@@ -21,23 +21,33 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # ---------------------------------------------------------------------------
 # Base build deps + Vincent Rivière's m68k-atari-mint cross toolchain.
+#
+# The PPA is added via a manual keyring (instead of add-apt-repository) so
+# the build doesn't depend on launchpadlib / GPG-in-container quirks.
 # ---------------------------------------------------------------------------
+ARG VRIVIERE_KEY=4AAD3A5DB5690522
+ARG UBUNTU_RELEASE=jammy
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         curl \
+        dirmngr \
         git \
         gnupg \
         make \
-        software-properties-common \
         wget \
         xz-utils \
         unzip \
         zip \
     ; \
-    add-apt-repository -y ppa:vriviere/ppa; \
+    install -d /etc/apt/keyrings; \
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${VRIVIERE_KEY}" \
+        | gpg --dearmor -o /etc/apt/keyrings/vriviere.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/vriviere.gpg] http://ppa.launchpad.net/vriviere/ppa/ubuntu ${UBUNTU_RELEASE} main" \
+        > /etc/apt/sources.list.d/vriviere.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         gcc-m68k-atari-mint \
@@ -117,19 +127,28 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8 \
     LANG=C.UTF-8
 
+ARG VRIVIERE_KEY=4AAD3A5DB5690522
+ARG UBUNTU_RELEASE=jammy
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         coreutils \
+        curl \
+        dirmngr \
         file \
+        gnupg \
         make \
         python3 \
-        software-properties-common \
         xz-utils \
     ; \
-    add-apt-repository -y ppa:vriviere/ppa; \
+    install -d /etc/apt/keyrings; \
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${VRIVIERE_KEY}" \
+        | gpg --dearmor -o /etc/apt/keyrings/vriviere.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/vriviere.gpg] http://ppa.launchpad.net/vriviere/ppa/ubuntu ${UBUNTU_RELEASE} main" \
+        > /etc/apt/sources.list.d/vriviere.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         gcc-m68k-atari-mint \
