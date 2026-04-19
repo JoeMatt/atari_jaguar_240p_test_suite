@@ -35,6 +35,7 @@ RUN set -eux; \
         ca-certificates \
         curl \
         dirmngr \
+        doxygen \
         git \
         gnupg \
         make \
