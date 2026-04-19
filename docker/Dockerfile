@@ -89,11 +89,11 @@ ARG RMVLIB_REF=master
 RUN set -eux; \
     cd /tmp/src; \
     git clone --depth 1 --branch "${JLIBC_REF}" "${JLIBC_REPO}" jlibc; \
-    JAGPATH="${JAGPATH}" make -C jlibc; \
-    JAGPATH="${JAGPATH}" make -C jlibc install; \
+    JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C jlibc; \
+    JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C jlibc install; \
     git clone --depth 1 --branch "${RMVLIB_REF}" "${RMVLIB_REPO}" rmvlib; \
-    JAGPATH="${JAGPATH}" make -C rmvlib; \
-    JAGPATH="${JAGPATH}" make -C rmvlib install
+    JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C rmvlib; \
+    JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C rmvlib install
 
 # ---------------------------------------------------------------------------
 # Stage libgcc.a for the m68k-atari-mint target so the Jaguar link line
