@@ -52,6 +52,8 @@ jobs:
         id: tags
         run: |
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=${{ steps.img.outputs.image }}:sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           {
             echo "tags<<EOF"
             echo "${{ steps.img.outputs.image }}:latest"
@@ -59,13 +61,33 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build${{ github.event_name != 'pull_request' && ' & push' || '' }} SDK image
+      # Resolve push-vs-load-vs-neither once so the build and smoke-test
+      # steps stay in sync. PRs do nothing remote (no creds). Pushes go to
+      # GHCR. Manual dispatch with push=false loads into the local daemon
+      # so the smoke-test can exercise the image we *just* built rather
+      # than pulling whatever happens to be tagged :latest in the registry.
+      - name: Resolve build mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = 'pull_request' ]; then
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "load=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.inputs.push }}" = 'false' ]; then
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "load=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "push=true"  >> "$GITHUB_OUTPUT"
+            echo "load=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build${{ steps.mode.outputs.push == 'true' && ' & push' || '' }} SDK image
         uses: docker/build-push-action@v6
         with:
           context: docker
           file: docker/Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push != 'false') }}
+          push: ${{ steps.mode.outputs.push == 'true' }}
+          load: ${{ steps.mode.outputs.load == 'true' }}
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -80,8 +102,14 @@ jobs:
       - name: Smoke-test the image
         if: github.event_name != 'pull_request'
         run: |
-          docker pull ${{ steps.img.outputs.image }}:latest
-          docker run --rm ${{ steps.img.outputs.image }}:latest \
+          # If we pushed, pull the immutable :sha-<short> tag back so we test
+          # the exact bytes that just landed. If we only built locally
+          # (workflow_dispatch with push=false + load=true), the image is
+          # already in the daemon under both tags.
+          if [ "${{ steps.mode.outputs.push }}" = 'true' ]; then
+            docker pull "${{ steps.tags.outputs.sha_tag }}"
+          fi
+          docker run --rm "${{ steps.tags.outputs.sha_tag }}" \
             bash -c 'm68k-atari-mint-gcc --version | head -n1 && \
                      mac -? 2>&1 | head -n1 || true; \
                      aln -? 2>&1 | head -n1 || true; \

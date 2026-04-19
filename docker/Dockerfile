@@ -58,40 +58,60 @@ RUN set -eux; \
 
 # ---------------------------------------------------------------------------
 # Build RMAC + RLN from upstream sources.
-# Pinned to specific commits so the image is reproducible. Bump as needed.
+#
+# Pinned to specific upstream commit SHAs so the image is reproducible and
+# protected against the upstream `master` moving under our feet (supply
+# chain hygiene). To bump:
+#   1. git ls-remote http://tiddly.mooo.com:5000/{rmac,rln}/{rmac,rln}.git HEAD
+#   2. update RMAC_REF / RLN_REF below, rebuild, smoke-test.
+#
+# NOTE on transport: tiddly.mooo.com only serves git over plain HTTP on
+# port 5000 (no HTTPS endpoint as of 2026-04). The pinned commit SHAs are
+# what gives us integrity here -- `git checkout <sha>` will refuse to
+# proceed if the fetched objects don't hash to the requested SHA, so a
+# tampered transport cannot silently substitute different code. If/when
+# the upstream offers HTTPS, flip these defaults.
 # ---------------------------------------------------------------------------
 ARG RMAC_REPO=http://tiddly.mooo.com:5000/rmac/rmac.git
-ARG RMAC_REF=master
+ARG RMAC_REF=a81f2e5a4a4a4c62f1c411a12edd048c9f6c72c5
 ARG RLN_REPO=http://tiddly.mooo.com:5000/rln/rln.git
-ARG RLN_REF=master
+ARG RLN_REF=4cde5893338e264c22e4fe26cd23f4b4db9107e4
 
+# Helper: clone-then-checkout works for any ref (branch, tag, or raw SHA),
+# unlike `git clone --branch <ref>` which only accepts branch/tag names.
+# These repos are tiny (<2 MiB), so the lack of --depth 1 is irrelevant.
 RUN set -eux; \
     mkdir -p "${JAGPATH}/bin" "${JAGPATH}/lib/lib" "${JAGPATH}/lib/include" /tmp/src; \
     cd /tmp/src; \
-    git clone --depth 1 --branch "${RMAC_REF}" "${RMAC_REPO}" rmac; \
-    cd rmac && make && \
-        install -m 0755 rmac "${JAGPATH}/bin/rmac" && \
+    git clone "${RMAC_REPO}" rmac; \
+    git -C rmac checkout --detach "${RMAC_REF}"; \
+    make -C rmac && \
+        install -m 0755 rmac/rmac "${JAGPATH}/bin/rmac" && \
         ln -sf rmac "${JAGPATH}/bin/mac"; \
-    cd /tmp/src; \
-    git clone --depth 1 --branch "${RLN_REF}" "${RLN_REPO}" rln; \
-    cd rln && make && \
-        install -m 0755 rln "${JAGPATH}/bin/rln" && \
+    git clone "${RLN_REPO}" rln; \
+    git -C rln checkout --detach "${RLN_REF}"; \
+    make -C rln && \
+        install -m 0755 rln/rln "${JAGPATH}/bin/rln" && \
         ln -sf rln "${JAGPATH}/bin/aln"
 
 # ---------------------------------------------------------------------------
 # Build jlibc + rmvlib (The Removers Library).
+# Pinned to upstream SHAs for the same reproducibility reasons as above.
+# Bump via: git ls-remote https://github.com/theRemovers/{jlibc,rmvlib}.git HEAD
 # ---------------------------------------------------------------------------
 ARG JLIBC_REPO=https://github.com/theRemovers/jlibc.git
-ARG JLIBC_REF=master
+ARG JLIBC_REF=1937a1372ff3ac452ce89ec3291c9490d2b1212b
 ARG RMVLIB_REPO=https://github.com/theRemovers/rmvlib.git
-ARG RMVLIB_REF=master
+ARG RMVLIB_REF=164026e1aca2e46c16329062310949b2d6383e0a
 
 RUN set -eux; \
     cd /tmp/src; \
-    git clone --depth 1 --branch "${JLIBC_REF}" "${JLIBC_REPO}" jlibc; \
+    git clone "${JLIBC_REPO}" jlibc; \
+    git -C jlibc checkout --detach "${JLIBC_REF}"; \
     JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C jlibc; \
     JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C jlibc install; \
-    git clone --depth 1 --branch "${RMVLIB_REF}" "${RMVLIB_REPO}" rmvlib; \
+    git clone "${RMVLIB_REPO}" rmvlib; \
+    git -C rmvlib checkout --detach "${RMVLIB_REF}"; \
     JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C rmvlib; \
     JAGPATH="${JAGPATH}" MAKEFLAGS=--no-print-directory make -C rmvlib install
 

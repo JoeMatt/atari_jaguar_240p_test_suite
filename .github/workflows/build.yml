@@ -25,7 +25,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -114,13 +113,22 @@ jobs:
   pr-comment:
     name: Post PR build summary
     needs: build
-    if: github.event_name == 'pull_request'
+    # Skip on fork PRs: the GITHUB_TOKEN is read-only there so the comment
+    # step would fail and mark the workflow red even though the build was
+    # green. Forks still get the artifacts -- they just don't get the
+    # convenience comment.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
       - name: Sticky comment with download links
         uses: marocchino/sticky-pull-request-comment@v2
+        # Belt-and-braces: even within the same repo, never let a comment
+        # failure block the merge -- the artifacts upload is the source of truth.
+        continue-on-error: true
         with:
           header: jaguar-rom-build
           message: |

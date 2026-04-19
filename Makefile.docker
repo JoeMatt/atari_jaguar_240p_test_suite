@@ -21,14 +21,72 @@
 #   make native-build     -- build directly on the host (assumes SDK installed)
 # ---------------------------------------------------------------------------
 
-# Image coordinates. The default points at this fork's GHCR namespace.
-# Override on the command line if you've published your own image:
-#   make SDK_IMAGE=ghcr.io/myname/jaguar-sdk:dev sdk-pull docker-build
-SDK_OWNER	?= joematt
+# Image coordinates.
+#
+# SDK_OWNER auto-detects the GHCR namespace from `git remote get-url origin`
+# so contributors who fork the repo don't have to override anything to push
+# / pull their own SDK image -- their own login is used by default. Falls
+# back to `joematt` (this fork's canonical publisher) when:
+#   - we're not in a git checkout, or
+#   - the origin remote isn't a GitHub URL (e.g. local-only mirror), or
+#   - git itself isn't on PATH.
+#
+# Override explicitly to point at a different namespace or tag:
+#   make SDK_OWNER=myname             docker-build
+#   make SDK_IMAGE=ghcr.io/foo/bar:dev docker-build
+SDK_OWNER_DEFAULT := joematt
+# Two parser landmines to avoid in this $(shell ...) call:
+#   1. make counts `(` / `)` even inside quotes, so the sed expressions must
+#      not contain parens (no grouping, no backrefs).
+#   2. make treats `#` as start-of-comment everywhere, including inside the
+#      shell argument, which would chop each continuation line at the sed
+#      `s#...#...#` delimiter. We use `,` as the sed delimiter instead.
+SDK_OWNER_DETECTED := $(shell git remote get-url origin 2>/dev/null \
+	| sed -e 's,^https://github.com/,,' \
+	      -e 's,^http://github.com/,,' \
+	      -e 's,^git@github.com:,,' \
+	      -e 's,^ssh://git@github.com/,,' \
+	      -e 's,\.git$$,,' \
+	      -e 's,/.*,,' \
+	| tr 'A-Z' 'a-z' \
+	| head -n1)
+SDK_OWNER	?= $(or $(SDK_OWNER_DETECTED),$(SDK_OWNER_DEFAULT))
 SDK_IMAGE	?= ghcr.io/$(SDK_OWNER)/jaguar-sdk:latest
 
 DOCKER		?= docker
 DOCKER_PLATFORM	?= linux/amd64
+
+# ---------------------------------------------------------------------------
+# Colima support.
+#
+# Colima (https://github.com/abiosoft/colima) is the de-facto Docker Desktop
+# replacement on macOS / Linux. It ships a Lima-backed VM that exposes a
+# standard docker socket, so once `colima start` has run, every `docker`
+# invocation in this Makefile transparently routes through it -- no special
+# wrappers needed.
+#
+# We probe for it at parse time and use it to (a) auto-start the VM when a
+# docker target is invoked but no daemon is reachable, and (b) surface
+# colima-specific help so users who don't have Docker Desktop have a
+# zero-config path forward.
+#
+# Tunables (override on the make command line):
+#   COLIMA_PROFILE      profile name (default: default)
+#   COLIMA_CPU          vCPUs to allocate when auto-starting          (4)
+#   COLIMA_MEMORY       GiB of RAM to allocate when auto-starting     (6)
+#   COLIMA_DISK         GiB of disk to allocate when auto-starting    (30)
+#   COLIMA_VM_TYPE      vm type: qemu | vz (Apple Silicon fast path)
+#   COLIMA_EXTRA        extra flags appended to `colima start`
+# ---------------------------------------------------------------------------
+HAS_COLIMA		:= $(if $(shell command -v colima 2>/dev/null),1,0)
+COLIMA_PROFILE		?= default
+COLIMA_CPU		?= 4
+COLIMA_MEMORY		?= 6
+COLIMA_DISK		?= 30
+COLIMA_VM_TYPE		?=
+COLIMA_EXTRA		?=
+COLIMA_START_FLAGS	= --cpu $(COLIMA_CPU) --memory $(COLIMA_MEMORY) --disk $(COLIMA_DISK) \
+			  $(if $(COLIMA_VM_TYPE),--vm-type $(COLIMA_VM_TYPE)) $(COLIMA_EXTRA)
 
 # Mount the repo at /work and run as the host user so generated files are not
 # owned by root. `--init` ensures Ctrl-C cleanly tears down the build.
@@ -48,34 +106,73 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
 
 .PHONY: sdk-pull sdk-build sdk-shell \
         docker-build docker-debug docker-rom docker-rom-debug docker-all \
-        native-build in-docker help help-toolchain
+        native-build in-docker help help-toolchain \
+        docker-up colima-start colima-stop colima-status
 
-sdk-pull:
+# ---------------------------------------------------------------------------
+# docker-up: order-only prereq for every target that touches the docker CLI.
+# Fast path: if `docker info` succeeds, returns immediately.
+# Slow path: if colima is installed but no daemon is reachable, start the VM.
+# Otherwise, print an actionable error and bail before doing real work.
+# ---------------------------------------------------------------------------
+docker-up:
+	@if $(DOCKER) info >/dev/null 2>&1; then exit 0; fi; \
+	if [ "$(HAS_COLIMA)" = "1" ]; then \
+		if colima status --profile $(COLIMA_PROFILE) >/dev/null 2>&1; then \
+			printf '>> docker daemon unreachable but colima profile "%s" reports running.\n' '$(COLIMA_PROFILE)' >&2; \
+			printf '>> Check `docker context ls` -- you may need: docker context use colima-$(COLIMA_PROFILE)\n' >&2; \
+			exit 1; \
+		fi; \
+		printf '>> docker daemon not reachable; starting colima profile "%s" (%s vCPU, %s GiB RAM)...\n' \
+			'$(COLIMA_PROFILE)' '$(COLIMA_CPU)' '$(COLIMA_MEMORY)' >&2; \
+		colima start --profile $(COLIMA_PROFILE) $(COLIMA_START_FLAGS); \
+	else \
+		printf '>> docker daemon not reachable and colima is not installed.\n' >&2; \
+		printf '>> macOS:  brew install colima docker  &&  make colima-start\n' >&2; \
+		printf '>> Linux:  start the docker service, or `brew install colima docker`\n' >&2; \
+		printf '>> Or install Docker Desktop: https://docs.docker.com/get-docker/\n' >&2; \
+		exit 1; \
+	fi
+
+colima-start:
+	@if [ "$(HAS_COLIMA)" != "1" ]; then \
+		printf 'colima not found. Install with `brew install colima` (or your package manager).\n' >&2; \
+		exit 1; \
+	fi
+	colima start --profile $(COLIMA_PROFILE) $(COLIMA_START_FLAGS)
+
+colima-stop:
+	colima stop --profile $(COLIMA_PROFILE)
+
+colima-status:
+	@colima status --profile $(COLIMA_PROFILE) 2>&1 || true
+
+sdk-pull: | docker-up
 	$(DOCKER) pull $(SDK_IMAGE)
 
-sdk-build:
+sdk-build: | docker-up
 	$(DOCKER) build --platform $(DOCKER_PLATFORM) -t $(SDK_IMAGE) -f docker/Dockerfile docker
 
-sdk-shell:
+sdk-shell: | docker-up
 	$(DOCKER_RUN_TTY) bash
 
 CMD ?= make
-in-docker:
+in-docker: | docker-up
 	$(DOCKER_RUN) sh -c '$(CMD)'
 
-docker-build:
+docker-build: | docker-up
 	$(DOCKER_RUN) sh -c 'make clean && make'
 
-docker-debug:
+docker-debug: | docker-up
 	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1'
 
-docker-rom:
+docker-rom: | docker-up
 	$(DOCKER_RUN) sh -c 'make clean && make && make rom'
 
-docker-rom-debug:
+docker-rom-debug: | docker-up
 	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom'
 
-docker-all:
+docker-all: | docker-up
 	$(DOCKER_RUN) sh -c '\
 		make clean && make && make rom && \
 		make clean && make DEBUG=1 && make DEBUG=1 rom'
@@ -112,6 +209,12 @@ help:
 	@printf '  %-22s %s\n' 'sdk-shell'        'open an interactive shell in the SDK container'
 	@printf '  %-22s %s\n' 'in-docker CMD=..' 'run an arbitrary command inside the SDK container'
 	@printf '\n'
+	@printf 'Colima (Docker Desktop alternative; auto-starts when needed):\n'
+	@printf '  %-22s %s\n' 'colima-start'     'start the colima VM (uses COLIMA_* tunables)'
+	@printf '  %-22s %s\n' 'colima-stop'      'stop the colima VM'
+	@printf '  %-22s %s\n' 'colima-status'    'show colima VM status for COLIMA_PROFILE'
+	@printf '  %-22s %s\n' 'docker-up'        'ensure docker daemon is reachable (auto-starts colima)'
+	@printf '\n'
 	@printf 'Hardware / emulator helpers (need the matching tool on PATH):\n'
 	@printf '  %-22s %s\n' 'skunkram'         'upload .cof to Skunkboard (jcp)'
 	@printf '  %-22s %s\n' 'skunkrom'         'flash .rom to Skunkboard (jcp -f)'
@@ -121,19 +224,29 @@ help:
 	@printf '\n'
 	@printf 'Useful variables:\n'
 	@printf '  %-22s %s\n' 'DEBUG=0|1'        'release (default) vs debug build'
+	@printf '  %-22s %s\n' 'USE_DOCKER=0|1'   'force native or container path (default: auto-detect)'
 	@printf '  %-22s %s\n' 'JAGPATH=PATH'     'Jaguar SDK install root for native builds'
 	@printf '  %-22s %s\n' 'SDK_IMAGE=ref'    'override the docker image (default $(SDK_IMAGE))'
 	@printf '  %-22s %s\n' 'DOCKER=cmd'       'docker binary (default `docker`)'
+	@printf '  %-22s %s\n' 'COLIMA_PROFILE=p' 'colima profile name (default `default`)'
+	@printf '  %-22s %s\n' 'COLIMA_CPU=N'     'vCPUs when auto-starting colima (default 4)'
+	@printf '  %-22s %s\n' 'COLIMA_MEMORY=N'  'GiB RAM when auto-starting colima (default 6)'
+	@printf '  %-22s %s\n' 'COLIMA_VM_TYPE=vz' 'on Apple Silicon: faster amd64 via Rosetta'
 	@printf '\n'
 	@printf 'Shell completion: `make <TAB>` lists every target above when bash-completion\n'
 	@printf 'or zsh compsys is enabled. See README "Shell completion" for setup.\n'
 
 # Friendly fast-fail when neither the native toolchain nor docker is found.
 help-toolchain:
-	@printf 'Cannot build: neither the native Jaguar toolchain nor Docker were found.\n\n'
+	@printf 'Cannot build: neither the native Jaguar toolchain nor a container runtime was found.\n\n'
 	@printf 'Pick one of:\n'
-	@printf '  * Install Docker (https://docs.docker.com/get-docker/) and re-run `make`.\n'
-	@printf '  * Install the m68k-atari-mint cross toolchain + rmvlib and set JAGPATH.\n'
+	@printf '  macOS (no Docker Desktop required):\n'
+	@printf '    brew install colima docker\n'
+	@printf '    make colima-start    # one-time, then bare `make` works\n\n'
+	@printf '  Any platform with Docker Desktop:\n'
+	@printf '    Install Docker (https://docs.docker.com/get-docker/) and re-run `make`.\n\n'
+	@printf '  Native toolchain (fastest builds, Linux-friendly):\n'
+	@printf '    Install the m68k-atari-mint cross toolchain + rmvlib and set JAGPATH.\n'
 	@printf '    (BitJag scripts: https://github.com/BitJag/ubuntu-rmvlib-install-scripts)\n\n'
 	@printf 'Then run `make help` for the full target list.\n'
 	@exit 1

@@ -1,5 +1,21 @@
-include	Makefile.config
-include	Makefile.docker
+include Makefile.config
+include Makefile.docker
+
+# ---------------------------------------------------------------------------
+# Top-level .PHONY hoisting.
+#
+# zsh's _make completion (and most other shells' make completion) parses
+# `.PHONY:` lines from the Makefile that was passed on the command line.
+# It only follows `include` directives when there's a literal SPACE after
+# `include` (it does not recognise tabs), and even when it does, listing
+# every public target up here makes target completion instant.
+# ---------------------------------------------------------------------------
+.PHONY: all rom rom-debug dist clean alpine bjl debug skunkram skunkrom \
+        vjram vjrom reset \
+        sdk-pull sdk-build sdk-shell \
+        docker-build docker-debug docker-rom docker-rom-debug docker-all \
+        docker-up colima-start colima-stop colima-status \
+        in-docker native-build help help-toolchain
 
 # ---------------------------------------------------------------------------
 # Default goal selection.
@@ -39,9 +55,18 @@ else
   .DEFAULT_GOAL := help-toolchain
 endif
 
+# Only print the auto-route notice when bare `make` (or an explicit native
+# target) actually triggers the redirection -- not for `make help`, completion
+# probes, or sdk-* / docker-* targets that the user typed deliberately.
+NOTICE_GOALS := all rom rom-debug dist
 ifeq ($(AUTO_DOCKER_NOTICE),1)
-  $(info >> Native m68k-atari-mint-gcc not found; routing build through the Jaguar SDK Docker image.)
-  $(info >> Set USE_DOCKER=0 to disable, or run `make help` to see every target.)
+  ifeq ($(filter-out $(NOTICE_GOALS),$(or $(MAKECMDGOALS),all)),)
+    $(info >> Native m68k-atari-mint-gcc not found; routing build through the Jaguar SDK container image.)
+    ifeq ($(HAS_COLIMA),1)
+      $(info >> docker daemon will be auto-started via colima if not already running.)
+    endif
+    $(info >> Set USE_DOCKER=0 to disable, or run `make help` to see every target.)
+  endif
 endif
 
 PROJECT=jag_240p_test_suite
@@ -61,4 +86,4 @@ OBJS=$(SRCC:.c=.o) $(SRCS:.s=.o) $(GFX_S:.s=.o) $(STRUCT_S:.s=.o) $(AUD_S:.s=.o)
 OTHEROBJS=
 RMVLIBS=display.o interrupt.o sound.o rmvlib.a fb2d.o lz77.o gpudriver.o
 
-include	Makefile.example
+include Makefile.example

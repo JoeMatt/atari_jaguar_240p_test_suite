@@ -76,14 +76,27 @@ def build_rom(in_path: Path, out_path: Path) -> None:
     #   cnt = (end - 0x802000) / 4              # words to checksum
     # In our case `body` is the post-header payload, so the equivalent count
     # is simply len(body) rounded down to a 4-byte boundary.
+    #
+    # The original payload is preserved verbatim in the output ROM; only the
+    # checksum range is rounded down -- this matches makefastboot's behaviour
+    # and avoids silently dropping any trailing 1-3 bytes (which would happen
+    # if the linked .bin isn't 32-bit aligned).
     word_count = len(body) // 4
     if word_count == 0:
         raise SystemExit(f"{in_path}: input is too small to checksum")
 
-    body = body[: word_count * 4]
+    aligned_len = word_count * 4
     checksum = JAG_MAGIC
-    for offset in range(0, len(body), 4):
+    for offset in range(0, aligned_len, 4):
         checksum = (checksum + struct.unpack_from(">I", body, offset)[0]) & 0xFFFFFFFF
+
+    if len(body) != aligned_len:
+        print(
+            f"note: input is {len(body)} bytes, not 32-bit aligned; "
+            f"checksum covers the first {aligned_len} bytes, "
+            f"trailing {len(body) - aligned_len} byte(s) preserved verbatim",
+            file=sys.stderr,
+        )
 
     struct.pack_into(">I", header, 0x410, ROM_BASE)
     struct.pack_into(">I", header, 0x414, word_count)
