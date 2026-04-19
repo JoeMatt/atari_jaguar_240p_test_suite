@@ -35,7 +35,7 @@ make (top-level)
 ├── Makefile              ← entry point, default-goal selection, .PHONY hoisting
 ├── Makefile.config       ← MACFLAGS, ALNFLAGS, JAGPATH, DEBUG knobs
 ├── Makefile.docker       ← Docker / Colima wrappers, SDK_OWNER autodetect
-└── Makefile.example      ← actual build rules (objs, .cof, .bin, .rom, dist)
+└── Makefile.example      ← actual build rules (objs, .cof, .bin, .rom, .j64, dist)
 ```
 
 ### Default-goal logic (Makefile)
@@ -94,6 +94,24 @@ Both rules are documented inline above the `SDK_OWNER_DETECTED` block.
 Don't remove those comments.
 
 ---
+
+## Output formats: `.rom` vs `.j64`
+
+`.rom` and `.j64` are **byte-identical**. The Jaguar cart memory image
+format has no canonical extension; emulators and flash-cart front-ends
+have settled on `.j64` (raw cart image) and `.jag` (cart image with a
+410-byte JagDOS metadata header). Most modern tooling accepts either,
+but some launcher UIs filter the file picker by extension.
+
+The `j64` make target is therefore a `cp $(ROM) $(J64)` and nothing
+more — never regenerate the bytes a different way, and never let `.rom`
+and `.j64` diverge for the same source. `make docker-all` and
+`release.yml` both produce both files; CI uploads them as separate
+artifacts so no rename is needed downstream.
+
+We do **not** pad the cart image to a power-of-2 size (1/2/4/6 MB).
+Software emulators zero-fill on load; the few flash carts that require
+padding are out of scope for this fork.
 
 ## ROM generation invariants (`scripts/make-rom.py`)
 
@@ -244,6 +262,8 @@ make                    # auto-routes to native or docker-build
 make help               # full target list
 make docker-rom         # build .rom in container (release)
 make docker-rom-debug   # build .rom in container (-O0 -g)
+make docker-j64         # build .rom + .j64 (same bytes, different ext)
+make docker-j64-debug   # build debug .rom + .j64
 make docker-all         # both ROMs in one shot
 make sdk-shell          # interactive shell in SDK container
 make colima-start       # boot the colima VM

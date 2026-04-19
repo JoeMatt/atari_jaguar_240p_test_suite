@@ -3,6 +3,7 @@
 *.cof
 *.bin
 *.rom
+*.j64
 *.tar.gz
 .depend
 

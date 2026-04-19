@@ -35,9 +35,11 @@ Any Docker-compatible runtime works:
 make sdk-pull           # pulls ghcr.io/<owner>/jaguar-sdk:latest
 make docker-build       # release .cof + .bin
 make docker-rom         # release .rom (with universal cart header)
+make docker-j64         # release .rom + .j64 (.j64 = same bytes, different ext)
 make docker-debug       # debug   .cof + .bin (-debug suffix, -O0 -g)
 make docker-rom-debug   # debug   .rom
-make docker-all         # both flavours in one container invocation
+make docker-j64-debug   # debug   .rom + .j64
+make docker-all         # both flavours, all artefacts, in one container invocation
 make sdk-shell          # interactive shell in the SDK container
 ```
 
@@ -87,14 +89,16 @@ make DEBUG=1                   # debug build
 
 | Variable      | Result                                                     | Output names                |
 | ------------- | ---------------------------------------------------------- | --------------------------- |
-| `DEBUG=0`     | `-O2 -fomit-frame-pointer -funroll-loops -DNDEBUG` (default) | `jag_240p_test_suite.{cof,bin,rom}` |
-| `DEBUG=1`     | `-O0 -g -DDEBUG`, `mac -d` for assembler symbols           | `jag_240p_test_suite-debug.{cof,bin,rom}` |
+| `DEBUG=0`     | `-O2 -fomit-frame-pointer -funroll-loops -DNDEBUG` (default) | `jag_240p_test_suite.{cof,bin,rom,j64}` |
+| `DEBUG=1`     | `-O0 -g -DDEBUG`, `mac -d` for assembler symbols           | `jag_240p_test_suite-debug.{cof,bin,rom,j64}` |
 
 Always `make clean` between switching flavours -- object files are not suffixed.
 
 ### Running the ROM
 
 The `.rom` file works on real hardware, BigPEmu, Virtual Jaguar, Skunkboard, etc. The `.cof` file runs from RAM (via Alpine, Skunkboard `make skunkram`, `make vjram`) but some tests unpack assets larger than free RAM and will crash; prefer the `.rom`.
+
+`.rom` and `.j64` are **byte-identical** -- the `.j64` extension exists purely because some emulator front-ends (BigPEmu's launcher, several handheld front-ends, RetroArch in some configurations) filter the file picker by extension. `make j64` (or `make docker-j64`) builds both; `make vjj64` launches the `.j64` in Virtual Jaguar.
 
 If you'd rather wrap the `.bin` with a different tool, the original sources of the same fastboot algorithm are:
 
@@ -125,7 +129,7 @@ source /path/to/atari_jaguar_240p_test_suite/scripts/completion.zsh
 source /path/to/atari_jaguar_240p_test_suite/scripts/completion.bash
 ```
 
-After that `make doc<TAB>` offers `docker-all docker-build docker-debug docker-rom docker-rom-debug docker-up`, `make col<TAB>` offers `colima-start colima-status colima-stop`, etc.
+After that `make doc<TAB>` offers `docker-all docker-build docker-debug docker-j64 docker-j64-debug docker-rom docker-rom-debug docker-up`, `make col<TAB>` offers `colima-start colima-status colima-stop`, etc.
 
 **2. Stock shell completion** -- works for most setups, no extra files to source:
 

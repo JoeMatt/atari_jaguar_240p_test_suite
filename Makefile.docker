@@ -16,7 +16,9 @@
 #   make docker-debug     -- debug build (.cof + .bin, -debug suffix)
 #   make docker-rom       -- release .rom (with cart header) inside the container
 #   make docker-rom-debug -- debug   .rom inside the container
-#   make docker-all       -- both release and debug ROMs in one invocation
+#   make docker-j64       -- release .j64 (same bytes as .rom, different ext)
+#   make docker-j64-debug -- debug   .j64
+#   make docker-all       -- release + debug .rom AND .j64 in one invocation
 #   make in-docker CMD=.. -- generic escape hatch
 #   make native-build     -- build directly on the host (assumes SDK installed)
 # ---------------------------------------------------------------------------
@@ -105,7 +107,8 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
 		$(SDK_IMAGE)
 
 .PHONY: sdk-pull sdk-build sdk-shell \
-        docker-build docker-debug docker-rom docker-rom-debug docker-all \
+        docker-build docker-debug docker-rom docker-rom-debug \
+        docker-j64 docker-j64-debug docker-all \
         native-build in-docker help help-toolchain \
         docker-up colima-start colima-stop colima-status
 
@@ -172,10 +175,19 @@ docker-rom: | docker-up
 docker-rom-debug: | docker-up
 	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom'
 
+docker-j64: | docker-up
+	$(DOCKER_RUN) sh -c 'make clean && make && make rom && make j64'
+
+docker-j64-debug: | docker-up
+	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom && make DEBUG=1 j64'
+
+# Build everything in one container invocation: release .cof/.bin/.rom/.j64
+# plus debug variants. Faster than running the four targets separately
+# because the SDK image only spins up once.
 docker-all: | docker-up
 	$(DOCKER_RUN) sh -c '\
-		make clean && make && make rom && \
-		make clean && make DEBUG=1 && make DEBUG=1 rom'
+		make clean && make && make rom && make j64 && \
+		make clean && make DEBUG=1 && make DEBUG=1 rom && make DEBUG=1 j64'
 
 # For users who already have crossmint + rmvlib installed natively (Linux,
 # or macOS with the Homebrew tap, etc) and don't want Docker overhead.
@@ -183,6 +195,7 @@ native-build:
 	$(MAKE) clean
 	$(MAKE) all
 	$(MAKE) rom
+	$(MAKE) j64
 
 # ---------------------------------------------------------------------------
 # Self-documenting target list. `make help` prints categorised targets so
@@ -194,6 +207,8 @@ help:
 	@printf 'Native build (needs crossmint + rmvlib in $$JAGPATH=%s):\n' '$(JAGPATH)'
 	@printf '  %-22s %s\n' 'all'              'build .cof + .bin (default when toolchain found)'
 	@printf '  %-22s %s\n' 'rom'              'build .rom with fastboot cart header'
+	@printf '  %-22s %s\n' 'j64'              'copy .rom -> .j64 (same bytes, ext for emulator front-ends)'
+	@printf '  %-22s %s\n' 'rom-debug / j64-debug' 'debug variants of the above'
 	@printf '  %-22s %s\n' 'native-build'     'clean + all + rom'
 	@printf '  %-22s %s\n' 'dist'             'tar.gz of source + binaries'
 	@printf '  %-22s %s\n' 'clean'            'remove build artefacts'
@@ -201,9 +216,11 @@ help:
 	@printf 'Docker build (needs only docker; pulls ghcr.io image):\n'
 	@printf '  %-22s %s\n' 'docker-build'     'release .cof + .bin in SDK container'
 	@printf '  %-22s %s\n' 'docker-rom'       'release .rom in SDK container'
+	@printf '  %-22s %s\n' 'docker-j64'       'release .rom + .j64 in SDK container'
 	@printf '  %-22s %s\n' 'docker-debug'     'debug .cof + .bin (-O0 -g, -debug suffix)'
 	@printf '  %-22s %s\n' 'docker-rom-debug' 'debug .rom'
-	@printf '  %-22s %s\n' 'docker-all'       'release + debug ROMs in one invocation'
+	@printf '  %-22s %s\n' 'docker-j64-debug' 'debug .rom + .j64'
+	@printf '  %-22s %s\n' 'docker-all'       'release + debug .rom + .j64 in one invocation'
 	@printf '  %-22s %s\n' 'sdk-pull'         'pull SDK_IMAGE=$(SDK_IMAGE) from registry'
 	@printf '  %-22s %s\n' 'sdk-build'        'build SDK image locally from docker/Dockerfile'
 	@printf '  %-22s %s\n' 'sdk-shell'        'open an interactive shell in the SDK container'
@@ -218,7 +235,7 @@ help:
 	@printf 'Hardware / emulator helpers (need the matching tool on PATH):\n'
 	@printf '  %-22s %s\n' 'skunkram'         'upload .cof to Skunkboard (jcp)'
 	@printf '  %-22s %s\n' 'skunkrom'         'flash .rom to Skunkboard (jcp -f)'
-	@printf '  %-22s %s\n' 'vjram / vjrom'    'launch in Virtual Jaguar'
+	@printf '  %-22s %s\n' 'vjram / vjrom / vjj64' 'launch .cof / .rom / .j64 in Virtual Jaguar'
 	@printf '  %-22s %s\n' 'bjl'              'send .bin via BJL (lo -8)'
 	@printf '  %-22s %s\n' 'alpine / debug'   'launch under Alpine debugger / WDB'
 	@printf '\n'

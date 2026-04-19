@@ -76,17 +76,19 @@ jobs:
 
           docker run --rm -u "$(id -u):$(id -g)" \
             -v "$PWD:/work" -w /work "$SDK_IMAGE" \
-            sh -c 'make clean && make && make rom'
+            sh -c 'make clean && make && make rom && make j64'
           cp "${PROJECT}.cof" "$OUTDIR/${PROJECT}-${TAG}.cof"
           cp "${PROJECT}.bin" "$OUTDIR/${PROJECT}-${TAG}.bin"
           cp "${PROJECT}.rom" "$OUTDIR/${PROJECT}-${TAG}.rom"
+          cp "${PROJECT}.j64" "$OUTDIR/${PROJECT}-${TAG}.j64"
 
           docker run --rm -u "$(id -u):$(id -g)" \
             -v "$PWD:/work" -w /work "$SDK_IMAGE" \
-            sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom'
+            sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom && make DEBUG=1 j64'
           cp "${PROJECT}-debug.cof" "$OUTDIR/${PROJECT}-${TAG}-debug.cof"
           cp "${PROJECT}-debug.bin" "$OUTDIR/${PROJECT}-${TAG}-debug.bin"
           cp "${PROJECT}-debug.rom" "$OUTDIR/${PROJECT}-${TAG}-debug.rom"
+          cp "${PROJECT}-debug.j64" "$OUTDIR/${PROJECT}-${TAG}-debug.j64"
 
           ( cd "$OUTDIR" && sha256sum * > SHA256SUMS.txt )
           ls -lh "$OUTDIR"
@@ -131,7 +133,9 @@ jobs:
             release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}.cof
             release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}.bin
             release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}.rom
+            release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}.j64
             release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}-debug.cof
             release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}-debug.bin
             release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}-debug.rom
+            release/${{ env.PROJECT }}-${{ needs.build.outputs.tag }}-debug.j64
             release/SHA256SUMS.txt

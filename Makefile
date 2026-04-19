@@ -10,10 +10,11 @@ include Makefile.docker
 # `include` (it does not recognise tabs), and even when it does, listing
 # every public target up here makes target completion instant.
 # ---------------------------------------------------------------------------
-.PHONY: all rom rom-debug dist clean alpine bjl debug skunkram skunkrom \
-        vjram vjrom reset \
+.PHONY: all rom rom-debug j64 j64-debug dist clean alpine bjl debug skunkram skunkrom \
+        vjram vjrom vjj64 reset \
         sdk-pull sdk-build sdk-shell \
-        docker-build docker-debug docker-rom docker-rom-debug docker-all \
+        docker-build docker-debug docker-rom docker-rom-debug \
+        docker-j64 docker-j64-debug docker-all \
         docker-up colima-start colima-stop colima-status \
         in-docker native-build help help-toolchain
 

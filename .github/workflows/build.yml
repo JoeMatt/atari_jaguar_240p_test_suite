@@ -84,8 +84,8 @@ jobs:
             -u "$(id -u):$(id -g)" \
             -v "$PWD:/work" -w /work \
             "$SDK_IMAGE" \
-            sh -c "make clean && make DEBUG=${DEBUG_FLAG} && make DEBUG=${DEBUG_FLAG} rom"
-          ls -lh ${PROJECT}${SUFFIX}.cof ${PROJECT}${SUFFIX}.bin ${PROJECT}${SUFFIX}.rom
+            sh -c "make clean && make DEBUG=${DEBUG_FLAG} && make DEBUG=${DEBUG_FLAG} rom && make DEBUG=${DEBUG_FLAG} j64"
+          ls -lh ${PROJECT}${SUFFIX}.cof ${PROJECT}${SUFFIX}.bin ${PROJECT}${SUFFIX}.rom ${PROJECT}${SUFFIX}.j64
 
       - name: Stage artifacts
         if: steps.filter.outputs.skip == 'false'
@@ -95,7 +95,7 @@ jobs:
           if [ '${{ matrix.flavour }}' = 'debug' ]; then SUFFIX=-debug; else SUFFIX=; fi
           OUTDIR="dist/${PROJECT}-${{ matrix.flavour }}-${SHORT_SHA}"
           mkdir -p "$OUTDIR"
-          cp "${PROJECT}${SUFFIX}.cof" "${PROJECT}${SUFFIX}.bin" "${PROJECT}${SUFFIX}.rom" "$OUTDIR/"
+          cp "${PROJECT}${SUFFIX}.cof" "${PROJECT}${SUFFIX}.bin" "${PROJECT}${SUFFIX}.rom" "${PROJECT}${SUFFIX}.j64" "$OUTDIR/"
           ( cd "$OUTDIR" && sha256sum * > SHA256SUMS.txt )
           echo "outdir=${OUTDIR}" >> "$GITHUB_OUTPUT"
           echo "name=${PROJECT}-${{ matrix.flavour }}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
@@ -138,7 +138,9 @@ jobs:
 
             | Flavour | Files | Download |
             | --- | --- | --- |
-            | release | `.cof`, `.bin`, `.rom`, `SHA256SUMS.txt` | [Run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) |
-            | debug   | `.cof`, `.bin`, `.rom`, `SHA256SUMS.txt` | [Run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) |
+            | release | `.cof`, `.bin`, `.rom`, `.j64`, `SHA256SUMS.txt` | [Run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) |
+            | debug   | `.cof`, `.bin`, `.rom`, `.j64`, `SHA256SUMS.txt` | [Run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) |
+
+            > `.rom` and `.j64` are byte-identical -- different extension for emulators that filter by file type.
 
             Artifacts expire 30 days after the run.
