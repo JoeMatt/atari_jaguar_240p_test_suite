@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------------------
+# Docker wrappers for the Jaguar SDK image.
+#
+# These let macOS users (and anyone without a local crossmint install) build
+# the ROM with nothing but Docker on their machine. The same image is used in
+# CI, so what builds locally builds in CI and vice versa.
+#
+# All wrapper targets are prefixed with `docker-` to avoid colliding with the
+# native build targets defined in Makefile.example (which are themselves used
+# inside the container).
+#
+#   make sdk-pull         -- pull the prebuilt SDK image from GHCR
+#   make sdk-build        -- build the SDK image locally from docker/Dockerfile
+#   make sdk-shell        -- open an interactive shell in the SDK container
+#   make docker-build     -- release build (.cof + .bin) inside the container
+#   make docker-debug     -- debug build (.cof + .bin, -debug suffix)
+#   make docker-rom       -- release .rom (with cart header) inside the container
+#   make docker-rom-debug -- debug   .rom inside the container
+#   make docker-all       -- both release and debug ROMs in one invocation
+#   make in-docker CMD=.. -- generic escape hatch
+#   make native-build     -- build directly on the host (assumes SDK installed)
+# ---------------------------------------------------------------------------
+
+# Image coordinates. The default points at this fork's GHCR namespace.
+# Override on the command line if you've published your own image:
+#   make SDK_IMAGE=ghcr.io/myname/jaguar-sdk:dev sdk-pull docker-build
+SDK_OWNER	?= joematt
+SDK_IMAGE	?= ghcr.io/$(SDK_OWNER)/jaguar-sdk:latest
+
+DOCKER		?= docker
+DOCKER_PLATFORM	?= linux/amd64
+
+# Mount the repo at /work and run as the host user so generated files are not
+# owned by root. `--init` ensures Ctrl-C cleanly tears down the build.
+DOCKER_RUN	= $(DOCKER) run --rm --init \
+		--platform $(DOCKER_PLATFORM) \
+		-u $(shell id -u):$(shell id -g) \
+		-v "$(CURDIR)":/work \
+		-w /work \
+		$(SDK_IMAGE)
+
+DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
+		--platform $(DOCKER_PLATFORM) \
+		-u $(shell id -u):$(shell id -g) \
+		-v "$(CURDIR)":/work \
+		-w /work \
+		$(SDK_IMAGE)
+
+.PHONY: sdk-pull sdk-build sdk-shell \
+        docker-build docker-debug docker-rom docker-rom-debug docker-all \
+        native-build in-docker
+
+sdk-pull:
+	$(DOCKER) pull $(SDK_IMAGE)
+
+sdk-build:
+	$(DOCKER) build --platform $(DOCKER_PLATFORM) -t $(SDK_IMAGE) -f docker/Dockerfile docker
+
+sdk-shell:
+	$(DOCKER_RUN_TTY) bash
+
+CMD ?= make
+in-docker:
+	$(DOCKER_RUN) sh -c '$(CMD)'
+
+docker-build:
+	$(DOCKER_RUN) sh -c 'make clean && make'
+
+docker-debug:
+	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1'
+
+docker-rom:
+	$(DOCKER_RUN) sh -c 'make clean && make && make rom'
+
+docker-rom-debug:
+	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom'
+
+docker-all:
+	$(DOCKER_RUN) sh -c '\
+		make clean && make && make rom && \
+		make clean && make DEBUG=1 && make DEBUG=1 rom'
+
+# For users who already have crossmint + rmvlib installed natively (Linux,
+# or macOS with the Homebrew tap, etc) and don't want Docker overhead.
+native-build:
+	$(MAKE) clean
+	$(MAKE)
+	$(MAKE) rom

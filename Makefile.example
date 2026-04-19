@@ -1,16 +1,24 @@
-DISTFILES=Makefile Makefile.config Makefile.example README $(SRCC) $(SRCH) $(SRCS) $(OTHEROBJS)
+# ---------------------------------------------------------------------------
+# Output project name. BUILD_SUFFIX is set by Makefile.config based on DEBUG
+# so debug and release artifacts never overwrite each other.
+# Note: object files (.o) are NOT suffixed -- always `make clean` between
+# release and debug builds (the CI workflow does this automatically).
+# ---------------------------------------------------------------------------
+OUT_PROJECT	= $(PROJECT)$(BUILD_SUFFIX)
 
-TARFILE=$(PROJECT).tar.gz
+DISTFILES	= Makefile Makefile.config Makefile.example README.md $(SRCC) $(SRCH) $(SRCS) $(OTHEROBJS)
 
-all: .depend $(PROJECT).cof $(PROJECT).bin
+TARFILE		= $(OUT_PROJECT).tar.gz
 
-.PHONY: all dist alpine bjl debug skunk reset
+all: .depend $(OUT_PROJECT).cof $(OUT_PROJECT).bin
 
-$(PROJECT).cof: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
-	$(ALN) $(ALNFLAGSRAM) -e -o $(PROJECT).cof crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a 
+.PHONY: all dist alpine bjl debug skunkram skunkrom rom rom-debug reset clean vjram vjrom
 
-$(PROJECT).bin: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
-	$(ALN) $(ALNFLAGSROM) -n -o $(PROJECT).bin crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a 
+$(OUT_PROJECT).cof: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
+	$(ALN) $(ALNFLAGSRAM) -e -o $(OUT_PROJECT).cof crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a
+
+$(OUT_PROJECT).bin: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
+	$(ALN) $(ALNFLAGSROM) -n -o $(OUT_PROJECT).bin crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a
 
 %.o: %.s
 	$(MADMAC) $(MACFLAGS) $<
@@ -18,43 +26,56 @@ $(PROJECT).bin: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $<
 
-dist: $(PROJECT).cof $(PROJECT).bin
-	mkdir -p $(PROJECT)
-	cp -a $(DISTFILES) $(PROJECT).cof $(PROJECT).bin $(PROJECT)
-	tar cfvzh $(TARFILE) $(PROJECT)
-	rm -rf $(PROJECT)
+dist: $(OUT_PROJECT).cof $(OUT_PROJECT).bin
+	mkdir -p $(OUT_PROJECT)
+	cp -a $(DISTFILES) $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT)
+	tar cfvzh $(TARFILE) $(OUT_PROJECT)
+	rm -rf $(OUT_PROJECT)
 
-rom: $(PROJECT).cof
-	jag-rom-maker $(PROJECT).bin
+# ---------------------------------------------------------------------------
+# Real .rom file with a universal cart header. Prefers `makefastboot`
+# (shipped in the SDK Docker image); falls back to the helper script.
+# ---------------------------------------------------------------------------
+rom: $(OUT_PROJECT).bin
+	@if command -v makefastboot >/dev/null 2>&1; then \
+		makefastboot $(OUT_PROJECT).bin $(OUT_PROJECT).rom; \
+	else \
+		sh scripts/make-rom.sh $(OUT_PROJECT).bin $(OUT_PROJECT).rom; \
+	fi
 
-alpine: $(PROJECT).cof
-	$(RDB) $(PROJECT).cof
+rom-debug:
+	$(MAKE) DEBUG=1 rom
 
-bjl: $(PROJECT).bin
-	$(LO) -8 $(PROJECT).bin
+alpine: $(OUT_PROJECT).cof
+	$(RDB) $(OUT_PROJECT).cof
 
-debug: $(PROJECT).cof
-	$(WDB) $(PROJECT).cof
+bjl: $(OUT_PROJECT).bin
+	$(LO) -8 $(OUT_PROJECT).bin
 
-skunkram: $(PROJECT).cof
-	$(JCP) $(PROJECT).cof
+debug: $(OUT_PROJECT).cof
+	$(WDB) $(OUT_PROJECT).cof
 
-skunkrom: $(PROJECT).cof
-	$(JCP) -f $(PROJECT).rom
+skunkram: $(OUT_PROJECT).cof
+	$(JCP) $(OUT_PROJECT).cof
 
-vjram: $(PROJECT).cof
-	$(VJ) -a $(PROJECT).cof
+skunkrom: $(OUT_PROJECT).rom
+	$(JCP) -f $(OUT_PROJECT).rom
 
-vjrom: $(PROJECT).cof
-	$(VJ) -a $(PROJECT).rom
+vjram: $(OUT_PROJECT).cof
+	$(VJ) -a $(OUT_PROJECT).cof
+
+vjrom: $(OUT_PROJECT).rom
+	$(VJ) -a $(OUT_PROJECT).rom
 
 reset:
 	$(JCP) -r
 
 clean:
-	rm -f *~ $(OBJS) $(PROJECT).cof $(PROJECT).bin $(PROJECT).rom
+	rm -f *~ $(OBJS) .depend \
+		$(PROJECT).cof $(PROJECT).bin $(PROJECT).rom $(PROJECT).tar.gz \
+		$(PROJECT)-debug.cof $(PROJECT)-debug.bin $(PROJECT)-debug.rom $(PROJECT)-debug.tar.gz
 
 .depend: $(SRCC)
-	$(CC) -MM $(SRCC) > .depend
+	$(CC) -MM $(CFLAGS) $(SRCC) > .depend
 
 -include .depend

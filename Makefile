@@ -1,4 +1,5 @@
 include	Makefile.config
+include	Makefile.docker
 
 PROJECT=jag_240p_test_suite
 SRCC=	main.c\

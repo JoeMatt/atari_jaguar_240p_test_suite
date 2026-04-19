@@ -20,24 +20,89 @@ This is free software, with full source code available under the GPL.
 Learn more about the 240p Test Suite by Artemino at http://junkerhq.net/240p/
 
 ## Compiling & Running
-Compiling requires the following tools/libraries:
-- m68k-atari-mint cross-tools (cross compiler - Needed for building and using the Removers Library) - https://tho-otto.de/crossmint.php
-- RMAC (compiler) - http://rmac.is-slick.com/
-- RLN (linker) - http://rmac.is-slick.com/
-- Removers Library (C Library) - https://github.com/theRemovers/rmvlib/
-- Ray's lz77 Packer (Optional: Only if you plan on modifying graphics) - http://s390174849.online.de/ray.tscc.de/files/lz77_v13.zip
-- JCP (Optional: If you are flashing the program to a Skunkboard) - http://harmlesslion.com/software/skunkboard
 
-If you are running a linux environment that has access to the latest Ubuntu repositories, I have a set of bash scripts that automates the setup of a Jaguar devolopment environment on your linux system.  See the following for more details: https://github.com/BitJag/ubuntu-rmvlib-install-scripts
+There are two supported ways to build the ROM. The Docker path is recommended -- it works identically on macOS, Linux, and CI, and bakes in the entire Jaguar toolchain (crossmint, RMAC/RLN, rmvlib, makefastboot).
 
-Running the 240p Test Suite without crashing on real hardware requires a working ROM file.  Currently, if running the program from RAM space by using the .COF file, this works for most tests, but will crash for some tests that need to unpack assets that will exceed the available space in RAM, crashing the program.
+### Quick start (Docker, recommended)
 
-A ROM file can be produced by passing the file through Jiffi, or adding a universal cart header to the .BIN file manually or using makefastboot.
+Requires only [Docker](https://docs.docker.com/get-docker/) (Docker Desktop on macOS / Windows, or Docker Engine on Linux).
 
-- Jiffi - https://reboot.untergrund.net/new-reboot/jiffi.html
-- makefastboot - https://github.com/tursilion/makefastboot/
+```bash
+make sdk-pull           # pulls ghcr.io/<owner>/jaguar-sdk:latest
+make docker-build       # release .cof + .bin
+make docker-rom         # release .rom (with universal cart header)
+make docker-debug       # debug   .cof + .bin (-debug suffix, -O0 -g)
+make docker-rom-debug   # debug   .rom
+make docker-all         # both flavours in one container invocation
+make sdk-shell          # interactive shell in the SDK container
+```
 
-Finally, you can run your ROM file by using an emulator, a flash card reader, Skunkboard, or by creating your own physical cartridge. Currently there isn't anyone I'm aware of that is producing carts of the Jaguar 240p Test Suite.
+If the prebuilt image isn't published yet (or you're hacking on it), build it locally:
+
+```bash
+make sdk-build          # builds docker/Dockerfile -> ghcr.io/<owner>/jaguar-sdk:latest
+```
+
+The `SDK_OWNER` / `SDK_IMAGE` Make variables let forks point at their own image:
+
+```bash
+make SDK_IMAGE=ghcr.io/myname/jaguar-sdk:dev sdk-pull docker-build
+```
+
+### Native install
+
+For developers who'd rather not use Docker, the toolchain consists of:
+
+- **m68k-atari-mint cross-tools** (cross compiler) - https://tho-otto.de/crossmint.php
+- **RMAC** assembler - http://rmac.is-slick.com/ (installed as `mac` in `$JAGPATH/bin`)
+- **RLN** linker - http://rmac.is-slick.com/ (installed as `aln` in `$JAGPATH/bin`)
+- **Removers Library** (rmvlib + jlibc) - https://github.com/theRemovers/rmvlib
+- **Ray's lz77 Packer** (optional, only if you modify graphics) - http://s390174849.online.de/ray.tscc.de/files/lz77_v13.zip
+- **JCP** (optional, for flashing a Skunkboard) - http://harmlesslion.com/software/skunkboard
+- **makefastboot** (optional, for `make rom` if you don't want to use the bundled fallback) - https://github.com/tursilion/makefastboot/
+
+On Ubuntu the easiest path is the BitJag install scripts: https://github.com/BitJag/ubuntu-rmvlib-install-scripts
+
+Once installed, set `JAGPATH` to the SDK root and build natively:
+
+```bash
+export JAGPATH=$HOME/Jaguar
+make native-build              # clean + release + rom
+make DEBUG=1                   # debug build
+```
+
+### Build flavours
+
+| Variable      | Result                                                     | Output names                |
+| ------------- | ---------------------------------------------------------- | --------------------------- |
+| `DEBUG=0`     | `-O2 -fomit-frame-pointer -funroll-loops -DNDEBUG` (default) | `jag_240p_test_suite.{cof,bin,rom}` |
+| `DEBUG=1`     | `-O0 -g -DDEBUG`, `mac -d` for assembler symbols           | `jag_240p_test_suite-debug.{cof,bin,rom}` |
+
+Always `make clean` between switching flavours -- object files are not suffixed.
+
+### Running the ROM
+
+The `.rom` file works on real hardware, BigPEmu, Virtual Jaguar, Skunkboard, etc. The `.cof` file runs from RAM (via Alpine, Skunkboard `make skunkram`, `make vjram`) but some tests unpack assets larger than free RAM and will crash; prefer the `.rom`.
+
+If you don't want `make rom`, you can still wrap the `.bin` manually:
+
+- [Jiffi](https://reboot.untergrund.net/new-reboot/jiffi.html)
+- [makefastboot](https://github.com/tursilion/makefastboot/)
+
+### Continuous integration & releases
+
+This repo ships three GitHub Actions workflows:
+
+- **`.github/workflows/sdk-image.yml`** -- rebuilds and publishes `ghcr.io/<owner>/jaguar-sdk:latest` whenever `docker/**` changes.
+- **`.github/workflows/build.yml`** -- builds release + debug ROMs on every push and pull request, uploads them as run artifacts, and posts a sticky PR comment with the download links. Also exposes a `workflow_dispatch` trigger with a `flavours` choice (`both` / `release` / `debug`).
+- **`.github/workflows/release.yml`** -- on `git push` of a `vX.Y.Z` tag (or via `workflow_dispatch`), builds release + debug, generates release notes, and attaches `.cof`, `.bin`, `.rom` (release + debug) plus `SHA256SUMS.txt` to a GitHub Release.
+
+To cut a release:
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
 
 ## Contributors
 ```
