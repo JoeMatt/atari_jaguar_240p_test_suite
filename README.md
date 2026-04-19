@@ -89,6 +89,35 @@ If you'd rather wrap the `.bin` with a different tool, the original sources of t
 - [Jiffi](https://reboot.untergrund.net/new-reboot/jiffi.html) (Java)
 - [makefastboot](https://github.com/tursilion/makefastboot/) (Windows-only C++)
 
+### Discoverability & shell completion
+
+Run `make help` for a categorised list of every target (native, docker, hardware helpers) and the variables that tweak them.
+
+`make` itself auto-detects the environment so a bare `make` Just Works:
+
+| Detected | What `make` does |
+| --- | --- |
+| Native `m68k-atari-mint-gcc` on PATH | runs the native build (`all`) |
+| No native toolchain, but Docker on PATH | prints a notice and routes through `docker-build` |
+| Neither toolchain nor Docker | prints a friendly help message and exits non-zero |
+
+Tab completion of `make <TAB>` works out of the box once your shell has Make completion loaded:
+
+**zsh** -- compsys ships built-in completion for `make`. If `make <TAB>` does nothing, add this to `~/.zshrc`:
+
+```bash
+autoload -Uz compinit && compinit
+```
+
+**bash** -- install [bash-completion](https://github.com/scop/bash-completion):
+
+```bash
+brew install bash-completion@2          # macOS
+sudo apt install bash-completion        # Debian/Ubuntu
+```
+
+…then either start a new shell or `source` the completion script per the package's instructions. After that, `make doc<TAB>` will offer `docker-all docker-build docker-debug docker-rom docker-rom-debug` etc.
+
 ### Continuous integration & releases
 
 This repo ships three GitHub Actions workflows:

@@ -48,7 +48,7 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
 
 .PHONY: sdk-pull sdk-build sdk-shell \
         docker-build docker-debug docker-rom docker-rom-debug docker-all \
-        native-build in-docker
+        native-build in-docker help help-toolchain
 
 sdk-pull:
 	$(DOCKER) pull $(SDK_IMAGE)
@@ -84,5 +84,56 @@ docker-all:
 # or macOS with the Homebrew tap, etc) and don't want Docker overhead.
 native-build:
 	$(MAKE) clean
-	$(MAKE)
+	$(MAKE) all
 	$(MAKE) rom
+
+# ---------------------------------------------------------------------------
+# Self-documenting target list. `make help` prints categorised targets so
+# users (and shell completion previews) can discover what's available.
+# Keep the column layout tab-friendly so it renders the same in any shell.
+# ---------------------------------------------------------------------------
+help:
+	@printf 'Atari Jaguar 240p Test Suite -- make targets\n\n'
+	@printf 'Native build (needs crossmint + rmvlib in $$JAGPATH=%s):\n' '$(JAGPATH)'
+	@printf '  %-22s %s\n' 'all'              'build .cof + .bin (default when toolchain found)'
+	@printf '  %-22s %s\n' 'rom'              'build .rom with fastboot cart header'
+	@printf '  %-22s %s\n' 'native-build'     'clean + all + rom'
+	@printf '  %-22s %s\n' 'dist'             'tar.gz of source + binaries'
+	@printf '  %-22s %s\n' 'clean'            'remove build artefacts'
+	@printf '\n'
+	@printf 'Docker build (needs only docker; pulls ghcr.io image):\n'
+	@printf '  %-22s %s\n' 'docker-build'     'release .cof + .bin in SDK container'
+	@printf '  %-22s %s\n' 'docker-rom'       'release .rom in SDK container'
+	@printf '  %-22s %s\n' 'docker-debug'     'debug .cof + .bin (-O0 -g, -debug suffix)'
+	@printf '  %-22s %s\n' 'docker-rom-debug' 'debug .rom'
+	@printf '  %-22s %s\n' 'docker-all'       'release + debug ROMs in one invocation'
+	@printf '  %-22s %s\n' 'sdk-pull'         'pull SDK_IMAGE=$(SDK_IMAGE) from registry'
+	@printf '  %-22s %s\n' 'sdk-build'        'build SDK image locally from docker/Dockerfile'
+	@printf '  %-22s %s\n' 'sdk-shell'        'open an interactive shell in the SDK container'
+	@printf '  %-22s %s\n' 'in-docker CMD=..' 'run an arbitrary command inside the SDK container'
+	@printf '\n'
+	@printf 'Hardware / emulator helpers (need the matching tool on PATH):\n'
+	@printf '  %-22s %s\n' 'skunkram'         'upload .cof to Skunkboard (jcp)'
+	@printf '  %-22s %s\n' 'skunkrom'         'flash .rom to Skunkboard (jcp -f)'
+	@printf '  %-22s %s\n' 'vjram / vjrom'    'launch in Virtual Jaguar'
+	@printf '  %-22s %s\n' 'bjl'              'send .bin via BJL (lo -8)'
+	@printf '  %-22s %s\n' 'alpine / debug'   'launch under Alpine debugger / WDB'
+	@printf '\n'
+	@printf 'Useful variables:\n'
+	@printf '  %-22s %s\n' 'DEBUG=0|1'        'release (default) vs debug build'
+	@printf '  %-22s %s\n' 'JAGPATH=PATH'     'Jaguar SDK install root for native builds'
+	@printf '  %-22s %s\n' 'SDK_IMAGE=ref'    'override the docker image (default $(SDK_IMAGE))'
+	@printf '  %-22s %s\n' 'DOCKER=cmd'       'docker binary (default `docker`)'
+	@printf '\n'
+	@printf 'Shell completion: `make <TAB>` lists every target above when bash-completion\n'
+	@printf 'or zsh compsys is enabled. See README "Shell completion" for setup.\n'
+
+# Friendly fast-fail when neither the native toolchain nor docker is found.
+help-toolchain:
+	@printf 'Cannot build: neither the native Jaguar toolchain nor Docker were found.\n\n'
+	@printf 'Pick one of:\n'
+	@printf '  * Install Docker (https://docs.docker.com/get-docker/) and re-run `make`.\n'
+	@printf '  * Install the m68k-atari-mint cross toolchain + rmvlib and set JAGPATH.\n'
+	@printf '    (BitJag scripts: https://github.com/BitJag/ubuntu-rmvlib-install-scripts)\n\n'
+	@printf 'Then run `make help` for the full target list.\n'
+	@exit 1
