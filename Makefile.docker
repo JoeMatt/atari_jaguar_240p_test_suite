@@ -12,8 +12,8 @@
 #   make sdk-pull         -- pull the prebuilt SDK image from GHCR
 #   make sdk-build        -- build the SDK image locally from docker/Dockerfile
 #   make sdk-shell        -- open an interactive shell in the SDK container
-#   make docker-build     -- release build (.cof + .bin) inside the container
-#   make docker-debug     -- debug build (.cof + .bin, -debug suffix)
+#   make docker-build     -- release build (.cof + .bin + .rom + .j64) inside the container
+#   make docker-debug     -- debug build (.cof + .bin + .rom + .j64, -debug suffix)
 #   make docker-rom       -- release .rom (with cart header) inside the container
 #   make docker-rom-debug -- debug   .rom inside the container
 #   make docker-j64       -- release .j64 (same bytes as .rom, different ext)
@@ -111,6 +111,7 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
         docker-j64 docker-j64-debug docker-all \
         native-build in-docker help help-toolchain \
         docker-up colima-start colima-stop colima-status \
+        ensure-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
         verify-sig
 
@@ -171,6 +172,25 @@ LIBRETRO_PYTHON		?= $(LIBRETRO_VENV)/bin/python
 LIBRETRO_CORE		?= $(firstword $(wildcard ./virtualjaguar_libretro.dylib ./virtualjaguar_libretro.so ./virtualjaguar_libretro.dll))
 LIBRETRO_CONTENT	?= $(OUT_PROJECT).j64
 LIBRETRO_FRAMES		?= 0
+RETROARCH_BIN		?= $(or $(shell command -v retroarch 2>/dev/null),$(firstword $(wildcard $(HOME)/Applications/RetroArch.app/Contents/MacOS/RetroArch /Applications/RetroArch.app/Contents/MacOS/RetroArch)))
+RETROARCH_APP		?= $(firstword $(wildcard $(HOME)/Applications/RetroArch.app /Applications/RetroArch.app))
+OPENEMU_APP		?= $(firstword $(wildcard $(HOME)/Applications/OpenEmu.app /Applications/OpenEmu.app))
+
+# Build the .j64 using whichever toolchain is available.
+# Preference:
+#   1) native m68k toolchain (fastest)
+#   2) docker/colima fallback
+ensure-j64:
+	@if [ -f "$(OUT_PROJECT).j64" ]; then \
+		exit 0; \
+	elif command -v m68k-atari-mint-gcc >/dev/null 2>&1; then \
+		$(MAKE) j64; \
+	elif command -v $(DOCKER) >/dev/null 2>&1; then \
+		$(MAKE) docker-j64; \
+	else \
+		printf '!! Cannot build $(OUT_PROJECT).j64: no native toolchain and no docker.\n' >&2; \
+		exit 1; \
+	fi
 
 $(LIBRETRO_VENV)/bin/python:
 	python3 -m venv $(LIBRETRO_VENV)
@@ -191,8 +211,39 @@ libretro-test: libretro-venv
 		$(LIBRETRO_CORE) $(LIBRETRO_CONTENT)
 
 # Convenience: build the j64 first, then load+run 60 frames.
-libretro-run: $(OUT_PROJECT).j64
+libretro-run: ensure-j64
 	$(MAKE) LIBRETRO_FRAMES=60 libretro-test
+
+# Canonical interactive run target:
+#   make run
+# Prefers RetroArch UI (with explicit Virtual Jaguar core), falls back to
+# OpenEmu.app if RetroArch isn't installed.
+run: run-ui
+
+run-ui: ensure-j64
+	@if [ -n "$(RETROARCH_BIN)" ] && [ -x "$(RETROARCH_BIN)" ]; then \
+		if [ -z "$(LIBRETRO_CORE)" ]; then \
+			printf '!! No Virtual Jaguar core found in repo root.\n' >&2; \
+			printf '   Expected: ./virtualjaguar_libretro.{dylib,so,dll}\n' >&2; \
+			exit 1; \
+		fi; \
+		printf '>> Launching RetroArch UI via %s\n' "$(RETROARCH_BIN)"; \
+		"$(RETROARCH_BIN)" -L "$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"; \
+	elif [ -n "$(RETROARCH_APP)" ]; then \
+		printf '>> Launching RetroArch.app: %s\n' "$(RETROARCH_APP)"; \
+		printf '>> If needed, select Virtual Jaguar core and open %s\n' "$(LIBRETRO_CONTENT)"; \
+		open -a "$(RETROARCH_APP)" "$(LIBRETRO_CONTENT)"; \
+	elif [ -n "$(OPENEMU_APP)" ]; then \
+		printf '>> Launching OpenEmu: %s\n' "$(OPENEMU_APP)"; \
+		printf '>> If OpenEmu asks, import/select the Jaguar core and open %s\n' "$(LIBRETRO_CONTENT)"; \
+		open -a "$(OPENEMU_APP)" "$(LIBRETRO_CONTENT)"; \
+	else \
+		printf '!! No supported UI frontend found.\n' >&2; \
+		printf '   Install RetroArch or OpenEmu, or run: make run-headless\n' >&2; \
+		exit 1; \
+	fi
+
+run-headless: libretro-run
 
 # Run a longer trace and dump every Nth frame as PNG for visual inspection.
 # Useful for diagnosing "loads but renders nothing" symptoms -- we can see
@@ -201,7 +252,7 @@ libretro-run: $(OUT_PROJECT).j64
 # DUMP_EVERY to taste.
 LIBRETRO_DUMP_DIR	?= frames
 LIBRETRO_DUMP_EVERY	?= 30
-libretro-frames: $(OUT_PROJECT).j64 libretro-venv
+libretro-frames: ensure-j64 libretro-venv
 	@if [ -z "$(LIBRETRO_CORE)" ]; then \
 		printf '!! No libretro core found in CWD (see libretro-test).\n'; \
 		exit 1; \
@@ -241,16 +292,16 @@ docker-debug: | docker-up
 	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1'
 
 docker-rom: | docker-up
-	$(DOCKER_RUN) sh -c 'make clean && make && make rom'
+	$(DOCKER_RUN) sh -c 'make clean && make rom'
 
 docker-rom-debug: | docker-up
-	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom'
+	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 rom'
 
 docker-j64: | docker-up
-	$(DOCKER_RUN) sh -c 'make clean && make && make rom && make j64'
+	$(DOCKER_RUN) sh -c 'make clean && make j64'
 
 docker-j64-debug: | docker-up
-	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 && make DEBUG=1 rom && make DEBUG=1 j64'
+	$(DOCKER_RUN) sh -c 'make clean && make DEBUG=1 j64'
 
 # Build everything in one container invocation: release .cof/.bin/.rom/.j64
 # plus debug variants. Faster than running the four targets separately
@@ -265,8 +316,6 @@ docker-all: | docker-up
 native-build:
 	$(MAKE) clean
 	$(MAKE) all
-	$(MAKE) rom
-	$(MAKE) j64
 
 # ---------------------------------------------------------------------------
 # Self-documenting target list. `make help` prints categorised targets so
@@ -276,19 +325,19 @@ native-build:
 help:
 	@printf 'Atari Jaguar 240p Test Suite -- make targets\n\n'
 	@printf 'Native build (needs crossmint + rmvlib in $$JAGPATH=%s):\n' '$(JAGPATH)'
-	@printf '  %-22s %s\n' 'all'              'build .cof + .bin (default when toolchain found)'
+	@printf '  %-22s %s\n' 'all'              'build .cof + .bin + .rom + .j64 (default when toolchain found)'
 	@printf '  %-22s %s\n' 'rom'              'build .rom with fastboot cart header'
 	@printf '  %-22s %s\n' 'j64'              'copy .rom -> .j64 (same bytes, ext for emulator front-ends)'
 	@printf '  %-22s %s\n' 'rom-debug / j64-debug' 'debug variants of the above'
-	@printf '  %-22s %s\n' 'native-build'     'clean + all + rom'
+	@printf '  %-22s %s\n' 'native-build'     'clean + all'
 	@printf '  %-22s %s\n' 'dist'             'tar.gz of source + binaries'
 	@printf '  %-22s %s\n' 'clean'            'remove build artefacts'
 	@printf '\n'
 	@printf 'Docker build (needs only docker; pulls ghcr.io image):\n'
-	@printf '  %-22s %s\n' 'docker-build'     'release .cof + .bin in SDK container'
+	@printf '  %-22s %s\n' 'docker-build'     'release .cof + .bin + .rom + .j64 in SDK container'
 	@printf '  %-22s %s\n' 'docker-rom'       'release .rom in SDK container'
 	@printf '  %-22s %s\n' 'docker-j64'       'release .rom + .j64 in SDK container'
-	@printf '  %-22s %s\n' 'docker-debug'     'debug .cof + .bin (-O0 -g, -debug suffix)'
+	@printf '  %-22s %s\n' 'docker-debug'     'debug .cof + .bin + .rom + .j64 (-O0 -g, -debug suffix)'
 	@printf '  %-22s %s\n' 'docker-rom-debug' 'debug .rom'
 	@printf '  %-22s %s\n' 'docker-j64-debug' 'debug .rom + .j64'
 	@printf '  %-22s %s\n' 'docker-all'       'release + debug .rom + .j64 in one invocation'
@@ -307,6 +356,8 @@ help:
 	@printf '  %-22s %s\n' 'skunkram'         'upload .cof to Skunkboard (jcp)'
 	@printf '  %-22s %s\n' 'skunkrom'         'flash .rom to Skunkboard (jcp -f)'
 	@printf '  %-22s %s\n' 'vjram / vjrom / vjj64' 'launch .cof / .rom / .j64 in Virtual Jaguar'
+	@printf '  %-22s %s\n' 'run / run-ui'     'build .j64 and open it in RetroArch UI (fallback: OpenEmu)'
+	@printf '  %-22s %s\n' 'run-headless'     'libretro smoke run (no frontend UI)'
 	@printf '  %-22s %s\n' 'libretro-test'    'load .j64 into a libretro core (drop the .dylib in CWD)'
 	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 60 frames (smoke-test)'
 	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'

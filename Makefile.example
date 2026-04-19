@@ -10,7 +10,7 @@ DISTFILES	= Makefile Makefile.config Makefile.example README.md $(SRCC) $(SRCH) 
 
 TARFILE		= $(OUT_PROJECT).tar.gz
 
-all: .depend $(OUT_PROJECT).cof $(OUT_PROJECT).bin
+all: .depend $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT).rom $(OUT_PROJECT).j64
 
 .PHONY: all dist alpine bjl debug skunkram skunkrom rom rom-debug j64 j64-debug reset clean vjram vjrom vjj64
 
@@ -37,8 +37,10 @@ dist: $(OUT_PROJECT).cof $(OUT_PROJECT).bin
 # self-contained Python port of Tursilion's makefastboot tool that runs
 # anywhere Python 3 is available (no Windows or extra binaries required).
 # ---------------------------------------------------------------------------
-rom: $(OUT_PROJECT).bin
+$(OUT_PROJECT).rom: $(OUT_PROJECT).bin
 	python3 scripts/make-rom.py $(OUT_PROJECT).bin $(OUT_PROJECT).rom
+
+rom: $(OUT_PROJECT).rom
 
 rom-debug:
 	$(MAKE) DEBUG=1 rom

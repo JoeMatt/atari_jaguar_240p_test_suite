@@ -33,10 +33,10 @@ Any Docker-compatible runtime works:
 
 ```bash
 make sdk-pull           # pulls ghcr.io/<owner>/jaguar-sdk:latest
-make docker-build       # release .cof + .bin
+make docker-build       # release .cof + .bin + .rom + .j64
 make docker-rom         # release .rom (with universal cart header)
 make docker-j64         # release .rom + .j64 (.j64 = same bytes, different ext)
-make docker-debug       # debug   .cof + .bin (-debug suffix, -O0 -g)
+make docker-debug       # debug   .cof + .bin + .rom + .j64 (-debug suffix, -O0 -g)
 make docker-rom-debug   # debug   .rom
 make docker-j64-debug   # debug   .rom + .j64
 make docker-all         # both flavours, all artefacts, in one container invocation
@@ -81,7 +81,7 @@ Once installed, set `JAGPATH` to the SDK root and build natively:
 
 ```bash
 export JAGPATH=$HOME/Jaguar
-make native-build              # clean + release + rom
+make native-build              # clean + release all formats
 make DEBUG=1                   # debug build
 ```
 
@@ -109,6 +109,7 @@ ROM output is padded with trailing `0xFF` to the next 1 MiB boundary. This is re
 If you want to verify a build actually loads (and runs) before pushing to a real device, drop your libretro core (e.g. `virtualjaguar_libretro.dylib`) into the repo root and run:
 
 ```bash
+make run                  # build .j64 and open UI frontend (RetroArch/OpenEmu)
 make libretro-run         # build .j64, init core, run 60 frames
 make libretro-test        # init core + load_game only (faster)
 ```

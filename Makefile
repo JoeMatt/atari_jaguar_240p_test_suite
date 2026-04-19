@@ -16,6 +16,7 @@ include Makefile.docker
         docker-build docker-debug docker-rom docker-rom-debug \
         docker-j64 docker-j64-debug docker-all \
         docker-up colima-start colima-stop colima-status \
+        ensure-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
         verify-sig \
         in-docker native-build help help-toolchain
