@@ -17,3 +17,4 @@ jag_240p_test_suite-debug/
 .DS_Store
 .vscode/
 .idea/
+*.dylib
