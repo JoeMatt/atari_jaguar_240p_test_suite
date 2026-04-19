@@ -110,7 +110,9 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
         docker-build docker-debug docker-rom docker-rom-debug \
         docker-j64 docker-j64-debug docker-all \
         native-build in-docker help help-toolchain \
-        docker-up colima-start colima-stop colima-status
+        docker-up colima-start colima-stop colima-status \
+        libretro-venv libretro-test libretro-run libretro-frames \
+        verify-sig
 
 # ---------------------------------------------------------------------------
 # docker-up: order-only prereq for every target that touches the docker CLI.
@@ -149,6 +151,75 @@ colima-stop:
 
 colima-status:
 	@colima status --profile $(COLIMA_PROFILE) 2>&1 || true
+
+# ---------------------------------------------------------------------------
+# Libretro core load/run smoke-test (JesseTG/libretro.py).
+#
+# Runs the libretro init -> load_game -> run pipeline against any libretro
+# core (.dylib / .so / .dll) and reports whether the core accepted the
+# content. This catches "won't load" failures that standalone emulators
+# usually swallow with an opaque error (extension filter, BIOS missing,
+# bad checksum, etc.).
+#
+# Tunables:
+#   LIBRETRO_CORE     path to the core (default: virtualjaguar_libretro.<ext>)
+#   LIBRETRO_CONTENT  ROM to feed in (default: $(OUT_PROJECT).j64)
+#   LIBRETRO_FRAMES   how many frames to run after load (default: 0)
+# ---------------------------------------------------------------------------
+LIBRETRO_VENV		?= .venv-libretro
+LIBRETRO_PYTHON		?= $(LIBRETRO_VENV)/bin/python
+LIBRETRO_CORE		?= $(firstword $(wildcard ./virtualjaguar_libretro.dylib ./virtualjaguar_libretro.so ./virtualjaguar_libretro.dll))
+LIBRETRO_CONTENT	?= $(OUT_PROJECT).j64
+LIBRETRO_FRAMES		?= 0
+
+$(LIBRETRO_VENV)/bin/python:
+	python3 -m venv $(LIBRETRO_VENV)
+	$(LIBRETRO_VENV)/bin/pip install --quiet --upgrade pip
+	$(LIBRETRO_VENV)/bin/pip install --quiet 'libretro.py[cli]'
+
+libretro-venv: $(LIBRETRO_VENV)/bin/python
+
+libretro-test: libretro-venv
+	@if [ -z "$(LIBRETRO_CORE)" ]; then \
+		printf '!! No libretro core found in CWD.\n'; \
+		printf '   Drop virtualjaguar_libretro.{dylib,so,dll} next to the Makefile,\n'; \
+		printf '   or pass LIBRETRO_CORE=/path/to/core.{dylib,so,dll}.\n'; \
+		exit 1; \
+	fi
+	$(LIBRETRO_PYTHON) scripts/libretro-load-test.py \
+		--frames $(LIBRETRO_FRAMES) \
+		$(LIBRETRO_CORE) $(LIBRETRO_CONTENT)
+
+# Convenience: build the j64 first, then load+run 60 frames.
+libretro-run: $(OUT_PROJECT).j64
+	$(MAKE) LIBRETRO_FRAMES=60 libretro-test
+
+# Run a longer trace and dump every Nth frame as PNG for visual inspection.
+# Useful for diagnosing "loads but renders nothing" symptoms -- we can see
+# exactly what the OP is painting frame-by-frame instead of staring at a
+# black emulator window. Override DUMP_FRAMES_DIR / LIBRETRO_FRAMES /
+# DUMP_EVERY to taste.
+LIBRETRO_DUMP_DIR	?= frames
+LIBRETRO_DUMP_EVERY	?= 30
+libretro-frames: $(OUT_PROJECT).j64 libretro-venv
+	@if [ -z "$(LIBRETRO_CORE)" ]; then \
+		printf '!! No libretro core found in CWD (see libretro-test).\n'; \
+		exit 1; \
+	fi
+	rm -rf $(LIBRETRO_DUMP_DIR)
+	$(LIBRETRO_PYTHON) scripts/libretro-load-test.py \
+		--frames $(or $(LIBRETRO_FRAMES_OVERRIDE),180) \
+		--dump-frames $(LIBRETRO_DUMP_DIR) \
+		--dump-every $(LIBRETRO_DUMP_EVERY) \
+		--summary \
+		$(LIBRETRO_CORE) $(LIBRETRO_CONTENT)
+
+# Verify scripts/make-rom.py FASTBOOT_SIGNATURE is byte-identical to upstream
+# (tursilion/makefastboot). One-byte typos here brick carts on real hardware
+# but are invisible to most libretro / standalone emulators -- this guard
+# stops that class of bug from re-landing.
+verify-sig:
+	python3 scripts/verify-sig.py
 
 sdk-pull: | docker-up
 	$(DOCKER) pull $(SDK_IMAGE)
@@ -236,6 +307,10 @@ help:
 	@printf '  %-22s %s\n' 'skunkram'         'upload .cof to Skunkboard (jcp)'
 	@printf '  %-22s %s\n' 'skunkrom'         'flash .rom to Skunkboard (jcp -f)'
 	@printf '  %-22s %s\n' 'vjram / vjrom / vjj64' 'launch .cof / .rom / .j64 in Virtual Jaguar'
+	@printf '  %-22s %s\n' 'libretro-test'    'load .j64 into a libretro core (drop the .dylib in CWD)'
+	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 60 frames (smoke-test)'
+	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
+	@printf '  %-22s %s\n' 'verify-sig'       'check fastboot signature matches tursilion/makefastboot'
 	@printf '  %-22s %s\n' 'bjl'              'send .bin via BJL (lo -8)'
 	@printf '  %-22s %s\n' 'alpine / debug'   'launch under Alpine debugger / WDB'
 	@printf '\n'

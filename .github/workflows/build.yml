@@ -60,6 +60,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify fastboot signature is byte-identical to upstream
+        # Cheap regression test that prevents a one-byte typo in
+        # scripts/make-rom.py from silently shipping a cart that bricks on
+        # real hardware / BIOS-strict emulators while still "working" under
+        # libretro cores that bypass BIOS verification.
+        if: steps.filter.outputs.skip == 'false'
+        run: python3 scripts/verify-sig.py
+
       - name: Pull SDK image (or build it locally on first run)
         if: steps.filter.outputs.skip == 'false'
         run: |

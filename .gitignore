@@ -17,4 +17,10 @@ jag_240p_test_suite-debug/
 .DS_Store
 .vscode/
 .idea/
+
+# Libretro test scaffolding
+.venv-libretro/
+*.dylib
+*.so
+*.dll
 *.dylib

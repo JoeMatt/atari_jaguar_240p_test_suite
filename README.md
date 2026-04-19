@@ -98,7 +98,22 @@ Always `make clean` between switching flavours -- object files are not suffixed.
 
 The `.rom` file works on real hardware, BigPEmu, Virtual Jaguar, Skunkboard, etc. The `.cof` file runs from RAM (via Alpine, Skunkboard `make skunkram`, `make vjram`) but some tests unpack assets larger than free RAM and will crash; prefer the `.rom`.
 
-`.rom` and `.j64` are **byte-identical** -- the `.j64` extension exists purely because some emulator front-ends (BigPEmu's launcher, several handheld front-ends, RetroArch in some configurations) filter the file picker by extension. `make j64` (or `make docker-j64`) builds both; `make vjj64` launches the `.j64` in Virtual Jaguar.
+`.rom` and `.j64` are **byte-identical** -- the `.j64` extension exists purely because some emulator front-ends filter the file picker by extension. `make j64` (or `make docker-j64`) builds both; `make vjj64` launches the `.j64` in Virtual Jaguar.
+
+ROM output is padded with trailing `0xFF` to the next 1 MiB boundary. This is required for Virtual Jaguar/libretro's cart-file type detection (non-padded images can "load" but never execute, usually showing a cyan top line + black screen).
+
+> **RetroArch users:** the Virtual Jaguar libretro core (`virtualjaguar_libretro.{dylib,so,dll}`) accepts only `j64|jag|cue|cdi|iso` -- so you must load the **`.j64`**, never the `.rom` (which the core's extension filter rejects with `Content extension 'rom' is not supported`).
+
+#### Smoke-testing against a libretro core
+
+If you want to verify a build actually loads (and runs) before pushing to a real device, drop your libretro core (e.g. `virtualjaguar_libretro.dylib`) into the repo root and run:
+
+```bash
+make libretro-run         # build .j64, init core, run 60 frames
+make libretro-test        # init core + load_game only (faster)
+```
+
+The first invocation auto-creates `.venv-libretro/` and `pip install`s [JesseTG/libretro.py](https://github.com/JesseTG/libretro.py) into it; subsequent runs reuse it. The core is not committed to the repo (it's in `.gitignore`); grab the build that matches your platform from the [virtualjaguar_libretro releases](https://github.com/libretro/virtualjaguar-libretro) or RetroArch's online updater.
 
 If you'd rather wrap the `.bin` with a different tool, the original sources of the same fastboot algorithm are:
 

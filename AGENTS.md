@@ -103,6 +103,15 @@ have settled on `.j64` (raw cart image) and `.jag` (cart image with a
 410-byte JagDOS metadata header). Most modern tooling accepts either,
 but some launcher UIs filter the file picker by extension.
 
+**Important — libretro core extension filter.** The Virtual Jaguar
+libretro core (`virtualjaguar_libretro.{dylib,so,dll}`) hard-codes
+`valid_extensions = "j64|jag|cue|cdi|iso"` in its `retro_get_system_info`
+implementation. **`.rom` is not in that list** — RetroArch (or any
+libretro frontend) will refuse to load the file with
+`ContentError: Content extension 'rom' is not supported by the system`,
+even though the bytes are valid. Always tell users to load the `.j64`
+when targeting RetroArch / any libretro core.
+
 The `j64` make target is therefore a `cp $(ROM) $(J64)` and nothing
 more — never regenerate the bytes a different way, and never let `.rom`
 and `.j64` diverge for the same source. `make docker-all` and
@@ -113,9 +122,46 @@ We do **not** pad the cart image to a power-of-2 size (1/2/4/6 MB).
 Software emulators zero-fill on load; the few flash carts that require
 padding are out of scope for this fork.
 
+### Libretro smoke-testing harness
+
+`scripts/libretro-load-test.py` + `make libretro-test` / `make
+libretro-run` / `make libretro-frames` use
+[JesseTG/libretro.py][libretro-py] to spin up a real libretro core
+in-process and call `retro_init` → `retro_load_game` → optional
+`retro_run` loop. Use this when an emulator "just doesn't load" a
+build — the core's actual rejection (extension filter, BIOS missing,
+content too big, checksum mismatch, etc.) surfaces as a clean Python
+exception instead of being swallowed.
+
+`make libretro-frames` additionally dumps every Nth rendered frame as
+a PNG to `./frames/`. This is the right tool when the core *does* load
+the cart but renders nothing visible — you can see exactly what the
+Object Processor is painting frame-by-frame instead of staring at a
+black emulator window. The `--summary` flag also prints
+`non_black=X.X%` per frame, which surfaces "stuck on a single splash
+line" symptoms instantly (sub-2 % across hundreds of frames means the
+68k almost certainly never reached `main`).
+
+The makefile bootstraps `.venv-libretro/` automatically on first run.
+We deliberately do **not** invoke libretro.py's bundled
+`python -m libretro.py.test.loads_content` because typer 0.12 has an
+annotation bug under Python 3.14 (`tuple[Path, ...]` blows up Click).
+The standalone script bypasses typer.
+
+> Caveat — most libretro Jaguar cores (Virtual Jaguar included) **bypass
+> BIOS verification entirely**. They jump straight to `$802000` without
+> validating the fastboot signature or the cart-header CRC. That makes
+> them excellent for "does my code even start?" but useless for
+> validating header correctness — for that, run on real hardware,
+> BigPEmu, or anything else that actually executes the BIOS. The
+> `verify-sig.py` byte-equality check (see below) is what guards
+> header correctness in CI.
+
+[libretro-py]: https://github.com/JesseTG/libretro.py
+
 ## ROM generation invariants (`scripts/make-rom.py`)
 
-This script ports `makefastboot.cpp` to Python. Two correctness rules
+This script ports `makefastboot.cpp` to Python. Correctness rules
 that *must* be preserved:
 
 1. **The full input body is written to the ROM verbatim.** The original
@@ -127,6 +173,25 @@ that *must* be preserved:
 2. **`JAG_MAGIC` is the seed for the running checksum**, computed over
    big-endian 32-bit words. The header layout matches makefastboot.cpp
    byte-for-byte; if you "clean it up" you will brick fastboot.
+3. **`FASTBOOT_SIGNATURE` must be byte-identical to upstream.** It is
+   an RSA-encrypted boot stub the Jaguar BIOS verifies before jumping
+   to `$802000`. A single bit flip is enough to halt the boot on real
+   hardware / BigPEmu / any BIOS-strict emulator — but it is *invisible*
+   under most libretro and standalone emulators (which skip BIOS
+   verification entirely). The historic regression here was byte
+   `0x69` flipping `0x76 → 0x52`, which "looked fine" in libretro
+   smoke tests for weeks. `scripts/verify-sig.py` (run automatically
+   from `.github/workflows/build.yml` and via `make verify-sig`)
+   diff-checks every byte against tursilion/makefastboot upstream and
+   fails CI on any divergence. Re-run it whenever the signature
+   constant is touched.
+4. **Pad cart output to a 1 MiB boundary with `0xFF`.** Virtual
+   Jaguar/libretro file-type detection only executes cart images when
+   the file size matches its ROM heuristics (multiples of 1 MiB for
+   cart images). Non-padded images may be accepted by the frontend but
+   never executed by the core (classic symptom: cyan top line + black
+   screen forever). Padding bytes are treated as erased flash and are
+   safe on real hardware.
 
 A round-trip smoke test lives at the bottom of any agent transcript that
 modified this script — run it after any change here:
