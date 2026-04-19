@@ -1,6 +1,11 @@
 include	Makefile.config
 include	Makefile.docker
 
+# Force the native build's `all` target to remain the default goal even
+# though Makefile.docker is included first (its first target would otherwise
+# become the default).
+.DEFAULT_GOAL := all
+
 PROJECT=jag_240p_test_suite
 SRCC=	main.c\
 	common_assets.c\
