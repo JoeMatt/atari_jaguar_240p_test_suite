@@ -105,19 +105,10 @@ RUN set -eux; \
     install -m 0644 "${LIBGCC}" "${JAGPATH}/lib/lib/libgcc.a"
 
 # ---------------------------------------------------------------------------
-# makefastboot for producing real .rom files with a universal cart header.
-# ---------------------------------------------------------------------------
-ARG MAKEFASTBOOT_REPO=https://github.com/tursilion/makefastboot.git
-ARG MAKEFASTBOOT_REF=master
-
-RUN set -eux; \
-    cd /tmp/src; \
-    git clone --depth 1 --branch "${MAKEFASTBOOT_REF}" "${MAKEFASTBOOT_REPO}" makefastboot || \
-        git clone --depth 1 "${MAKEFASTBOOT_REPO}" makefastboot; \
-    cd makefastboot; \
-    if [ -f Makefile ]; then make; else gcc -O2 -o makefastboot makefastboot.c; fi; \
-    install -m 0755 makefastboot "${JAGPATH}/bin/makefastboot"
-
+# Note: the original Tursilion `makefastboot` is a Windows-only Visual Studio
+# project, so we don't try to compile it here. The repo ships a pure-Python
+# port at scripts/make-rom.py which the `make rom` target invokes directly,
+# so the runtime image only needs python3 (already installed below).
 # ---------------------------------------------------------------------------
 # Final lean image: keep only what is needed at build/run time.
 # ---------------------------------------------------------------------------
@@ -164,7 +155,7 @@ ENV PATH="${JAGPATH}/bin:${PATH}"
 WORKDIR /work
 
 LABEL org.opencontainers.image.title="Jaguar SDK" \
-      org.opencontainers.image.description="Atari Jaguar dev environment: m68k-atari-mint + RMAC/RLN (mac/aln) + rmvlib + makefastboot" \
+      org.opencontainers.image.description="Atari Jaguar dev environment: m68k-atari-mint + RMAC/RLN (mac/aln) + rmvlib (jlibc)" \
       org.opencontainers.image.source="https://github.com/BitJag/atari_jaguar_240p_test_suite" \
       org.opencontainers.image.licenses="GPL-2.0-or-later"
 

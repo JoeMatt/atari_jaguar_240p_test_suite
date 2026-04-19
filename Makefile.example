@@ -33,15 +33,12 @@ dist: $(OUT_PROJECT).cof $(OUT_PROJECT).bin
 	rm -rf $(OUT_PROJECT)
 
 # ---------------------------------------------------------------------------
-# Real .rom file with a universal cart header. Prefers `makefastboot`
-# (shipped in the SDK Docker image); falls back to the helper script.
+# Real .rom file with a fastboot cart header. Uses scripts/make-rom.py, a
+# self-contained Python port of Tursilion's makefastboot tool that runs
+# anywhere Python 3 is available (no Windows or extra binaries required).
 # ---------------------------------------------------------------------------
 rom: $(OUT_PROJECT).bin
-	@if command -v makefastboot >/dev/null 2>&1; then \
-		makefastboot $(OUT_PROJECT).bin $(OUT_PROJECT).rom; \
-	else \
-		sh scripts/make-rom.sh $(OUT_PROJECT).bin $(OUT_PROJECT).rom; \
-	fi
+	python3 scripts/make-rom.py $(OUT_PROJECT).bin $(OUT_PROJECT).rom
 
 rom-debug:
 	$(MAKE) DEBUG=1 rom
