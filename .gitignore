@@ -1,0 +1,18 @@
+# Build artefacts
+*.o
+*.cof
+*.bin
+*.rom
+*.tar.gz
+.depend
+
+# Distribution staging
+dist/
+jag_240p_test_suite/
+jag_240p_test_suite-debug/
+
+# Editor / OS noise
+*~
+.DS_Store
+.vscode/
+.idea/

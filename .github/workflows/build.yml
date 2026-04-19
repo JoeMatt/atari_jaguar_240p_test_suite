@@ -61,9 +61,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull SDK image
+      - name: Pull SDK image (or build it locally on first run)
         if: steps.filter.outputs.skip == 'false'
-        run: docker pull "$SDK_IMAGE"
+        run: |
+          if docker pull "$SDK_IMAGE" 2>/dev/null; then
+            echo "Pulled prebuilt SDK image."
+          else
+            echo "SDK image $SDK_IMAGE not available on GHCR yet; building locally."
+            docker build --platform linux/amd64 -t "$SDK_IMAGE" -f docker/Dockerfile docker
+          fi
 
       - name: Build ${{ matrix.flavour }}
         if: steps.filter.outputs.skip == 'false'

@@ -59,8 +59,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull SDK image
-        run: docker pull "$SDK_IMAGE"
+      - name: Pull SDK image (or build it locally as a fallback)
+        run: |
+          if docker pull "$SDK_IMAGE" 2>/dev/null; then
+            echo "Pulled prebuilt SDK image."
+          else
+            echo "SDK image $SDK_IMAGE not available on GHCR; building locally."
+            docker build --platform linux/amd64 -t "$SDK_IMAGE" -f docker/Dockerfile docker
+          fi
 
       - name: Build release flavour, stage, then debug flavour
         run: |
