@@ -42,9 +42,12 @@ static int helpStrstrIndex(const char *hay, const char *needle){
  *
  * No-op (and safe) if the phrase isn't found, e.g. after a future rewrite. */
 static void highlightHelpPhrase(textBox *tb, const char *phrase){
+    const char *base;
+    int start;
+
     if(tb == NULL || tb->text == NULL || phrase == NULL){ return; }
-    const char *base = (const char *)tb->text;
-    int start = helpStrstrIndex(base, phrase);
+    base = (const char *)tb->text;
+    start = helpStrstrIndex(base, phrase);
     if(start < 0){ return; }
     textRangeColorChange(tb, start, helpStrlen(phrase), WHITE, GREEN);
 }
