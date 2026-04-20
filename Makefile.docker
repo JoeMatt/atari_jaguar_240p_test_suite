@@ -506,8 +506,9 @@ verify-sig:
 # CI runs the same flow on every push (see .github/workflows/build.yml
 # `smoke-test` job), so what passes locally passes in CI.
 # ---------------------------------------------------------------------------
-TEST_FRAMES	?= 60
-VJ_CORE_SRC	?= ../virtualjaguar-libretro
+# TEST_FRAMES and VJ_CORE_SRC live in Makefile.config (alongside DEBUG and
+# the other host-tunable knobs); the rules below stay here so they sit
+# next to verify-sig / libretro-test / libretro-run, which they delegate to.
 
 test: verify-sig
 	@printf '>> Booting ROM in libretro core for %s frame(s)...\n' "$(TEST_FRAMES)"

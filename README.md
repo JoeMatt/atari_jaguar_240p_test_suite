@@ -127,7 +127,10 @@ The lower-level targets are still available for finer control:
 ```bash
 make run                  # build .j64 and do a deterministic headless smoke run
 make run-ui               # attempt UI launch (RetroArch; may crash on broken setups)
-make libretro-run         # build .j64, init core, run 0 frames (load-only)
+make libretro-run         # build, init core, load_game on $(OUT_PROJECT).jag (the .cof renamed),
+                          # run 0 frames -- proves the core's content filter accepts the cart.
+                          # Override with LIBRETRO_CONTENT=$(OUT_PROJECT).j64 to test the cart-image
+                          # path instead (currently fails to boot without a real BIOS, see notes below).
 make libretro-test        # init core + load_game (use LIBRETRO_FRAMES=N for frames)
 make libretro-frames      # render 180 frames and dump every 30th to ./frames/*.png
 ```

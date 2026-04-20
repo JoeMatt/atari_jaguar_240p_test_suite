@@ -126,6 +126,13 @@ jobs:
     # there's no host runtime, so the only meaningful "did it work?"
     # signal comes from running the ROM in an emulator.
     needs: build
+    # The smoke test consumes the *release* artifact, so skip when the
+    # release flavour was filtered out of the build matrix (workflow_dispatch
+    # with flavours=debug). Default branch/PR runs always build both.
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.flavours == 'both' ||
+      github.event.inputs.flavours == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -150,7 +157,15 @@ jobs:
           ref: ${{ env.VJ_CORE_REF }}
           path: vj-core
 
-      # Cache the built core keyed on the VJ source tree's commit SHA so
+      # Capture the actual checked-out commit SHA -- relying on .git/HEAD
+      # via hashFiles() is brittle (the file can be a symbolic ref like
+      # `ref: refs/heads/master`, whose contents don't change as upstream
+      # advances, leaving the cache permanently warm against a stale core).
+      - name: Resolve vj-core SHA
+        id: vj-sha
+        run: echo "sha=$(git -C vj-core rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Cache the built core keyed on the resolved upstream SHA so
       # subsequent CI runs (with the same upstream HEAD) skip the ~90s
       # rebuild. Cache miss = build from scratch and populate the cache.
       - name: Cache built libretro core
@@ -158,7 +173,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: vj-core/virtualjaguar_libretro.so
-          key: vj-core-${{ runner.os }}-${{ hashFiles('vj-core/.git/HEAD') }}
+          key: vj-core-${{ runner.os }}-${{ steps.vj-sha.outputs.sha }}
 
       - name: Build virtualjaguar_libretro.so
         if: steps.core-cache.outputs.cache-hit != 'true'
@@ -193,12 +208,12 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install 'libretro.py[cli]' Pillow
 
-      - name: Boot ROM (60 frames + dump init framebuffer)
+      - name: Boot ROM (60 frames + dump final framebuffer)
         # What this proves:
         #   - load_game returned True (ROM header / size / format accepted)
         #   - 60 retro_run() calls execute without raising or _exit()
         #
-        # What this does NOT prove (intentional):
+        # What it does NOT prove (intentional):
         #   - that the cart's menu is visually correct. The Jaguar BIOS
         #     animation requires a real Atari BIOS ROM (copyrighted, not
         #     redistributable) to advance to cart code. Without a BIOS,
@@ -206,19 +221,22 @@ jobs:
         #     state for the entire run -- every captured frame is bit-
         #     identical regardless of frame count.
         #
-        # The single dumped frame (frame-0000.png) is therefore the boot
-        # framebuffer, useful as a smoke artifact but not as a render
-        # regression check. If the BIOS-init pixels ever change shape
-        # something fundamental broke (linker layout, fastboot signature,
-        # video init); otherwise the meaningful signal is in the log.
+        # Param math: --frames 60 produces indices 0..59. --dump-every 59
+        # therefore matches at i=0 and i=59, dumping frame-0000.png AND
+        # frame-0059.png. We delete the boot frame so the uploaded artifact
+        # is unambiguously the *last* rendered frame -- if a BIOS ever
+        # lands in CI, that PNG will be the menu, not the splash. Today
+        # both PNGs are identical due to the BIOS gate documented above,
+        # but the param/intent now reads correctly at face value.
         run: |
           mkdir -p smoke-out
           .venv/bin/python rom/scripts/libretro-load-test.py \
             --frames 60 \
-            --dump-frames smoke-out --dump-every 60 \
+            --dump-frames smoke-out --dump-every 59 \
             --summary \
             vj-core/virtualjaguar_libretro.so \
             rom-artifact/${PROJECT}.jag
+          rm -f smoke-out/frame-0000.png
 
       - name: Upload smoke screenshot
         if: always()
