@@ -47,6 +47,7 @@ void MDFourierTest(void);
 /* Hardware tests */
 void HardwareInfo(void);
 void JaguarCDTest(void);
+void ResolutionTest(void);
 
 /* Screen savers (animated full-screen patterns for OLED burn-in / demo)
  * Mirrors the Screensavers section that ships with the canonical 240p

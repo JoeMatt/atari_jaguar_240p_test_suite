@@ -857,6 +857,303 @@ void HardwareInfo(void){
 }
 
 /* ---------------------------------------------------------------------------
+ * Hardware tools: Video Mode / Resolution test
+ *
+ * Addresses upstream BitJag #2 ("Resolution Switching") within the bounds of
+ * what is actually safe to flip at runtime in the Removers' Library display
+ * model. The library has no `delete_display` and the menu's long-lived
+ * sprites (backdrop, status line, lineTextBox[]) are sized for the boot-time
+ * vmode. So a "global runtime resolution change" would require a second boot
+ * path -- out of scope for a single test.
+ *
+ * What we *can* do safely while a test is the only thing on the display:
+ *   - read every relevant TOM video register live (vmode, vp, hp, hdb1/hde,
+ *     vdb/vde, vs) and show the user what the hardware is actually doing,
+ *   - flip the PWIDTH (pixel-clock divider) and pixel-format bits inside
+ *     `vmode` and let the user see how the connected display reacts -- this
+ *     does not change any framebuffer dimensions, only how pixels are
+ *     clocked out of the line buffer, so the test sprites remain valid,
+ *   - restore the boot defaults on exit so the rest of the menu / tests
+ *     come back exactly as before.
+ *
+ * This is the minimum viable answer to "give users a way to see and probe
+ * Jaguar video modes" without lying about a feature we can't actually
+ * deliver across every test in the suite.
+ *
+ * Controls: UP/DOWN cycles PWIDTH (1..8), LEFT/RIGHT cycles pixel format
+ *           (CRY16 / RGB24 / DIRECT16 / RGB16), A restores the boot vmode,
+ *           B toggles auto-recenter (rescales display->x as PWIDTH changes
+ *           so the image stays visually centered on real hardware -- any
+ *           drift you see with this on is your emulator's PWIDTH handling
+ *           being broken), OPTION exits (and restores the boot vmode).
+ *
+ * Visual aids: a 320 x activeH reference frame is drawn on layer 12 with
+ * a 1px white border and a center crosshair, so off-center / squashed
+ * modes are obvious without measuring. On real hardware the frame edges
+ * should kiss the visible screen edges; on a buggy emulator they won't.
+ *
+ * Mode tagging: well-known commercial uses are tagged inline so users
+ * can connect the test to actual games -- e.g. PWIDTH8 is what Jaguar
+ * Doom uses (each pixel 2x wide so 160 logical columns fill the screen),
+ * CRY16 is the native format for Cybermorph / AvP / Tempest 2000.
+ * --------------------------------------------------------------------------- */
+void ResolutionTest(void){
+    /// Snapshot the boot vmode and display->x so we can always get back to a
+    /// sane display. main.c sets `RGB16 | CSYNC | BGEN | PWIDTH4 | VIDEN` and
+    /// display->x = 19 (NTSC) / 14 (PAL) before show_display().
+    const uint16_t vmodeBoot   = TOMREGS->vmode;
+    const int      bootDisplayX = settings->d->x;
+
+    /// Pixel-format names line up with the bit pattern in (vmode >> 1) & 0x3.
+    /// Tag the commercially-recognisable formats so users connect the test
+    /// to actual Jaguar games they have lying around.
+    static const char *fmtName[4] = {
+        "CRY16  (Cybermorph)",
+        "RGB24             ",
+        "DIRECT16          ",
+        "RGB16             "      /// boot default
+    };
+
+    /// PWIDTH divisor table. PWIDTH(n) clocks one pixel every (n+1) cycles
+    /// of the 26.59 MHz video clock (NTSC) / 26.42 MHz (PAL); the resulting
+    /// active pixels-per-line at 320 line-buffer columns work out roughly
+    /// to: PWIDTH4 ~= 320 native, PWIDTH2 ~= 640 squeezed, PWIDTH8 ~= 160
+    /// stretched (the famous Doom mode). On real hardware all eight
+    /// settings cover the same horizontal screen area; only the per-pixel
+    /// width changes. Buggy emulators that ignore PWIDTH will render the
+    /// stretched modes (5..8) at less than full screen width.
+    static const char *pwHintTbl[8] = {
+        "1280 sqsh ",   /// PWIDTH1 -- pixels 1/4 of normal
+        "640 squash",   /// PWIDTH2
+        "427 squash",   /// PWIDTH3
+        "320 native",   /// PWIDTH4 -- boot default
+        "256 stretch",  /// PWIDTH5 -- approx. SNES horizontal density
+        "213 stretch",  /// PWIDTH6
+        "183 stretch",  /// PWIDTH7
+        "160=Doom!! "   /// PWIDTH8 -- Jaguar Doom's resolution hack
+    };
+
+    int exit = 0;
+    int redraw = 1;
+    int pwidth     = ((vmodeBoot >> 9) & 0x7);   /// 0..7 maps to PWIDTH1..PWIDTH8
+    int fmt        = ((vmodeBoot >> 1) & 0x3);   /// 0..3 maps to fmtName[]
+    int autoCenter = 0;                          /// off by default; B toggles
+
+    int i, k, p;
+    char buf[12];
+
+    /// --- Reference frame sprite ----------------------------------------
+    /// 320 x activeH DEPTH16 sprite with a 1px white border and a single-pixel
+    /// crosshair through the centre. Lives on layer 12 (text rows are layer 13)
+    /// so the frame sits behind the text. Active height tracks region.
+    int activeH = settings->PALNTSC ? 240 : 288;
+    uint16_t *frameBuf = malloc(sizeof(uint16_t) * 320 * activeH);
+    fillPACK_RGB16(frameBuf, 320 * activeH, COLOR_BLACK);
+    rectPACK_RGB16(frameBuf, 320, 0,           0,           320, 1, COLOR_WHITE); /// top
+    rectPACK_RGB16(frameBuf, 320, 0,           activeH - 1, 320, 1, COLOR_WHITE); /// bottom
+    rectPACK_RGB16(frameBuf, 320, 0,           0,           1,   activeH, COLOR_WHITE); /// left
+    rectPACK_RGB16(frameBuf, 320, 319,         0,           1,   activeH, COLOR_WHITE); /// right
+    rectPACK_RGB16(frameBuf, 320, 159,         0,           2,   activeH, COLOR_WHITE); /// vertical centre line
+    rectPACK_RGB16(frameBuf, 320, 0,           activeH/2,   320, 2,       COLOR_WHITE); /// horizontal centre line
+    /// Quarter ticks on the top/bottom borders -- helps spot horizontal scaling.
+    rectPACK_RGB16(frameBuf, 320, 80,  0,           1, 4,           COLOR_WHITE);
+    rectPACK_RGB16(frameBuf, 320, 240, 0,           1, 4,           COLOR_WHITE);
+    rectPACK_RGB16(frameBuf, 320, 80,  activeH - 4, 1, 4,           COLOR_WHITE);
+    rectPACK_RGB16(frameBuf, 320, 240, activeH - 4, 1, 4,           COLOR_WHITE);
+
+    sprite *frameSp = new_sprite(320, activeH, 0, 0, DEPTH16, (uint8_t*)frameBuf);
+    frameSp->trans = 0;
+    attach_sprite_to_display_at_layer(frameSp, settings->d, 12);
+
+    textBox *titleTb = newTextBox("VIDEO MODE TEST", 192, 9, mainFont, 0, settings->d, 80, 40, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    /// Region label is fixed for the lifetime of this test, so pick the
+    /// right initial string instead of patching characters in place. The
+    /// previous in-place rewrite of "NTSC" -> "PAL" left a double space
+    /// before the Hz value because the tokens differ in length.
+    textBox *regionTb = newTextBox(
+        (settings->PALNTSC == 0) ? "REGION : PAL 50Hz " : "REGION : NTSC 60Hz",
+        224, 9, mainFont, 0, settings->d, 56, 64, 13, 1);
+    updateLine(settings, mainFont, regionTb, NULL, 999999, 999999, WHITE);
+
+    /// Mutable / informative rows. Refreshed in the `redraw` block so
+    /// pwidth/fmt/autoCenter edits show up next vsync. Initial strings
+    /// are pre-formatted to match the post-redraw layout exactly (no
+    /// parens around the hint text) so the first frame doesn't flash a
+    /// different format before the redraw fires.
+    textBox *fmtTb     = newTextBox("FORMAT : RGB16              ", 256, 9, mainFont, 0, settings->d, 32, 88,  13, 1);
+    textBox *pwTb      = newTextBox("PWIDTH : 4 320 native       ", 256, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
+    textBox *vmodeTb   = newTextBox("VMODE  : 0x0000             ", 256, 9, mainFont, 0, settings->d, 32, 120, 13, 1);
+    textBox *geomTb    = newTextBox("GEOM   : 320x000            ", 256, 9, mainFont, 0, settings->d, 32, 136, 13, 1);
+    textBox *regsTb    = newTextBox("VP=000 HP=000               ", 256, 9, mainFont, 0, settings->d, 32, 152, 13, 1);
+    textBox *recenTb   = newTextBox("RECENTER: OFF               ", 256, 9, mainFont, 0, settings->d, 32, 168, 13, 1);
+
+    textBox *help1Tb   = newTextBox("UP/DOWN: PWIDTH   LEFT/RIGHT: format", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
+    textBox *help2Tb   = newTextBox("A: boot mode   B: recenter   OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 200, 13, 1);
+    updateLine(settings, mainFont, help1Tb, NULL, 999999, 999999, GREY);
+    updateLine(settings, mainFont, help2Tb, NULL, 999999, 999999, GREY);
+
+    /// Layers 12 (frame) and 13 (text) only.
+    hide_or_show_display_layer_range(settings->d, 1, 12, 13);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(redraw){
+            /// Compose new vmode: keep non-PWIDTH/non-format bits from the
+            /// boot value, splice in the user's PWIDTH and pixel-format.
+            uint16_t newVmode = (vmodeBoot & ~((0x7u << 9) | (0x3u << 1)))
+                              | ((uint16_t)(pwidth & 0x7) << 9)
+                              | ((uint16_t)(fmt    & 0x3) << 1);
+            TOMREGS->vmode = newVmode;
+
+            /// Auto-recenter: scale display->x by the PWIDTH ratio. boot
+            /// is PWIDTH4 (divisor 4); at PWIDTH8 (divisor 8) pixels are
+            /// 2x as wide so the centering offset (in pixel-clock units)
+            /// halves; conversely PWIDTH2 doubles it. Integer math, +divisor/2
+            /// for round-to-nearest.
+            int newDispX = bootDisplayX;
+            if(autoCenter){
+                int divisor = pwidth + 1;
+                newDispX = (bootDisplayX * 4 + divisor/2) / divisor;
+            }
+            settings->d->x = (short int)newDispX;
+
+            /// FORMAT row -- variable-width hint, copy until null or 18 chars.
+            for(i = 0; i < 18; i++){ fmtTb->text[9 + i] = ' '; }
+            const char *fn = fmtName[fmt & 0x3];
+            for(i = 0; i < 18 && fn[i] != '\0'; i++){ fmtTb->text[9 + i] = fn[i]; }
+            updateLine(settings, mainFont, fmtTb, NULL, 999999, 999999, WHITE);
+
+            /// PWIDTH row.
+            for(i = 0; i < 14; i++){ pwTb->text[9 + i] = ' '; }
+            pwTb->text[9]  = (char)('1' + pwidth);
+            pwTb->text[10] = ' ';
+            const char *pwh = pwHintTbl[pwidth];
+            for(i = 0; i < 12 && pwh[i] != '\0'; i++){ pwTb->text[11 + i] = pwh[i]; }
+            updateLine(settings, mainFont, pwTb, NULL, 999999, 999999, pwidth == 7 ? RED : WHITE);
+
+            /// VMODE register, hex.
+            buf[0] = '\0';
+            itostring(buf, (int)newVmode, 16);
+            int n = 0; while(buf[n] != '\0' && n < 4) n++;
+            for(p = 0; p < 4; p++){ vmodeTb->text[11 + p] = '0'; }
+            for(k = 0; k < n; k++){ vmodeTb->text[11 + (4 - n) + k] = buf[k]; }
+            updateLine(settings, mainFont, vmodeTb, NULL, 999999, 999999, WHITE);
+
+            /// GEOM row -- effective active resolution. Width is line buffer
+            /// span (always 320 in this build); height comes from PALNTSC.
+            buf[0] = '\0';
+            itostring(buf, activeH, 10);
+            int hn = 0; while(buf[hn] != '\0' && hn < 3) hn++;
+            for(p = 0; p < 3; p++){ geomTb->text[13 + p] = ' '; }
+            for(k = 0; k < hn; k++){ geomTb->text[13 + (3 - hn) + k] = buf[k]; }
+            updateLine(settings, mainFont, geomTb, NULL, 999999, 999999, WHITE);
+
+            /// VP / HP raw register dump, decimal -- handy for documenting
+            /// what an emulator vs real HW reports for region timing.
+            uint16_t vpReg = TOMREGS->vp;
+            uint16_t hpReg = TOMREGS->hp;
+            buf[0] = '\0';
+            itostring(buf, (int)vpReg, 10);
+            int vn = 0; while(buf[vn] != '\0' && vn < 3) vn++;
+            for(p = 0; p < 3; p++){ regsTb->text[3 + p] = ' '; }
+            for(k = 0; k < vn; k++){ regsTb->text[3 + (3 - vn) + k] = buf[k]; }
+            buf[0] = '\0';
+            itostring(buf, (int)hpReg, 10);
+            int hpn = 0; while(buf[hpn] != '\0' && hpn < 3) hpn++;
+            for(p = 0; p < 3; p++){ regsTb->text[10 + p] = ' '; }
+            for(k = 0; k < hpn; k++){ regsTb->text[10 + (3 - hpn) + k] = buf[k]; }
+            updateLine(settings, mainFont, regsTb, NULL, 999999, 999999, WHITE);
+
+            /// RECENTER row -- show state and the actual display->x being used.
+            recenTb->text[10] = 'O';
+            recenTb->text[11] = autoCenter ? 'N' : 'F';
+            recenTb->text[12] = autoCenter ? ' ' : 'F';
+            recenTb->text[13] = ' ';
+            recenTb->text[14] = '(';
+            recenTb->text[15] = 'x';
+            recenTb->text[16] = '=';
+            buf[0] = '\0';
+            itostring(buf, newDispX, 10);
+            int xn = 0; while(buf[xn] != '\0' && xn < 3) xn++;
+            for(p = 0; p < 3; p++){ recenTb->text[17 + p] = ' '; }
+            for(k = 0; k < xn; k++){ recenTb->text[17 + (3 - xn) + k] = buf[k]; }
+            recenTb->text[20] = ')';
+            updateLine(settings, mainFont, recenTb, NULL, 999999, 999999, autoCenter ? GREEN : GREY);
+
+            redraw = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            pwidth = (pwidth + 1) & 0x7;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            pwidth = (pwidth + 7) & 0x7;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_RIGHT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            fmt = (fmt + 1) & 0x3;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_LEFT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            fmt = (fmt + 3) & 0x3;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            pwidth = ((vmodeBoot >> 9) & 0x7);
+            fmt    = ((vmodeBoot >> 1) & 0x3);
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_B) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            autoCenter = !autoCenter;
+            redraw = 1;
+        }
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    /// Always restore the boot vmode + display->x before handing control back
+    /// to the menu, even if the user exited via OPTION mid-stretch. Otherwise
+    /// the main menu sprites would render at the wrong pixel clock / origin.
+    TOMREGS->vmode  = vmodeBoot;
+    settings->d->x  = (short int)bootDisplayX;
+
+    /// Tear down test-owned layers, then restore everything else for the menu.
+    hide_or_show_display_layer_range(settings->d, 0, 12, 13);
+    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+
+    help2Tb  = freeTextBox(help2Tb);
+    help1Tb  = freeTextBox(help1Tb);
+    recenTb  = freeTextBox(recenTb);
+    regsTb   = freeTextBox(regsTb);
+    geomTb   = freeTextBox(geomTb);
+    vmodeTb  = freeTextBox(vmodeTb);
+    pwTb     = freeTextBox(pwTb);
+    fmtTb    = freeTextBox(fmtTb);
+    regionTb = freeTextBox(regionTb);
+    titleTb  = freeTextBox(titleTb);
+
+    teardownFullscreenSprite(frameSp, frameBuf);
+}
+
+/* ---------------------------------------------------------------------------
  * Options menu
  *
  * Replaces the (x)Options stubs that appeared in every sub-menu. For now the
