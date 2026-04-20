@@ -220,9 +220,8 @@ int main () {
                 
             }
             
-            resetAllLines();
-            loadMainMenuLines();
             settings->menuState = 1;
+            loadMainMenuLines();
         
         }
     
@@ -236,8 +235,19 @@ void loadMainMenuLines(){
     vsync();
     vsync();
     
+    /* Set the main menu's coordinate band BEFORE wiping every line slot.
+     * Sub-menus use their own (smaller) lineXOffset / lineYOffset and may
+     * touch up to LINESOFTEXT-1 slots; if we reset with stale sub-menu
+     * offsets, slots 8..LINESOFTEXT-1 stay parked at the sub-menu's
+     * positions (still showing the previously-highlighted red "Back"
+     * entry, etc). Resetting at the main-menu offsets relocates every
+     * leftover slot into the same consistent band as the items we are
+     * about to draw, so the blanked " " sprites overwrite the old text
+     * cleanly and nothing red lingers in the middle of the screen. */
     settings->lineXOffset = 64;
     settings->lineYOffset = 88 + settings->PALOffset;
+    
+    resetAllLines();
     
     updateLine(settings, mainFont, lineTextBox[1], "Test Patterns", settings->lineXOffset, setLineYPos(0), RED);
     updateLine(settings, mainFont, lineTextBox[2], "Video Tests", settings->lineXOffset, setLineYPos(1), WHITE);
