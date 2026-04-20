@@ -78,7 +78,16 @@ def build_rom(in_path: Path, out_path: Path) -> None:
     pad_len = padded_size - unpadded_size
     body = payload + (b"\xFF" * pad_len)
 
-    header = bytearray(HEADER_SIZE)
+    # IMPORTANT: header is 0xFF-filled, not zero-filled, to be byte-for-byte
+    # identical to what upstream makefastboot.cpp produces for a headerless
+    # input. Upstream does `memset(bigbuf, 0xff, 0x2000)` BEFORE memcpy'ing
+    # the signature on top, so:
+    #   0x084-0x3FF, 0x40C-0x40F, 0x41C-0x1FFF stay at 0xFF (erased flash).
+    # Earlier versions of this script zero-filled, which meant the standard
+    # cart ID region (0x800-0x9FF in Atari's spec) was 0x00 rather than the
+    # 0xFF that real cart EPROMs and upstream-produced ROMs ship with --
+    # enough to make some cores' content-detection code refuse the cart.
+    header = bytearray(b"\xFF" * HEADER_SIZE)
 
     header[0x00:0x84] = FASTBOOT_SIGNATURE
 

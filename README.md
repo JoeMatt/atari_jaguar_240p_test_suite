@@ -109,7 +109,8 @@ ROM output is padded with trailing `0xFF` to the next 1 MiB boundary. This is re
 If you want to verify a build actually loads (and runs) before pushing to a real device, drop your libretro core (e.g. `virtualjaguar_libretro.dylib`) into the repo root and run:
 
 ```bash
-make run                  # build .j64 and open UI frontend (RetroArch/OpenEmu)
+make run                  # build .j64 and do a deterministic headless smoke run
+make run-ui               # attempt UI launch (RetroArch; may crash on broken setups)
 make libretro-run         # build .j64, init core, run 60 frames
 make libretro-test        # init core + load_game only (faster)
 ```

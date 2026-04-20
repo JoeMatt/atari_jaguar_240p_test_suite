@@ -16,9 +16,9 @@ include Makefile.docker
         docker-build docker-debug docker-rom docker-rom-debug \
         docker-j64 docker-j64-debug docker-all \
         docker-up colima-start colima-stop colima-status \
-        ensure-j64 run run-ui run-headless \
+        ensure-build ensure-j64 fresh-build fresh-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
-        verify-sig \
+        unquarantine-core verify-sig \
         in-docker native-build help help-toolchain
 
 # ---------------------------------------------------------------------------
@@ -70,6 +70,29 @@ ifeq ($(AUTO_DOCKER_NOTICE),1)
       $(info >> docker daemon will be auto-started via colima if not already running.)
     endif
     $(info >> Set USE_DOCKER=0 to disable, or run `make help` to see every target.)
+  endif
+endif
+
+# ---------------------------------------------------------------------------
+# Auto-purge a stale .depend.
+#
+# The Docker SDK build writes .depend with container paths like
+#   main.o: main.c main.h /opt/jagsdk/lib/include/jagdefs.h ...
+# When the user later runs `make <anything>` on the host (no toolchain),
+# `-include .depend` pulls those rules in and make tries to satisfy
+# `/opt/jagsdk/...` as a prerequisite -> "No rule to make target ...". Stop.
+#
+# We detect "this .depend was written by a different filesystem" by checking
+# whether ANY referenced header path still exists. If none of them do, the
+# file is stale and useless on this host -- nuke it before the include below.
+# (Cheap: a single `awk` pass at parse time, no external grep/find chains.)
+# ---------------------------------------------------------------------------
+ifneq ($(wildcard .depend),)
+  DEPEND_LIVE_PATHS := $(shell awk 'NF{for(i=1;i<=NF;i++) if($$i ~ /^\//) print $$i}' .depend 2>/dev/null | sort -u | head -20)
+  DEPEND_HAS_LIVE   := $(strip $(foreach p,$(DEPEND_LIVE_PATHS),$(wildcard $(p))))
+  ifeq ($(DEPEND_HAS_LIVE),)
+    $(info >> .depend references paths that don't exist on this host (likely a docker build); purging.)
+    $(shell rm -f .depend)
   endif
 endif
 

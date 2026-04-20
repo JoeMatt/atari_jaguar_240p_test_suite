@@ -79,8 +79,8 @@ def main(argv: list[str]) -> int:
 
     builder = SessionBuilder.defaults(str(args.core)).with_content(str(args.content))
 
-    print(f">> core:    {args.core}")
-    print(f">> content: {args.content} ({args.content.stat().st_size:,} bytes)")
+    print(f">> core:    {args.core}", flush=True)
+    print(f">> content: {args.content} ({args.content.stat().st_size:,} bytes)", flush=True)
 
     save_png = None
     if args.dump_frames is not None:
@@ -92,9 +92,27 @@ def main(argv: list[str]) -> int:
         if save_png is None:
             return 1
 
+    # Note on flushing: every print uses flush=True. The Virtual Jaguar
+    # libretro core on macOS calls raw _exit(0) from inside the first
+    # retro_run() invocation (upstream bug -- reproduces with any
+    # non-RetroArch harness), which bypasses Python's stdio buffering and
+    # atexit hooks. Without flush=True the user would see zero output and
+    # think the script silently did nothing. Even with flush=True, anything
+    # printed AFTER session.run() may not appear if the core takes that
+    # exit path.
+    if args.frames > 0:
+        print(
+            ">> NOTE: requesting >0 frames against virtualjaguar on macOS will\n"
+            "         likely cause the core to call _exit(0) from inside\n"
+            "         retro_run() -- this is an upstream core bug, not a\n"
+            "         harness issue. The ROM is valid if 'load_game returned\n"
+            "         True' prints above.",
+            flush=True,
+        )
+
     try:
         with builder.build() as session:
-            print(">> load_game returned True; core initialised successfully.")
+            print(">> load_game returned True; core initialised successfully.", flush=True)
             for i in range(args.frames):
                 session.run()
                 if not (args.summary or save_png):
@@ -102,23 +120,26 @@ def main(argv: list[str]) -> int:
                 shot = session.video.screenshot()
                 if shot is None:
                     if args.summary:
-                        print(f"  frame {i:04d}: <no framebuffer yet>")
+                        print(f"  frame {i:04d}: <no framebuffer yet>", flush=True)
                     continue
                 if args.summary:
                     nb = _non_black_ratio(shot)
                     print(
                         f"  frame {i:04d}: {shot.width}x{shot.height} "
-                        f"{shot.pixel_format.name} non_black={nb:.1%}"
+                        f"{shot.pixel_format.name} non_black={nb:.1%}",
+                        flush=True,
                     )
                 if save_png and (i % args.dump_every == 0):
                     out = args.dump_frames / f"frame-{i:04d}.png"
                     save_png(shot, out)
             if args.frames:
-                print(f">> ran {args.frames} frame(s) without raising.")
+                print(f">> ran {args.frames} frame(s) without raising.", flush=True)
                 if save_png:
-                    print(f">> dumped frames to {args.dump_frames}/")
+                    print(f">> dumped frames to {args.dump_frames}/", flush=True)
+            sys.stdout.flush()
+            sys.stderr.flush()
     except Exception as exc:
-        print(f"!! load failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"!! load failed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         return 2
 
     return 0

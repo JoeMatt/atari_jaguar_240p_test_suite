@@ -10,7 +10,15 @@ DISTFILES	= Makefile Makefile.config Makefile.example README.md $(SRCC) $(SRCH) 
 
 TARFILE		= $(OUT_PROJECT).tar.gz
 
+## When the native cross-compiler is missing, `.depend` cannot exist, so we
+## must not list it as a prerequisite of `all` -- otherwise host invocations
+## that hit this target (rare, but possible) would deadlock on a file that
+## has no rule to build it.
+ifeq ($(HAS_NATIVE_CC),1)
 all: .depend $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT).rom $(OUT_PROJECT).j64
+else
+all: $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT).rom $(OUT_PROJECT).j64
+endif
 
 .PHONY: all dist alpine bjl debug skunkram skunkrom rom rom-debug j64 j64-debug reset clean vjram vjrom vjj64
 
@@ -60,7 +68,16 @@ j64: $(OUT_PROJECT).j64
 j64-debug:
 	$(MAKE) DEBUG=1 j64
 
-vjj64: $(OUT_PROJECT).j64
+# .jag = .cof with an extension the VJ libretro core accepts (j64|jag).
+# VJ can't emulate ROM-mapped $802000 cart images, so for VJ testing we
+# use the RAM-loaded COFF binary at $4000 -- the way the original project
+# always ran in Virtual Jaguar.
+$(OUT_PROJECT).jag: $(OUT_PROJECT).cof
+	cp -f $(OUT_PROJECT).cof $(OUT_PROJECT).jag
+
+jag: $(OUT_PROJECT).jag
+
+vjj64: fresh-j64
 	$(VJ) -a $(OUT_PROJECT).j64
 
 alpine: $(OUT_PROJECT).cof
@@ -89,10 +106,17 @@ reset:
 
 clean:
 	rm -f *~ $(OBJS) .depend \
-		$(PROJECT).cof $(PROJECT).bin $(PROJECT).rom $(PROJECT).j64 $(PROJECT).tar.gz \
-		$(PROJECT)-debug.cof $(PROJECT)-debug.bin $(PROJECT)-debug.rom $(PROJECT)-debug.j64 $(PROJECT)-debug.tar.gz
+		$(PROJECT).cof $(PROJECT).bin $(PROJECT).rom $(PROJECT).j64 $(PROJECT).jag $(PROJECT).tar.gz \
+		$(PROJECT)-debug.cof $(PROJECT)-debug.bin $(PROJECT)-debug.rom $(PROJECT)-debug.j64 $(PROJECT)-debug.jag $(PROJECT)-debug.tar.gz
 
+## .depend regeneration is gated on the native cross-compiler being present.
+## Without it, `make` would try to invoke m68k-atari-mint-gcc just to compute
+## header dependencies for targets that don't need it (verify, run, vjj64,
+## clean, etc.) and fail. When toolchain is absent we just skip it -- header
+## tracking is only useful for incremental rebuilds anyway.
+ifeq ($(HAS_NATIVE_CC),1)
 .depend: $(SRCC)
 	$(CC) -MM $(CFLAGS) $(SRCC) > .depend
 
 -include .depend
+endif

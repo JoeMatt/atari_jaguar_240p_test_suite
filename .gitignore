@@ -4,8 +4,10 @@
 *.bin
 *.rom
 *.j64
+*.jag
 *.tar.gz
 .depend
+frames*/
 
 # Distribution staging
 dist/
