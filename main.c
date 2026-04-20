@@ -254,44 +254,49 @@ void loadMainMenuLines(){
     
 };
 
+/* Draw the Test Patterns menu's text lines. Extracted so the parent menu can
+ * redraw itself after morePatternsMenu() (which shares lineTextBox[]) returns. */
+static void drawTestPatternMenuLines(int highlightLine){
+    settings->lineXOffset = 38;
+    settings->lineYOffset = 52 + settings->PALOffset;
+
+    resetAllLines();
+
+    updateLine(settings, mainFont, lineTextBox[1], "Pluge", settings->lineXOffset, setLineYPos(0), highlightLine == 1 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[2], "Color Bars", settings->lineXOffset, setLineYPos(1), highlightLine == 2 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "EBU Color Bars", settings->lineXOffset, setLineYPos(2), highlightLine == 3 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "SMPTE Color Bars", settings->lineXOffset, setLineYPos(3), highlightLine == 4 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Referenced Color Bars", settings->lineXOffset, setLineYPos(4), highlightLine == 5 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Color Bleed Check", settings->lineXOffset, setLineYPos(5), highlightLine == 6 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Monoscope", settings->lineXOffset, setLineYPos(6), highlightLine == 7 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Grid", settings->lineXOffset, setLineYPos(7), highlightLine == 8 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Gray Ramp", settings->lineXOffset, setLineYPos(8), highlightLine == 9 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "White & RGB Screens", settings->lineXOffset, setLineYPos(9), highlightLine == 10 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "100 IRE", settings->lineXOffset, setLineYPos(10), highlightLine == 11 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Sharpness", settings->lineXOffset, setLineYPos(11), highlightLine == 12 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Overscan", settings->lineXOffset, setLineYPos(12), highlightLine == 13 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[14], "Convergence", settings->lineXOffset, setLineYPos(13), highlightLine == 14 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[15], "More Patterns...", settings->lineXOffset, setLineYPos(14), highlightLine == 15 ? RED : WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[16], "Back to Main Menu", settings->lineXOffset, setLineYPos(15), highlightLine == 16 ? RED : WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
+}
+
 void testPatternMenu(){
-    
+
     int done = 0;
-    int lastMenuLine = 20; //counting from zero
+    /* Original 14 patterns + "More Patterns..." entry + "Back" = 16 lines.
+     * The 5 new procedural patterns live behind morePatternsMenu() so this
+     * menu still fits inside the 240p safe area without overlap. */
+    int lastMenuLine = 16; //counting from zero
     settings->menuState = 1;
-    
+
     hide_display_layer(settings->d, 2);
     vsync();
-    
-    settings->lineXOffset = 38;
-    settings->lineYOffset = 36 + settings->PALOffset;
-    
-    resetAllLines();
-        
-    updateLine(settings, mainFont, lineTextBox[1], "Pluge", settings->lineXOffset, setLineYPos(0), RED);
-    updateLine(settings, mainFont, lineTextBox[2], "Color Bars", settings->lineXOffset, setLineYPos(1), WHITE);
-    updateLine(settings, mainFont, lineTextBox[3], "EBU Color Bars", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "SMPTE Color Bars", settings->lineXOffset, setLineYPos(3), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "Referenced Color Bars", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Color Bleed Check", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Monoscope", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Grid", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[9], "Gray Ramp", settings->lineXOffset, setLineYPos(8), WHITE);
-    updateLine(settings, mainFont, lineTextBox[10], "White & RGB Screens", settings->lineXOffset, setLineYPos(9), WHITE);
-    updateLine(settings, mainFont, lineTextBox[11], "100 IRE", settings->lineXOffset, setLineYPos(10), WHITE);
-    updateLine(settings, mainFont, lineTextBox[12], "Sharpness", settings->lineXOffset, setLineYPos(11), WHITE);
-    updateLine(settings, mainFont, lineTextBox[13], "Overscan", settings->lineXOffset, setLineYPos(12), WHITE);
-    updateLine(settings, mainFont, lineTextBox[14], "Convergence", settings->lineXOffset, setLineYPos(13), WHITE);
-    updateLine(settings, mainFont, lineTextBox[15], "Color Bars w/ Gray", settings->lineXOffset, setLineYPos(14), WHITE);
-    updateLine(settings, mainFont, lineTextBox[16], "Linearity", settings->lineXOffset, setLineYPos(15), WHITE);
-    updateLine(settings, mainFont, lineTextBox[17], "Phase", settings->lineXOffset, setLineYPos(16), WHITE);
-    updateLine(settings, mainFont, lineTextBox[18], "Brightness", settings->lineXOffset, setLineYPos(17), WHITE);
-    updateLine(settings, mainFont, lineTextBox[19], "Contrast", settings->lineXOffset, setLineYPos(18), WHITE);
-    
-    updateLine(settings, mainFont, lineTextBox[20], "Back to Main Menu", settings->lineXOffset, setLineYPos(20), WHITE);
-    
-    updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
-       
+
+    drawTestPatternMenuLines(1);
+
     show_display_layer(settings->d, 2);
         
     while(!done){
@@ -448,43 +453,21 @@ void testPatternMenu(){
                     
                 break;
 
-                //Color Bars w/ Gray
+                //More Patterns submenu
                 case 15:
 
-                    DrawColorBarsGray();
-
-                break;
-
-                //Linearity
-                case 16:
-
-                    DrawLinearity();
-
-                break;
-
-                //Phase
-                case 17:
-
-                    DrawPhase();
-
-                break;
-
-                //Brightness
-                case 18:
-
-                    DrawBrightness();
-
-                break;
-
-                //Contrast
-                case 19:
-
-                    DrawContrast();
+                    morePatternsMenu();
+                    /* morePatternsMenu shares lineTextBox[]; redraw our own
+                     * menu state before the loop continues. */
+                    hide_display_layer(settings->d, 2);
+                    vsync();
+                    drawTestPatternMenuLines(15);
+                    show_display_layer(settings->d, 2);
 
                 break;
 
                 //return to main menu
-                case 20:
+                case 16:
                     
                     done = 1;
                     
@@ -501,6 +484,106 @@ void testPatternMenu(){
         
     }
     
+};
+
+/* Sub-menu for the procedurally-generated patterns added to the Jaguar build,
+ * separated from testPatternMenu so neither page overflows the 240p safe area. */
+void morePatternsMenu(){
+
+    int done = 0;
+    int lastMenuLine = 6; //counting from zero
+    settings->menuState = 1;
+
+    hide_display_layer(settings->d, 2);
+    vsync();
+
+    settings->lineXOffset = 38;
+    settings->lineYOffset = 80 + settings->PALOffset;
+
+    resetAllLines();
+
+    updateLine(settings, mainFont, lineTextBox[1], "Color Bars w/ Gray", settings->lineXOffset, setLineYPos(0), RED);
+    updateLine(settings, mainFont, lineTextBox[2], "Linearity", settings->lineXOffset, setLineYPos(1), WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "Phase", settings->lineXOffset, setLineYPos(2), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "Brightness", settings->lineXOffset, setLineYPos(3), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Contrast", settings->lineXOffset, setLineYPos(4), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[6], "Back to Test Patterns", settings->lineXOffset, setLineYPos(6), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
+
+    show_display_layer(settings->d, 2);
+
+    while(!done){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+            settings->scrollLock = 12;
+        }
+        else if(settings->scrollLock > 0){
+            settings->scrollLock--;
+            if(settings->scrollLock == 0){
+                settings->controllerLock = 0;
+                settings->scrollLock = 2;
+            }
+        }
+
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            settings->menuStateOld = settings->menuState;
+            if((settings->menuState + 1) < lastMenuLine + 1){
+                settings->menuState++;
+            }
+            else{
+                settings->menuState = 1;
+            }
+            updateLine(settings, mainFont, lineTextBox[settings->menuStateOld], '\0', 999999, 999999, WHITE);
+            updateLine(settings, mainFont, lineTextBox[settings->menuState], '\0', 999999, 999999, RED);
+        }
+
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            settings->menuStateOld = settings->menuState;
+            if((settings->menuState - 1) > 0){
+                settings->menuState--;
+            }
+            else{
+                settings->menuState = lastMenuLine;
+            }
+            updateLine(settings, mainFont, lineTextBox[settings->menuStateOld], '\0', 999999, 999999, WHITE);
+            updateLine(settings, mainFont, lineTextBox[settings->menuState], '\0', 999999, 999999, RED);
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+
+            if(settings->menuState != lastMenuLine){
+                hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+            }
+
+            switch(settings->menuState){
+
+                case 1: DrawColorBarsGray(); break;
+                case 2: DrawLinearity();    break;
+                case 3: DrawPhase();        break;
+                case 4: DrawBrightness();   break;
+                case 5: DrawContrast();     break;
+
+                //return to Test Patterns menu
+                case 6:
+                    done = 1;
+                break;
+
+                default:
+                    TOMREGS->bg = 0x000F;
+            }
+        }
+
+        hide_or_show_display_layer_range(settings->d, 1, 0, 2);
+    }
 };
 
 void VideoTestsMenu(){

@@ -32,6 +32,7 @@ sprite *SDSprite;
 void loadMainMenuLines();
 
 void testPatternMenu();
+void morePatternsMenu();
 
 void VideoTestsMenu();
 
