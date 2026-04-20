@@ -1,5 +1,53 @@
 #include "./help.h"
 
+/* helpStrlen() / helpStrstr()
+ *
+ * Tiny in-house substring search. The Jaguar SDK's jlibc ships strlen() but
+ * not strstr(), so we roll our own naive O(n*m) scan. Only ever called
+ * during help-screen redraws on user-pressed OPTION+DOWN, so the
+ * worst-case ~360-char haystack search is irrelevant for performance.
+ * Returns the byte index of the first occurrence of `needle` in `hay`, or
+ * -1 if not found. NULL inputs are treated as not-found. */
+static int helpStrlen(const char *s){
+    int n = 0;
+    while(s[n] != '\0'){ n++; }
+    return n;
+}
+
+static int helpStrstrIndex(const char *hay, const char *needle){
+    if(hay == NULL || needle == NULL){ return -1; }
+    if(needle[0] == '\0'){ return 0; }
+    int i, j;
+    for(i = 0; hay[i] != '\0'; i++){
+        for(j = 0; needle[j] != '\0' && hay[i + j] == needle[j]; j++){ /* match */ }
+        if(needle[j] == '\0'){ return i; }
+        if(hay[i + j] == '\0'){ return -1; }
+    }
+    return -1;
+}
+
+/* highlightHelpPhrase()
+ *
+ * Recolors `phrase` inside `tb`'s currently-set text by locating it at
+ * runtime rather than by hard-coding a character offset.
+ *
+ * Rationale: textRangeColorChange() takes an absolute character index, so
+ * any edit to the surrounding help string (typo fix, rewording, translation)
+ * silently misaligns the highlight onto the wrong characters. Locating the
+ * substring at runtime keeps the highlight pinned to the intended phrase
+ * regardless of upstream edits. Caught by Qodo on PR #3 after the
+ * "Evalute" -> "Evaluate" + "procesors" -> "processors" typo fixes shifted
+ * "DOWN + OPTION" two characters to the right of its old offset (291).
+ *
+ * No-op (and safe) if the phrase isn't found, e.g. after a future rewrite. */
+static void highlightHelpPhrase(textBox *tb, const char *phrase){
+    if(tb == NULL || tb->text == NULL || phrase == NULL){ return; }
+    const char *base = (const char *)tb->text;
+    int start = helpStrstrIndex(base, phrase);
+    if(start < 0){ return; }
+    textRangeColorChange(tb, start, helpStrlen(phrase), WHITE, GREEN);
+}
+
 void DrawHelp(int option){
     
     int i = 0;
@@ -88,7 +136,7 @@ void DrawHelp(int option){
                             updateLine(settings, mainFont, helpLineTextBox[0], "HELP GENERAL (1/2)", 999999, 999999, GREEN);
                             
                             updateLine(settings, mainFont, helpTextBox, "The 240p Test Suite was designed with two goals in mind:^^1) Evaluate 240p signals on TV sets and video processors; and...^^2) provide calibration patterns from a game console to help in properly calibrating the display black, white and color levels.^^Help is available everywhere by pressing DOWN + OPTION.", 999999, 999999, WHITE);
-                            textRangeColorChange(helpTextBox, 291, 13, WHITE, GREEN);
+                            highlightHelpPhrase(helpTextBox, "DOWN + OPTION");
 
                             updateLine(settings, mainFont, helpLineTextBox[1], "Continued...", 999999, 999999, WHITE);
 
@@ -98,8 +146,8 @@ void DrawHelp(int option){
                             updateLine(settings, mainFont, helpLineTextBox[0], "HELP GENERAL (2/2)", 999999, 999999, GREEN);
                             
                             updateLine(settings, mainFont, helpTextBox, "The Jaguar port of the 240p Test Suite is a work in progress. Some functionality is still missing. For more information about the current state of this software, visit:^  https://jagcorner.com/240p-test-suite^^More general information about the 240p Test Suite:^  https://junkerhq.net/240p  ", 999999, 999999, WHITE);
-                            textRangeColorChange(helpTextBox, 171, 37, WHITE, GREEN);
-                            textRangeColorChange(helpTextBox, 264, 25, WHITE, GREEN);
+                            highlightHelpPhrase(helpTextBox, "https://jagcorner.com/240p-test-suite");
+                            highlightHelpPhrase(helpTextBox, "https://junkerhq.net/240p");
 
                         break;
                     }
