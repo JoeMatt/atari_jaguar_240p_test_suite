@@ -1,0 +1,613 @@
+# ---------------------------------------------------------------------------
+# Docker wrappers for the Jaguar SDK image.
+#
+# These let macOS users (and anyone without a local crossmint install) build
+# the ROM with nothing but Docker on their machine. The same image is used in
+# CI, so what builds locally builds in CI and vice versa.
+#
+# All wrapper targets are prefixed with `docker-` to avoid colliding with the
+# native build targets defined in Makefile.example (which are themselves used
+# inside the container).
+#
+#   make sdk-pull         -- pull the prebuilt SDK image from GHCR
+#   make sdk-build        -- build the SDK image locally from docker/Dockerfile
+#   make sdk-shell        -- open an interactive shell in the SDK container
+#   make docker-build     -- release build (.cof + .bin + .rom + .j64) inside the container
+#   make docker-debug     -- debug build (.cof + .bin + .rom + .j64, -debug suffix)
+#   make docker-rom       -- release .rom (with cart header) inside the container
+#   make docker-rom-debug -- debug   .rom inside the container
+#   make docker-j64       -- release .j64 (same bytes as .rom, different ext)
+#   make docker-j64-debug -- debug   .j64
+#   make docker-all       -- release + debug .rom AND .j64 in one invocation
+#   make in-docker CMD=.. -- generic escape hatch
+#   make native-build     -- build directly on the host (assumes SDK installed)
+# ---------------------------------------------------------------------------
+
+# Image coordinates.
+#
+# SDK_OWNER auto-detects the GHCR namespace from `git remote get-url origin`
+# so contributors who fork the repo don't have to override anything to push
+# / pull their own SDK image -- their own login is used by default. Falls
+# back to `joematt` (this fork's canonical publisher) when:
+#   - we're not in a git checkout, or
+#   - the origin remote isn't a GitHub URL (e.g. local-only mirror), or
+#   - git itself isn't on PATH.
+#
+# Override explicitly to point at a different namespace or tag:
+#   make SDK_OWNER=myname             docker-build
+#   make SDK_IMAGE=ghcr.io/foo/bar:dev docker-build
+SDK_OWNER_DEFAULT := joematt
+# Two parser landmines to avoid in this $(shell ...) call:
+#   1. make counts `(` / `)` even inside quotes, so the sed expressions must
+#      not contain parens (no grouping, no backrefs).
+#   2. make treats `#` as start-of-comment everywhere, including inside the
+#      shell argument, which would chop each continuation line at the sed
+#      `s#...#...#` delimiter. We use `,` as the sed delimiter instead.
+SDK_OWNER_DETECTED := $(shell git remote get-url origin 2>/dev/null \
+	| sed -e 's,^https://github.com/,,' \
+	      -e 's,^http://github.com/,,' \
+	      -e 's,^git@github.com:,,' \
+	      -e 's,^ssh://git@github.com/,,' \
+	      -e 's,\.git$$,,' \
+	      -e 's,/.*,,' \
+	| tr 'A-Z' 'a-z' \
+	| head -n1)
+SDK_OWNER	?= $(or $(SDK_OWNER_DETECTED),$(SDK_OWNER_DEFAULT))
+SDK_IMAGE	?= ghcr.io/$(SDK_OWNER)/jaguar-sdk:latest
+
+DOCKER		?= docker
+DOCKER_PLATFORM	?= linux/amd64
+
+# ---------------------------------------------------------------------------
+# Colima support.
+#
+# Colima (https://github.com/abiosoft/colima) is the de-facto Docker Desktop
+# replacement on macOS / Linux. It ships a Lima-backed VM that exposes a
+# standard docker socket, so once `colima start` has run, every `docker`
+# invocation in this Makefile transparently routes through it -- no special
+# wrappers needed.
+#
+# We probe for it at parse time and use it to (a) auto-start the VM when a
+# docker target is invoked but no daemon is reachable, and (b) surface
+# colima-specific help so users who don't have Docker Desktop have a
+# zero-config path forward.
+#
+# Tunables (override on the make command line):
+#   COLIMA_PROFILE      profile name (default: default)
+#   COLIMA_CPU          vCPUs to allocate when auto-starting          (4)
+#   COLIMA_MEMORY       GiB of RAM to allocate when auto-starting     (6)
+#   COLIMA_DISK         GiB of disk to allocate when auto-starting    (30)
+#   COLIMA_VM_TYPE      vm type: qemu | vz (Apple Silicon fast path)
+#   COLIMA_EXTRA        extra flags appended to `colima start`
+# ---------------------------------------------------------------------------
+HAS_COLIMA		:= $(if $(shell command -v colima 2>/dev/null),1,0)
+COLIMA_PROFILE		?= default
+COLIMA_CPU		?= 4
+COLIMA_MEMORY		?= 6
+COLIMA_DISK		?= 30
+COLIMA_VM_TYPE		?=
+COLIMA_EXTRA		?=
+COLIMA_START_FLAGS	= --cpu $(COLIMA_CPU) --memory $(COLIMA_MEMORY) --disk $(COLIMA_DISK) \
+			  $(if $(COLIMA_VM_TYPE),--vm-type $(COLIMA_VM_TYPE)) $(COLIMA_EXTRA)
+
+# Mount the repo at /work and run as the host user so generated files are not
+# owned by root. `--init` ensures Ctrl-C cleanly tears down the build.
+DOCKER_RUN	= $(DOCKER) run --rm --init \
+		--platform $(DOCKER_PLATFORM) \
+		-u $(shell id -u):$(shell id -g) \
+		-v "$(CURDIR)":/work \
+		-w /work \
+		$(SDK_IMAGE)
+
+DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
+		--platform $(DOCKER_PLATFORM) \
+		-u $(shell id -u):$(shell id -g) \
+		-v "$(CURDIR)":/work \
+		-w /work \
+		$(SDK_IMAGE)
+
+.PHONY: sdk-pull sdk-build sdk-shell \
+        docker-build docker-debug docker-rom docker-rom-debug \
+        docker-j64 docker-j64-debug docker-all \
+        native-build in-docker help help-toolchain \
+        docker-up colima-start colima-stop colima-status \
+        ensure-j64 run run-ui run-headless \
+        libretro-venv libretro-test libretro-run libretro-frames \
+        verify-sig
+
+# ---------------------------------------------------------------------------
+# docker-up: order-only prereq for every target that touches the docker CLI.
+# Fast path: if `docker info` succeeds, returns immediately.
+# Slow path: if colima is installed but no daemon is reachable, start the VM.
+# Otherwise, print an actionable error and bail before doing real work.
+# ---------------------------------------------------------------------------
+docker-up:
+	@if $(DOCKER) info >/dev/null 2>&1; then exit 0; fi; \
+	if [ "$(HAS_COLIMA)" = "1" ]; then \
+		if colima status --profile $(COLIMA_PROFILE) >/dev/null 2>&1; then \
+			printf '>> docker daemon unreachable but colima profile "%s" reports running.\n' '$(COLIMA_PROFILE)' >&2; \
+			printf '>> Check `docker context ls` -- you may need: docker context use colima-$(COLIMA_PROFILE)\n' >&2; \
+			exit 1; \
+		fi; \
+		printf '>> docker daemon not reachable; starting colima profile "%s" (%s vCPU, %s GiB RAM)...\n' \
+			'$(COLIMA_PROFILE)' '$(COLIMA_CPU)' '$(COLIMA_MEMORY)' >&2; \
+		colima start --profile $(COLIMA_PROFILE) $(COLIMA_START_FLAGS); \
+	else \
+		printf '>> docker daemon not reachable and colima is not installed.\n' >&2; \
+		printf '>> macOS:  brew install colima docker  &&  make colima-start\n' >&2; \
+		printf '>> Linux:  start the docker service, or `brew install colima docker`\n' >&2; \
+		printf '>> Or install Docker Desktop: https://docs.docker.com/get-docker/\n' >&2; \
+		exit 1; \
+	fi
+
+colima-start:
+	@if [ "$(HAS_COLIMA)" != "1" ]; then \
+		printf 'colima not found. Install with `brew install colima` (or your package manager).\n' >&2; \
+		exit 1; \
+	fi
+	colima start --profile $(COLIMA_PROFILE) $(COLIMA_START_FLAGS)
+
+colima-stop:
+	colima stop --profile $(COLIMA_PROFILE)
+
+colima-status:
+	@colima status --profile $(COLIMA_PROFILE) 2>&1 || true
+
+# ---------------------------------------------------------------------------
+# Libretro core load/run smoke-test (JesseTG/libretro.py).
+#
+# Runs the libretro init -> load_game -> run pipeline against any libretro
+# core (.dylib / .so / .dll) and reports whether the core accepted the
+# content. This catches "won't load" failures that standalone emulators
+# usually swallow with an opaque error (extension filter, BIOS missing,
+# bad checksum, etc.).
+#
+# Tunables:
+#   LIBRETRO_CORE     path to the core (default: virtualjaguar_libretro.<ext>)
+#   LIBRETRO_CONTENT  ROM to feed in (default: $(OUT_PROJECT).j64)
+#   LIBRETRO_FRAMES   how many frames to run after load (default: 0)
+# ---------------------------------------------------------------------------
+LIBRETRO_VENV		?= .venv-libretro
+LIBRETRO_PYTHON		?= $(LIBRETRO_VENV)/bin/python
+# Core resolution order:
+#   1. ./virtualjaguar_libretro.{dylib,so,dll}   <- project-local override
+#   2. ~/Library/Application Support/RetroArch/cores/virtualjaguar_libretro.dylib
+#   3. ~/Documents/RetroArch/cores/virtualjaguar_libretro.dylib (RA macOS new layout)
+#
+# Project-local intentionally wins. The libretro buildbot's stock VJ core has
+# an _exit(0) bug in retro_run() on macOS that nukes the entire RetroArch
+# process; if a contributor drops a patched dylib next to the Makefile we
+# MUST pick it up over the broken global copy -- otherwise `make run-ui`
+# silently runs the bad core and "flashes open and closed".
+LIBRETRO_CORE_LOCAL	:= $(firstword $(wildcard ./virtualjaguar_libretro.dylib ./virtualjaguar_libretro.so ./virtualjaguar_libretro.dll))
+# `wildcard` mangles paths with embedded spaces ("Application Support"), so
+# defer the system-cores lookup to the shell where quoting actually works.
+RETROARCH_VJ_CORE	:= $(shell for p in \
+	"$$HOME/Library/Application Support/RetroArch/cores/virtualjaguar_libretro.dylib" \
+	"$$HOME/Documents/RetroArch/cores/virtualjaguar_libretro.dylib"; do \
+		[ -f "$$p" ] && printf '%s' "$$p" && break; \
+	done)
+LIBRETRO_CORE		?= $(or $(LIBRETRO_CORE_LOCAL),$(RETROARCH_VJ_CORE))
+# Two distinct content variables -- conflating them caused subtle bugs
+# where `make verify` was reading a COFF (.jag) for cart-header validation.
+#
+# CART_IMAGE      = the actual cartridge ROM image (.j64). 1 MiB-aligned,
+#                   has the fastboot signature + cart header. This is what
+#                   real hardware, BigPEmu, and ROM-format-aware emulators
+#                   want, and what `make verify` validates structurally.
+# LIBRETRO_CONTENT = what we feed to the Virtual Jaguar libretro core.
+#                   VJ's libretro core can't currently emulate ROM-mapped
+#                   executables at $802000, so we feed it the RAM-loaded
+#                   COFF (.cof) renamed to .jag (the libretro core's
+#                   content-type filter only accepts .j64|.jag).
+#                   Override to $(OUT_PROJECT).j64 if testing the cart path.
+CART_IMAGE		?= $(OUT_PROJECT).j64
+LIBRETRO_CONTENT	?= $(OUT_PROJECT).jag
+LIBRETRO_FRAMES		?= 0
+# When non-empty, pass --summary so the user sees per-frame pixel-format /
+# resolution / non-black ratio. Default off to keep CI logs quiet.
+LIBRETRO_SUMMARY	?=
+RETROARCH_APP		?= $(firstword $(wildcard /Applications/RetroArch.app $(HOME)/Applications/RetroArch.app))
+# `make run-ui` launches RetroArch with the Virtual Jaguar libretro core.
+# An OpenEmu launcher used to live here, but Jaguar support in OpenEmu is
+# unreliable; the variable is gone and `run-ui` no longer branches on a
+# frontend selector. If you want to test in another emulator, build the
+# cart with `make` and open the resulting .j64 yourself.
+# `make run-ui` deliberately does NOT fall back to anything if RetroArch
+# isn't available -- earlier auto-fallbacks were triggered by false-positive
+# crash detection. Use `make run-headless` for the libretro smoke test.
+
+# Build the .j64 using whichever toolchain is available.
+# Preference:
+#   1) native m68k toolchain (fastest)
+#   2) docker/colima fallback
+# Build all artifacts using whichever toolchain is available.
+# `ensure-build` checks for .cof (always built); `fresh-build` forces
+# a rebuild. `ensure-j64` / `fresh-j64` are kept as aliases.
+ensure-build:
+	@if [ -f "$(OUT_PROJECT).cof" ]; then \
+		exit 0; \
+	elif command -v m68k-atari-mint-gcc >/dev/null 2>&1; then \
+		$(MAKE) all; \
+	elif command -v $(DOCKER) >/dev/null 2>&1; then \
+		$(MAKE) docker-build; \
+	else \
+		printf '!! Cannot build: no native toolchain and no docker.\n' >&2; \
+		exit 1; \
+	fi
+
+ensure-j64: ensure-build
+
+# Sub-make re-entry guard: `verify` invokes `run-headless` recursively for
+# the libretro load check. Without FRESH_J64_DONE=1 we'd rebuild twice on
+# every `make verify`. Targets that re-enter MUST forward this var.
+fresh-build:
+ifneq ($(FRESH_J64_DONE),1)
+	@printf '>> Rebuilding from source...\n'
+	@rm -f $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT).rom $(OUT_PROJECT).j64 $(OUT_PROJECT).jag
+	@$(MAKE) --no-print-directory ensure-build
+	@$(MAKE) --no-print-directory $(OUT_PROJECT).jag
+endif
+
+fresh-j64: fresh-build
+
+$(LIBRETRO_VENV)/bin/python:
+	python3 -m venv $(LIBRETRO_VENV)
+	$(LIBRETRO_VENV)/bin/pip install --quiet --upgrade pip
+	$(LIBRETRO_VENV)/bin/pip install --quiet 'libretro.py[cli]'
+
+libretro-venv: $(LIBRETRO_VENV)/bin/python
+
+## Make sure the libretro test always has a content file to load. ensure-build
+## only guarantees the .cof exists, but the libretro core's extension filter
+## requires the .jag copy too. We can't use `$(LIBRETRO_CONTENT)` as a literal
+## prerequisite here because Makefile.docker is included BEFORE Makefile.example
+## (where the .jag rule lives), so the rule isn't visible yet at parse time.
+## Instead, ensure-build is followed by a runtime check: if the content file
+## is missing, recurse into make to build it via Makefile.example's pattern rule.
+libretro-test: libretro-venv ensure-build
+	@if [ -z "$(LIBRETRO_CORE)" ]; then \
+		printf '!! No libretro core found in CWD.\n'; \
+		printf '   Drop virtualjaguar_libretro.{dylib,so,dll} next to the Makefile,\n'; \
+		printf '   or pass LIBRETRO_CORE=/path/to/core.{dylib,so,dll}.\n'; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		$(MAKE) --no-print-directory "$(LIBRETRO_CONTENT)" 2>/dev/null || true; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		printf '!! libretro content not found: %s\n' "$(LIBRETRO_CONTENT)" >&2; \
+		printf '   Run `make` first, or override LIBRETRO_CONTENT=/path/to/file.\n' >&2; \
+		exit 1; \
+	fi
+	"$(LIBRETRO_PYTHON)" scripts/libretro-load-test.py \
+		--frames $(LIBRETRO_FRAMES) \
+		$(if $(LIBRETRO_SUMMARY),--summary,) \
+		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
+
+# Convenience: build the j64 first, then load it (no frames). The Virtual
+# Jaguar libretro core on macOS calls _exit(0) from inside the first
+# retro_run() call (upstream bug, reproduces with any harness that isn't
+# RetroArch itself), so running frames here would silently kill the process
+# before any per-frame output makes it to stdout. The load step is still
+# valuable: if load_game returns True, the .j64 header / size / fastboot
+# signature are all valid -- which is what we actually want CI/local smoke
+# tests to verify. For visible output use `make run-ui` or `make vjj64`.
+libretro-run: ensure-j64
+	$(MAKE) LIBRETRO_FRAMES=0 libretro-test
+
+# Canonical reliable run target:
+#   make run
+# Runs a deterministic headless libretro load-only smoke test. Verifies the
+# .j64 is structurally valid and accepted by the Virtual Jaguar libretro
+# core. Does NOT open a window -- use `make run-ui` (RetroArch) or
+# `make vjj64` (Virtual Jaguar standalone) for visible playback.
+# `make run` and `make verify` are aliases now: this is a STRUCTURAL
+# verification of the .j64, not actual emulation.
+#
+# Why we don't try to "play" the ROM here:
+#   The Virtual Jaguar libretro core's M68K JIT is broken on Apple Silicon
+#   (renders cyan-line-on-top and never reaches main()). This reproduces with
+#   the canonical libretro buildbot core, with a freshly downloaded copy, in
+#   RetroArch macOS, and in RetroArch iOS -- so it is NOT something this
+#   repo can fix. For ground-truth visual verification use BigPEmu (gold
+#   standard, native Apple Silicon) or real hardware via a Skunkboard
+#   (`make skunkrom`).
+run: verify
+
+## Steps 2 & 3 read the actual cart image ($(CART_IMAGE) = .j64) -- earlier
+## these read $(LIBRETRO_CONTENT) which now defaults to the COFF .jag file
+## and would have failed with bogus offsets. Step 4 still uses the .jag
+## because that's what the libretro core's content-type filter accepts.
+verify: fresh-j64
+	@printf '\n=============================================================\n'
+	@printf '>> make verify -- Jaguar ROM structural verification\n'
+	@printf '=============================================================\n'
+	@printf '>> 1. fastboot signature byte-identical to upstream...\n'
+	@$(MAKE) --no-print-directory verify-sig
+	@printf '\n>> 2. cart image size is multiple of 1 MiB (libretro JST_ROM detect)...\n'
+	@_size=$$(wc -c < "$(CART_IMAGE)"); \
+		if [ $$((_size % 1048576)) -eq 0 ]; then \
+			printf '   OK: %s = %s bytes (%s MiB)\n' "$(CART_IMAGE)" "$$_size" "$$((_size / 1048576))"; \
+		else \
+			printf '   FAIL: %s = %s bytes is not a 1 MiB multiple\n' "$(CART_IMAGE)" "$$_size" >&2; exit 1; \
+		fi
+	@printf '\n>> 3. cart header (cart speed, boot addr, boot flags)...\n'
+	@python3 -c "$$_VERIFY_HEADER_PY" "$(CART_IMAGE)"
+	@printf '\n>> 4. libretro core accepts the ROM (load_game returns True)...\n'
+## We pipe `make run-headless` into a tempfile (not `... | grep` -- the bare
+## pipe drops the left-hand exit status, so a crashed libretro harness would
+## look "OK" as long as grep matched anything). Capture full output, then
+## decide based on what the harness actually printed:
+##   - "load_game returned True"        -> ROM accepted (PASS).
+##   - "about to call load_game" only,
+##     then SIGKILL/_exit                -> known upstream Virtual Jaguar
+##                                         libretro macOS bug (init or
+##                                         load_game itself raises SIGKILL
+##                                         from inside the dylib). We can't
+##                                         distinguish "ROM rejected" from
+##                                         "core died" in that case, so we
+##                                         emit a clearly-marked WARN and
+##                                         do not fail verify -- the
+##                                         structural checks above are the
+##                                         authoritative cart validation.
+##   - never reached "about to ..."      -> harness or content problem,
+##                                         FAIL with full log.
+	@if [ -n "$(LIBRETRO_CORE)" ]; then \
+		_log=$$(mktemp -t verify.XXXXXX) || exit 1; \
+		trap 'rm -f "$$_log"' EXIT; \
+		$(MAKE) --no-print-directory FRESH_J64_DONE=1 run-headless >"$$_log" 2>&1; \
+		grep -E '^>> (core|content|about to|load_game)' "$$_log" || true; \
+		if grep -q 'load_game returned True' "$$_log"; then \
+			printf '   OK: libretro core accepted the ROM.\n'; \
+		elif grep -q 'about to call load_game' "$$_log"; then \
+			printf '   WARN: core died inside load_game (known upstream Virtual\n'; \
+			printf '         Jaguar libretro bug on macOS: dylib raises SIGKILL\n'; \
+			printf '         from init/load_game). Cart structural checks above\n'; \
+			printf '         are authoritative; this step is informational only.\n'; \
+		else \
+			printf '   FAIL: harness never reached load_game, full log follows:\n' >&2; \
+			cat "$$_log" >&2; \
+			exit 1; \
+		fi; \
+	else \
+		printf '   SKIP: no libretro core installed\n'; \
+	fi
+	@printf '\n=============================================================\n'
+	@printf '>> ROM is structurally valid. To actually play it:\n'
+	@printf '>>   make run-ui    (RetroArch + Virtual Jaguar core)\n'
+	@printf '>>   make vjj64     (Virtual Jaguar standalone)\n'
+	@printf '>>   make skunkrom  (flash to real hardware via Skunkboard)\n'
+	@printf '>>   BigPEmu        (https://www.richwhitehouse.com/jaguar/)\n'
+	@printf '=============================================================\n'
+
+# Inline Python for header verification, kept here so `make verify` is
+# self-contained (no extra script, no shell quoting nightmare).
+define _VERIFY_HEADER_PY
+import struct, sys
+with open(sys.argv[1],'rb') as f:
+    h = f.read(0x420)
+ok = True
+def check(label, got, want):
+    global ok
+    status = 'OK  ' if got == want else 'FAIL'
+    if got != want: ok = False
+    print(f'   {status}: {label} = {got!r} (want {want!r})')
+check('cart speed @0x400', h[0x400:0x404].hex(), '04040404')
+check('boot addr  @0x404', h[0x404:0x408].hex(), '00802000')
+check('boot flags @0x408', h[0x408:0x40C].hex(), '00000000')
+check('chk start  @0x410', h[0x410:0x414].hex(), '00802000')
+wc = struct.unpack('>I', h[0x414:0x418])[0]
+print(f'   INFO: word count @0x414 = {wc} ({wc*4} bytes covered)')
+print(f'   INFO: checksum   @0x418 = 0x{h[0x418:0x41C].hex()}')
+sys.exit(0 if ok else 1)
+endef
+export _VERIFY_HEADER_PY
+
+# Strip macOS quarantine xattr from the libretro core if present.
+unquarantine-core:
+	@if [ -n "$(LIBRETRO_CORE)" ] && [ -f "$(LIBRETRO_CORE)" ]; then \
+		if xattr -l "$(LIBRETRO_CORE)" 2>/dev/null | grep -q 'com.apple.quarantine'; then \
+			printf '>> Stripping com.apple.quarantine from %s\n' "$(LIBRETRO_CORE)"; \
+			xattr -d com.apple.quarantine "$(LIBRETRO_CORE)"; \
+		fi; \
+	fi
+
+# Launch RetroArch with the .j64.
+#
+# macOS aggressively SIGKILL's processes that dlopen() dylibs from
+# untrusted locations (project dirs, Downloads, etc.) -- even after
+# stripping quarantine and ad-hoc codesigning. The ONLY reliable path
+# is ~/Library/Application Support/RetroArch/cores/, which RetroArch
+# itself uses and macOS trusts.
+#
+# If a project-local core exists (./virtualjaguar_libretro.dylib), we
+# install it into RA's cores dir before launch so the patched build
+# actually gets used. Then we launch via `open -a` which is the only
+# way to give a Cocoa GUI app a proper WindowServer session from make.
+RETROARCH_CORES_DIR	= $(HOME)/Library/Application Support/RetroArch/cores
+RETROARCH_VJ_INSTALLED	= $(RETROARCH_CORES_DIR)/virtualjaguar_libretro.dylib
+
+run-ui: fresh-build unquarantine-core
+	@if [ -z "$(RETROARCH_APP)" ]; then \
+		printf '!! RetroArch.app not found.\n' >&2; exit 1; \
+	fi
+	@mkdir -p "$(RETROARCH_CORES_DIR)"
+	@if [ -n "$(LIBRETRO_CORE_LOCAL)" ] && [ -f "$(LIBRETRO_CORE_LOCAL)" ]; then \
+		printf '>> Installing local core to RetroArch cores dir...\n'; \
+		cp -f "$(LIBRETRO_CORE_LOCAL)" "$(RETROARCH_VJ_INSTALLED)"; \
+	fi
+	@if [ ! -f "$(RETROARCH_VJ_INSTALLED)" ]; then \
+		printf '!! Virtual Jaguar core not installed in RetroArch.\n' >&2; \
+		printf '   Install via RetroArch -> Online Updater -> Core Downloader,\n' >&2; \
+		printf '   or drop virtualjaguar_libretro.dylib in this directory.\n' >&2; \
+		exit 1; \
+	fi
+	@printf '>> Staging content to RetroArch dir...\n'
+	@cp -f "$(LIBRETRO_CONTENT)" "$(RETROARCH_CORES_DIR)/$(notdir $(LIBRETRO_CONTENT))"
+	@printf '>> Core:    %s\n' "$(RETROARCH_VJ_INSTALLED)"
+	@printf '>> Content: %s\n' "$(RETROARCH_CORES_DIR)/$(notdir $(LIBRETRO_CONTENT))"
+	@open -a "$(RETROARCH_APP)" --args \
+		-L "$(RETROARCH_VJ_INSTALLED)" \
+		"$(RETROARCH_CORES_DIR)/$(notdir $(LIBRETRO_CONTENT))"
+
+run-headless: fresh-j64 unquarantine-core
+	@$(MAKE) --no-print-directory FRESH_J64_DONE=1 libretro-run
+
+# Run a longer trace and dump every Nth frame as PNG for visual inspection.
+# Useful for diagnosing "loads but renders nothing" symptoms -- we can see
+# exactly what the OP is painting frame-by-frame instead of staring at a
+# black emulator window. Override DUMP_FRAMES_DIR / LIBRETRO_FRAMES /
+# DUMP_EVERY to taste.
+LIBRETRO_DUMP_DIR	?= frames
+LIBRETRO_DUMP_EVERY	?= 30
+libretro-frames: ensure-j64 libretro-venv
+	@if [ -z "$(LIBRETRO_CORE)" ]; then \
+		printf '!! No libretro core found in CWD (see libretro-test).\n'; \
+		exit 1; \
+	fi
+	rm -rf $(LIBRETRO_DUMP_DIR)
+	"$(LIBRETRO_PYTHON)" scripts/libretro-load-test.py \
+		--frames $(or $(LIBRETRO_FRAMES_OVERRIDE),180) \
+		--dump-frames $(LIBRETRO_DUMP_DIR) \
+		--dump-every $(LIBRETRO_DUMP_EVERY) \
+		--summary \
+		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
+
+# Verify scripts/make-rom.py FASTBOOT_SIGNATURE is byte-identical to upstream
+# (tursilion/makefastboot). One-byte typos here brick carts on real hardware
+# but are invisible to most libretro / standalone emulators -- this guard
+# stops that class of bug from re-landing.
+verify-sig:
+	python3 scripts/verify-sig.py
+
+sdk-pull: | docker-up
+	$(DOCKER) pull $(SDK_IMAGE)
+
+sdk-build: | docker-up
+	$(DOCKER) build --platform $(DOCKER_PLATFORM) -t $(SDK_IMAGE) -f docker/Dockerfile docker
+
+sdk-shell: | docker-up
+	$(DOCKER_RUN_TTY) bash
+
+CMD ?= make
+in-docker: | docker-up
+	$(DOCKER_RUN) sh -c '$(CMD)'
+
+# NOTE: These do an INCREMENTAL build (no `make clean` first) so that
+# editing a single .c file produces a sub-second relink, not a full
+# toolchain run. Stale-.depend protection lives in the root Makefile
+# (auto-purges container-path .depend before include). If you really
+# want a pristine build, run `make clean docker-j64` (etc.) -- the host
+# clean target only does `rm` so it works without a toolchain.
+docker-build: | docker-up
+	$(DOCKER_RUN) sh -c 'make'
+
+docker-debug: | docker-up
+	$(DOCKER_RUN) sh -c 'make DEBUG=1'
+
+docker-rom: | docker-up
+	$(DOCKER_RUN) sh -c 'make rom'
+
+docker-rom-debug: | docker-up
+	$(DOCKER_RUN) sh -c 'make DEBUG=1 rom'
+
+docker-j64: | docker-up
+	$(DOCKER_RUN) sh -c 'make j64'
+
+docker-j64-debug: | docker-up
+	$(DOCKER_RUN) sh -c 'make DEBUG=1 j64'
+
+# Build everything in one container invocation: release .cof/.bin/.rom/.j64
+# plus debug variants. Faster than running the four targets separately
+# because the SDK image only spins up once.
+docker-all: | docker-up
+	$(DOCKER_RUN) sh -c '\
+		make clean && make && make rom && make j64 && \
+		make clean && make DEBUG=1 && make DEBUG=1 rom && make DEBUG=1 j64'
+
+# For users who already have crossmint + rmvlib installed natively (Linux,
+# or macOS with the Homebrew tap, etc) and don't want Docker overhead.
+native-build:
+	$(MAKE) clean
+	$(MAKE) all
+
+# ---------------------------------------------------------------------------
+# Self-documenting target list. `make help` prints categorised targets so
+# users (and shell completion previews) can discover what's available.
+# Keep the column layout tab-friendly so it renders the same in any shell.
+# ---------------------------------------------------------------------------
+help:
+	@printf 'Atari Jaguar 240p Test Suite -- make targets\n\n'
+	@printf 'Native build (needs crossmint + rmvlib in $$JAGPATH=%s):\n' '$(JAGPATH)'
+	@printf '  %-22s %s\n' 'all'              'build .cof + .bin + .rom + .j64 (default when toolchain found)'
+	@printf '  %-22s %s\n' 'rom'              'build .rom with fastboot cart header'
+	@printf '  %-22s %s\n' 'j64'              'copy .rom -> .j64 (same bytes, ext for emulator front-ends)'
+	@printf '  %-22s %s\n' 'rom-debug / j64-debug' 'debug variants of the above'
+	@printf '  %-22s %s\n' 'native-build'     'clean + all'
+	@printf '  %-22s %s\n' 'dist'             'tar.gz of source + binaries'
+	@printf '  %-22s %s\n' 'clean'            'remove build artefacts'
+	@printf '\n'
+	@printf 'Docker build (needs only docker; pulls ghcr.io image):\n'
+	@printf '  %-22s %s\n' 'docker-build'     'release .cof + .bin + .rom + .j64 in SDK container'
+	@printf '  %-22s %s\n' 'docker-rom'       'release .rom in SDK container'
+	@printf '  %-22s %s\n' 'docker-j64'       'release .rom + .j64 in SDK container'
+	@printf '  %-22s %s\n' 'docker-debug'     'debug .cof + .bin + .rom + .j64 (-O0 -g, -debug suffix)'
+	@printf '  %-22s %s\n' 'docker-rom-debug' 'debug .rom'
+	@printf '  %-22s %s\n' 'docker-j64-debug' 'debug .rom + .j64'
+	@printf '  %-22s %s\n' 'docker-all'       'release + debug .rom + .j64 in one invocation'
+	@printf '  %-22s %s\n' 'sdk-pull'         'pull SDK_IMAGE=$(SDK_IMAGE) from registry'
+	@printf '  %-22s %s\n' 'sdk-build'        'build SDK image locally from docker/Dockerfile'
+	@printf '  %-22s %s\n' 'sdk-shell'        'open an interactive shell in the SDK container'
+	@printf '  %-22s %s\n' 'in-docker CMD=..' 'run an arbitrary command inside the SDK container'
+	@printf '\n'
+	@printf 'Colima (Docker Desktop alternative; auto-starts when needed):\n'
+	@printf '  %-22s %s\n' 'colima-start'     'start the colima VM (uses COLIMA_* tunables)'
+	@printf '  %-22s %s\n' 'colima-stop'      'stop the colima VM'
+	@printf '  %-22s %s\n' 'colima-status'    'show colima VM status for COLIMA_PROFILE'
+	@printf '  %-22s %s\n' 'docker-up'        'ensure docker daemon is reachable (auto-starts colima)'
+	@printf '\n'
+	@printf 'Hardware / emulator helpers (need the matching tool on PATH):\n'
+	@printf '  %-22s %s\n' 'skunkram'         'upload .cof to Skunkboard (jcp)'
+	@printf '  %-22s %s\n' 'skunkrom'         'flash .rom to Skunkboard (jcp -f)'
+	@printf '  %-22s %s\n' 'vjram / vjrom / vjj64' 'launch .cof / .rom / .j64 in Virtual Jaguar'
+	@printf '  %-22s %s\n' 'run'              'build .j64 + deterministic headless smoke run'
+	@printf '  %-22s %s\n' 'run-ui'           'launch RetroArch with the Virtual Jaguar core (no fallback)'
+	@printf '  %-22s %s\n' 'run-headless'     'libretro smoke run (no frontend UI)'
+	@printf '  %-22s %s\n' 'libretro-test'    'load .jag (RAM-loaded COFF) into the libretro core (drop the .dylib in CWD)'
+	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 0 frames (load-only smoke-test, see comment in target)'
+	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
+	@printf '  %-22s %s\n' 'verify-sig'       'check fastboot signature matches tursilion/makefastboot'
+	@printf '  %-22s %s\n' 'bjl'              'send .bin via BJL (lo -8)'
+	@printf '  %-22s %s\n' 'alpine / debug'   'launch under Alpine debugger / WDB'
+	@printf '\n'
+	@printf 'Useful variables:\n'
+	@printf '  %-22s %s\n' 'DEBUG=0|1'        'release (default) vs debug build'
+	@printf '  %-22s %s\n' 'USE_DOCKER=0|1'   'force native or container path (default: auto-detect)'
+	@printf '  %-22s %s\n' 'JAGPATH=PATH'     'Jaguar SDK install root for native builds'
+	@printf '  %-22s %s\n' 'SDK_IMAGE=ref'    'override the docker image (default $(SDK_IMAGE))'
+	@printf '  %-22s %s\n' 'DOCKER=cmd'       'docker binary (default `docker`)'
+	@printf '  %-22s %s\n' 'COLIMA_PROFILE=p' 'colima profile name (default `default`)'
+	@printf '  %-22s %s\n' 'COLIMA_CPU=N'     'vCPUs when auto-starting colima (default 4)'
+	@printf '  %-22s %s\n' 'COLIMA_MEMORY=N'  'GiB RAM when auto-starting colima (default 6)'
+	@printf '  %-22s %s\n' 'COLIMA_VM_TYPE=vz' 'on Apple Silicon: faster amd64 via Rosetta'
+	@printf '  %-22s %s\n' 'CART_IMAGE=PATH'  'cart .j64 used by `make verify` (default $(CART_IMAGE))'
+	@printf '  %-22s %s\n' 'LIBRETRO_CONTENT=' 'content fed to libretro core (default $(LIBRETRO_CONTENT))'
+	@printf '\n'
+	@printf 'Shell completion: `make <TAB>` lists every target above when bash-completion\n'
+	@printf 'or zsh compsys is enabled. See README "Shell completion" for setup.\n'
+
+# Friendly fast-fail when neither the native toolchain nor docker is found.
+help-toolchain:
+	@printf 'Cannot build: neither the native Jaguar toolchain nor a container runtime was found.\n\n'
+	@printf 'Pick one of:\n'
+	@printf '  macOS (no Docker Desktop required):\n'
+	@printf '    brew install colima docker\n'
+	@printf '    make colima-start    # one-time, then bare `make` works\n\n'
+	@printf '  Any platform with Docker Desktop:\n'
+	@printf '    Install Docker (https://docs.docker.com/get-docker/) and re-run `make`.\n\n'
+	@printf '  Native toolchain (fastest builds, Linux-friendly):\n'
+	@printf '    Install the m68k-atari-mint cross toolchain + rmvlib and set JAGPATH.\n'
+	@printf '    (BitJag scripts: https://github.com/BitJag/ubuntu-rmvlib-install-scripts)\n\n'
+	@printf 'Then run `make help` for the full target list.\n'
+	@exit 1

@@ -1,0 +1,154 @@
+name: Build ROM
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*.*.*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      flavours:
+        description: 'Which builds to produce'
+        required: false
+        default: 'both'
+        type: choice
+        options: [both, release, debug]
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.flavour }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        flavour: [release, debug]
+    env:
+      SDK_IMAGE: ghcr.io/${{ github.repository_owner }}/jaguar-sdk:latest
+      PROJECT: jag_240p_test_suite
+    steps:
+      - name: Skip flavour if filtered out
+        id: filter
+        run: |
+          want='${{ github.event.inputs.flavours }}'
+          flavour='${{ matrix.flavour }}'
+          if [ "${{ github.event_name }}" = 'workflow_dispatch' ] && [ "$want" != 'both' ] && [ "$want" != "$flavour" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.filter.outputs.skip == 'false'
+        uses: actions/checkout@v4
+
+      - name: Lowercase image name
+        if: steps.filter.outputs.skip == 'false'
+        run: echo "SDK_IMAGE=$(echo $SDK_IMAGE | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR (read)
+        if: steps.filter.outputs.skip == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify fastboot signature is byte-identical to upstream
+        # Cheap regression test that prevents a one-byte typo in
+        # scripts/make-rom.py from silently shipping a cart that bricks on
+        # real hardware / BIOS-strict emulators while still "working" under
+        # libretro cores that bypass BIOS verification.
+        if: steps.filter.outputs.skip == 'false'
+        run: python3 scripts/verify-sig.py
+
+      - name: Pull SDK image (or build it locally on first run)
+        if: steps.filter.outputs.skip == 'false'
+        run: |
+          if docker pull "$SDK_IMAGE" 2>/dev/null; then
+            echo "Pulled prebuilt SDK image."
+          else
+            echo "SDK image $SDK_IMAGE not available on GHCR yet; building locally."
+            docker build --platform linux/amd64 -t "$SDK_IMAGE" -f docker/Dockerfile docker
+          fi
+
+      - name: Build ${{ matrix.flavour }}
+        if: steps.filter.outputs.skip == 'false'
+        run: |
+          if [ '${{ matrix.flavour }}' = 'debug' ]; then
+            DEBUG_FLAG=1
+            SUFFIX=-debug
+          else
+            DEBUG_FLAG=0
+            SUFFIX=
+          fi
+          docker run --rm \
+            -u "$(id -u):$(id -g)" \
+            -v "$PWD:/work" -w /work \
+            "$SDK_IMAGE" \
+            sh -c "make clean && make DEBUG=${DEBUG_FLAG} && make DEBUG=${DEBUG_FLAG} rom && make DEBUG=${DEBUG_FLAG} j64"
+          ls -lh ${PROJECT}${SUFFIX}.cof ${PROJECT}${SUFFIX}.bin ${PROJECT}${SUFFIX}.rom ${PROJECT}${SUFFIX}.j64
+
+      - name: Stage artifacts
+        if: steps.filter.outputs.skip == 'false'
+        id: stage
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          if [ '${{ matrix.flavour }}' = 'debug' ]; then SUFFIX=-debug; else SUFFIX=; fi
+          OUTDIR="dist/${PROJECT}-${{ matrix.flavour }}-${SHORT_SHA}"
+          mkdir -p "$OUTDIR"
+          cp "${PROJECT}${SUFFIX}.cof" "${PROJECT}${SUFFIX}.bin" "${PROJECT}${SUFFIX}.rom" "${PROJECT}${SUFFIX}.j64" "$OUTDIR/"
+          ( cd "$OUTDIR" && sha256sum * > SHA256SUMS.txt )
+          echo "outdir=${OUTDIR}" >> "$GITHUB_OUTPUT"
+          echo "name=${PROJECT}-${{ matrix.flavour }}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          ls -lh "$OUTDIR"
+
+      - name: Upload artifact
+        if: steps.filter.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.stage.outputs.name }}
+          path: ${{ steps.stage.outputs.outdir }}/*
+          if-no-files-found: error
+          retention-days: 30
+
+  pr-comment:
+    name: Post PR build summary
+    needs: build
+    # Skip on fork PRs: the GITHUB_TOKEN is read-only there so the comment
+    # step would fail and mark the workflow red even though the build was
+    # green. Forks still get the artifacts -- they just don't get the
+    # convenience comment.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Sticky comment with download links
+        uses: marocchino/sticky-pull-request-comment@v2
+        # Belt-and-braces: even within the same repo, never let a comment
+        # failure block the merge -- the artifacts upload is the source of truth.
+        continue-on-error: true
+        with:
+          header: jaguar-rom-build
+          message: |
+            ### Jaguar ROM build artifacts
+
+            Built from commit `${{ github.event.pull_request.head.sha }}` in workflow run [`#${{ github.run_number }}`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+            | Flavour | Files | Download |
+            | --- | --- | --- |
+            | release | `.cof`, `.bin`, `.rom`, `.j64`, `SHA256SUMS.txt` | [Run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) |
+            | debug   | `.cof`, `.bin`, `.rom`, `.j64`, `SHA256SUMS.txt` | [Run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) |
+
+            > `.rom` and `.j64` are byte-identical -- different extension for emulators that filter by file type.
+
+            Artifacts expire 30 days after the run.

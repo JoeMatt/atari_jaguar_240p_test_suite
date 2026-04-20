@@ -1,16 +1,32 @@
-DISTFILES=Makefile Makefile.config Makefile.example README $(SRCC) $(SRCH) $(SRCS) $(OTHEROBJS)
+# ---------------------------------------------------------------------------
+# Output project name. BUILD_SUFFIX is set by Makefile.config based on DEBUG
+# so debug and release artifacts never overwrite each other.
+# Note: object files (.o) are NOT suffixed -- always `make clean` between
+# release and debug builds (the CI workflow does this automatically).
+# ---------------------------------------------------------------------------
+OUT_PROJECT	= $(PROJECT)$(BUILD_SUFFIX)
 
-TARFILE=$(PROJECT).tar.gz
+DISTFILES	= Makefile Makefile.config Makefile.example README.md $(SRCC) $(SRCH) $(SRCS) $(OTHEROBJS)
 
-all: .depend $(PROJECT).cof $(PROJECT).bin
+TARFILE		= $(OUT_PROJECT).tar.gz
 
-.PHONY: all dist alpine bjl debug skunk reset
+## When the native cross-compiler is missing, `.depend` cannot exist, so we
+## must not list it as a prerequisite of `all` -- otherwise host invocations
+## that hit this target (rare, but possible) would deadlock on a file that
+## has no rule to build it.
+ifeq ($(HAS_NATIVE_CC),1)
+all: .depend $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT).rom $(OUT_PROJECT).j64
+else
+all: $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT).rom $(OUT_PROJECT).j64
+endif
 
-$(PROJECT).cof: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
-	$(ALN) $(ALNFLAGSRAM) -e -o $(PROJECT).cof crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a 
+.PHONY: all dist alpine bjl debug skunkram skunkrom rom rom-debug j64 j64-debug reset clean vjram vjrom vjj64
 
-$(PROJECT).bin: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
-	$(ALN) $(ALNFLAGSROM) -n -o $(PROJECT).bin crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a 
+$(OUT_PROJECT).cof: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
+	$(ALN) $(ALNFLAGSRAM) -e -o $(OUT_PROJECT).cof crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a
+
+$(OUT_PROJECT).bin: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
+	$(ALN) $(ALNFLAGSROM) -n -o $(OUT_PROJECT).bin crt0.o $(OBJS) $(OTHEROBJS) $(RMVLIBS) jlibc.a libgcc.a
 
 %.o: %.s
 	$(MADMAC) $(MACFLAGS) $<
@@ -18,43 +34,89 @@ $(PROJECT).bin: $(SRCH) $(OBJS) Makefile $(OTHEROBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $<
 
-dist: $(PROJECT).cof $(PROJECT).bin
-	mkdir -p $(PROJECT)
-	cp -a $(DISTFILES) $(PROJECT).cof $(PROJECT).bin $(PROJECT)
-	tar cfvzh $(TARFILE) $(PROJECT)
-	rm -rf $(PROJECT)
+dist: $(OUT_PROJECT).cof $(OUT_PROJECT).bin
+	mkdir -p $(OUT_PROJECT)
+	cp -a $(DISTFILES) $(OUT_PROJECT).cof $(OUT_PROJECT).bin $(OUT_PROJECT)
+	tar cfvzh $(TARFILE) $(OUT_PROJECT)
+	rm -rf $(OUT_PROJECT)
 
-rom: $(PROJECT).cof
-	jag-rom-maker $(PROJECT).bin
+# ---------------------------------------------------------------------------
+# Real .rom file with a fastboot cart header. Uses scripts/make-rom.py, a
+# self-contained Python port of Tursilion's makefastboot tool that runs
+# anywhere Python 3 is available (no Windows or extra binaries required).
+# ---------------------------------------------------------------------------
+$(OUT_PROJECT).rom: $(OUT_PROJECT).bin
+	python3 scripts/make-rom.py $(OUT_PROJECT).bin $(OUT_PROJECT).rom
 
-alpine: $(PROJECT).cof
-	$(RDB) $(PROJECT).cof
+rom: $(OUT_PROJECT).rom
 
-bjl: $(PROJECT).bin
-	$(LO) -8 $(PROJECT).bin
+rom-debug:
+	$(MAKE) DEBUG=1 rom
 
-debug: $(PROJECT).cof
-	$(WDB) $(PROJECT).cof
+# ---------------------------------------------------------------------------
+# .j64 is the same byte stream as .rom -- just the file extension that some
+# emulator front-ends (BigPEmu's launcher, several handheld front-ends,
+# RetroArch in some configurations) require to recognise the file. We copy
+# rather than symlink so the artifact survives `tar`, S3 uploads, and Windows
+# file systems without surprises.
+# ---------------------------------------------------------------------------
+$(OUT_PROJECT).j64: $(OUT_PROJECT).rom
+	cp -f $(OUT_PROJECT).rom $(OUT_PROJECT).j64
 
-skunkram: $(PROJECT).cof
-	$(JCP) $(PROJECT).cof
+j64: $(OUT_PROJECT).j64
 
-skunkrom: $(PROJECT).cof
-	$(JCP) -f $(PROJECT).rom
+j64-debug:
+	$(MAKE) DEBUG=1 j64
 
-vjram: $(PROJECT).cof
-	$(VJ) -a $(PROJECT).cof
+# .jag = .cof with an extension the VJ libretro core accepts (j64|jag).
+# VJ can't emulate ROM-mapped $802000 cart images, so for VJ testing we
+# use the RAM-loaded COFF binary at $4000 -- the way the original project
+# always ran in Virtual Jaguar.
+$(OUT_PROJECT).jag: $(OUT_PROJECT).cof
+	cp -f $(OUT_PROJECT).cof $(OUT_PROJECT).jag
 
-vjrom: $(PROJECT).cof
-	$(VJ) -a $(PROJECT).rom
+jag: $(OUT_PROJECT).jag
+
+vjj64: fresh-j64
+	$(VJ) -a $(OUT_PROJECT).j64
+
+alpine: $(OUT_PROJECT).cof
+	$(RDB) $(OUT_PROJECT).cof
+
+bjl: $(OUT_PROJECT).bin
+	$(LO) -8 $(OUT_PROJECT).bin
+
+debug: $(OUT_PROJECT).cof
+	$(WDB) $(OUT_PROJECT).cof
+
+skunkram: $(OUT_PROJECT).cof
+	$(JCP) $(OUT_PROJECT).cof
+
+skunkrom: $(OUT_PROJECT).rom
+	$(JCP) -f $(OUT_PROJECT).rom
+
+vjram: $(OUT_PROJECT).cof
+	$(VJ) -a $(OUT_PROJECT).cof
+
+vjrom: $(OUT_PROJECT).rom
+	$(VJ) -a $(OUT_PROJECT).rom
 
 reset:
 	$(JCP) -r
 
 clean:
-	rm -f *~ $(OBJS) $(PROJECT).cof $(PROJECT).bin $(PROJECT).rom
+	rm -f *~ $(OBJS) .depend \
+		$(PROJECT).cof $(PROJECT).bin $(PROJECT).rom $(PROJECT).j64 $(PROJECT).jag $(PROJECT).tar.gz \
+		$(PROJECT)-debug.cof $(PROJECT)-debug.bin $(PROJECT)-debug.rom $(PROJECT)-debug.j64 $(PROJECT)-debug.jag $(PROJECT)-debug.tar.gz
 
+## .depend regeneration is gated on the native cross-compiler being present.
+## Without it, `make` would try to invoke m68k-atari-mint-gcc just to compute
+## header dependencies for targets that don't need it (verify, run, vjj64,
+## clean, etc.) and fail. When toolchain is absent we just skip it -- header
+## tracking is only useful for incremental rebuilds anyway.
+ifeq ($(HAS_NATIVE_CC),1)
 .depend: $(SRCC)
-	$(CC) -MM $(SRCC) > .depend
+	$(CC) -MM $(CFLAGS) $(SRCC) > .depend
 
 -include .depend
+endif

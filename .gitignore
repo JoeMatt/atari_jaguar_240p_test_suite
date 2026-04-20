@@ -1,0 +1,28 @@
+# Build artefacts
+*.o
+*.cof
+*.bin
+*.rom
+*.j64
+*.jag
+*.tar.gz
+.depend
+frames*/
+
+# Distribution staging
+dist/
+jag_240p_test_suite/
+jag_240p_test_suite-debug/
+
+# Editor / OS noise
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# Libretro test scaffolding
+.venv-libretro/
+*.dylib
+*.so
+*.dll
+*.dylib
