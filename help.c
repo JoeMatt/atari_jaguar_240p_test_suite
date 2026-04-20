@@ -87,7 +87,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "HELP GENERAL (1/2)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "The 240p Test Suite was designed with two goals in mind:^^1) Evalute 240p signals on TV sets and video procesors; and...^^2) provide calibration patterns from a game console to help in properly calibrating the display black, white and color levels.^^Help is available everywhere by pressing DOWN + OPTION.", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "The 240p Test Suite was designed with two goals in mind:^^1) Evaluate 240p signals on TV sets and video processors; and...^^2) provide calibration patterns from a game console to help in properly calibrating the display black, white and color levels.^^Help is available everywhere by pressing DOWN + OPTION.", 999999, 999999, WHITE);
                             textRangeColorChange(helpTextBox, 291, 13, WHITE, GREEN);
 
                             updateLine(settings, mainFont, helpLineTextBox[1], "Continued...", 999999, 999999, WHITE);
@@ -114,7 +114,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "PLUGE (1/3)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "NTSC levels require black to beat 7.5 IRE for video. This HW lowest is 6 IRE (6%), so using this value for general 240p use is not recommended.^^Of course using it as reference will work perfectly for games in this platform.^^In PAL - and console gaming in general - it is advized to use a value of 2 IRE as black.", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "NTSC levels require black to beat 7.5 IRE for video. This HW lowest is 6 IRE (6%), so using this value for general 240p use is not recommended.^^Of course using it as reference will work perfectly for games in this platform.^^In PAL - and console gaming in general - it is advised to use a value of 2 IRE as black.", 999999, 999999, WHITE);
                             
                             updateLine(settings, mainFont, helpLineTextBox[1], "Continued...", 999999, 999999, WHITE);
                         break;
@@ -184,7 +184,7 @@ void DrawHelp(int option){
                         case 1:
                             updateLine(settings, mainFont, helpLineTextBox[0], "MONOSCOPE (2/3)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "Convergence: Use the center crosshair to check static (center of screen) convergence. Use the patterns at the sides to check dynamic (edge) convergence.^^Corners: After setting center and edge convergence, use magnets to adjust corner purity and geomentry.", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "Convergence: Use the center crosshair to check static (center of screen) convergence. Use the patterns at the sides to check dynamic (edge) convergence.^^Corners: After setting center and edge convergence, use magnets to adjust corner purity and geometry.", 999999, 999999, WHITE);
                             
                             updateLine(settings, mainFont, helpLineTextBox[1], "Continued...", 999999, 999999, WHITE);
                         break;
@@ -206,7 +206,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "COLOR BLEED", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "This pattern helps diagnose color bleed caused by unneeded color upsampling.^^You can toggle between certical bars and checkerboard with 'A'.", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "This pattern helps diagnose color bleed caused by unneeded color upsampling.^^You can toggle between vertical bars and checkerboard with 'A'.", 999999, 999999, WHITE);
                         break;
                     }
                     
@@ -219,7 +219,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "100 IRE", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "You can vary IRE intensity with A and B. Values are: 13, 25, 41, 53, 66, 82, 94.", 999999, 999999, WHITE);        
+                            updateLine(settings, mainFont, helpTextBox, "You can vary IRE intensity with A and B. Values are: 13, 25, 41, 53, 66, 82, 94.^^Each step maps to (IRE/100) * 63 on the Jaguar's 6-bit green channel; red and blue are driven at half that to stay neutral.^^NTSC-J / PAL / PC RGB use 0 IRE as black; NTSC-M (US) uses a 7.5 IRE pedestal -- check your display's setup-level menu. The Jaguar DAC clamps below ~6 IRE, which is why this ladder starts at 13.", 999999, 999999, WHITE);        
                         break;
                     }
                     
@@ -271,7 +271,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "SMPTE COLOR BARS", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "This pattern can be used to approximate for NTSC levels regarding contrast, brightness and colors.^^You can toggle between 75% and 100% SMPTE color bars with A. Of Course the percentages are relative to the console output.^^You can use color filters or the blue only option in your display to confirm color balance.^^This HW lowest black is ??????.", 999999, 999999, WHITE);    
+                            updateLine(settings, mainFont, helpTextBox, "This pattern can be used to approximate for NTSC levels regarding contrast, brightness and colors.^^You can toggle between 75% and 100% SMPTE color bars with A. Of course the percentages are relative to the console output.^^You can use color filters or the blue only option in your display to confirm color balance.^^This HW lowest black is ??????.", 999999, 999999, WHITE);    
                         break;
                     }
                     
@@ -297,7 +297,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "WHITE SCREEN", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "This pattern can be changed between white, black, red, green and blue screens with the 'A' and 'B' buttons.^^A custom color mode is available by pressing 'C' when on the white screen. Use left and right to select a color channel, and up and down to addjust the color channel.", 999999, 999999, WHITE);  
+                            updateLine(settings, mainFont, helpTextBox, "This pattern can be changed between white, black, red, green and blue screens with the 'A' and 'B' buttons.^^A custom color mode is available by pressing 'C' when on the white screen. Use left and right to select a color channel, and up and down to adjust the color channel.", 999999, 999999, WHITE);  
                         break;
                     }
                     
@@ -310,7 +310,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "CHECKERBOARD", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "This pattern shows all the visible pixels in an alternating white and black grid array.^^You can toggle the pattern with button 'Up', or turn on auto-toggle each auto-toggle each frame with the 'A' button. A frame counter is also available with 'B'.", 999999, 999999, WHITE);  
+                            updateLine(settings, mainFont, helpTextBox, "This pattern shows all the visible pixels in an alternating white and black grid array.^^You can toggle the pattern with button 'Up', or turn on auto-toggle each frame with the 'A' button. A frame counter is also available with 'B'.", 999999, 999999, WHITE);  
                         break;
                     }
                     
@@ -357,7 +357,7 @@ void DrawHelp(int option){
                         case 1:
                             updateLine(settings, mainFont, helpLineTextBox[0], "HOR/VER STRIPES (2/2)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "You can also display vertical bars by pressing 'LEFT'. That pattern will help you evaluate if the signal is not distorted horizontaly, since all lines should be one pixel wide.", 999999, 999999, WHITE);   
+                            updateLine(settings, mainFont, helpTextBox, "You can also display vertical bars by pressing 'LEFT'. That pattern will help you evaluate if the signal is not distorted horizontally, since all lines should be one pixel wide.", 999999, 999999, WHITE);   
                         break;
                     }
                     
@@ -370,7 +370,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "TIMING & REFLEX (1/2)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "The main intention is to show a changing pattern on the screen, which can be complemented with audio. This should show to some degree any lag when processing the signal.^^As an added feature, the user can click the 'A' button when the sprite is aligned with the one on the background, and the offset in frames from the actual intersection will be shown on scree, A 1khz tone will be played for 1 frame when pressed.", 999999, 999999, WHITE);   
+                            updateLine(settings, mainFont, helpTextBox, "The main intention is to show a changing pattern on the screen, which can be complemented with audio. This should show to some degree any lag when processing the signal.^^As an added feature, the user can click the 'A' button when the sprite is aligned with the one on the background, and the offset in frames from the actual intersection will be shown on screen. A 1 kHz tone will be played for 1 frame when pressed.", 999999, 999999, WHITE);   
                             
                             updateLine(settings, mainFont, helpLineTextBox[1], "Continued...", 999999, 999999, WHITE);
                         break;
@@ -391,7 +391,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "SCROLL TEST (1/2)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "This test shows either a horizontal 320x224 background from sonic or a vertical 256x224 background from Kiki Kaikai.^^Speed can be caried with Up & Down and scrool direction with Left. The 'A' button stops the scroll and 'B' toggles between vertical and horizontal.", 999999, 999999, WHITE);                               
+                            updateLine(settings, mainFont, helpTextBox, "This test shows either a horizontal 320x224 background from sonic or a vertical 256x224 background from Kiki Kaikai.^^Speed can be varied with Up & Down and scroll direction with Left. The 'A' button stops the scroll and 'B' toggles between vertical and horizontal.", 999999, 999999, WHITE);                               
                             
                             updateLine(settings, mainFont, helpLineTextBox[1], "Continued...", 999999, 999999, WHITE);
                         break;
@@ -412,7 +412,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "GRID SCROLL TEST", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "A grid is scrolled vertically or horizontally, which can be used to test linearity of the signal and how well the display or video processor copes with scrolling and framerate.^^'B' button can be used to toggle between horizontal and certical. while Up/Down regulates speed.^^'A' button stops the scroll and 'Left' changes direction.", 999999, 999999, WHITE); 
+                            updateLine(settings, mainFont, helpTextBox, "A grid is scrolled vertically or horizontally, which can be used to test linearity of the signal and how well the display or video processor copes with scrolling and framerate.^^'B' button can be used to toggle between horizontal and vertical, while Up/Down regulates speed.^^'A' button stops the scroll and 'Left' changes direction.", 999999, 999999, WHITE); 
                         break;
                     }
                     
@@ -425,7 +425,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "BACKLIT TEST", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "This test allows you to check how the display's backlit works when only a small array of pixels is shown.^^The user can move around the white pixel arrays with the d-pad, and change the size of the pixel array with 'A'. The 'B' button allows the user to hide the pixel array in order to alternate a fully black screen.", 999999, 999999, WHITE);  
+                            updateLine(settings, mainFont, helpTextBox, "This test allows you to check how the display's backlight works when only a small array of pixels is shown.^^The user can move around the white pixel arrays with the d-pad, and change the size of the pixel array with 'A'. The 'B' button allows the user to hide the pixel array in order to alternate a fully black screen.", 999999, 999999, WHITE);  
                         break;
                     }
                     
@@ -446,7 +446,7 @@ void DrawHelp(int option){
                         case 1:
                             updateLine(settings, mainFont, helpLineTextBox[0], "LAG TEST (2/2)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "You can splite the video signal and feed both displays.^^The vertical bars on the sides change color each frame to help when using LCD photos.^^Press A to start/stop, B to reset and C for Black & White test.", 999999, 999999, WHITE);        
+                            updateLine(settings, mainFont, helpTextBox, "You can split the video signal and feed both displays.^^The vertical bars on the sides change color each frame to help when using LCD photos.^^Press A to start/stop, B to reset and C for Black & White test.", 999999, 999999, WHITE);        
                         break;
                     }
                     
