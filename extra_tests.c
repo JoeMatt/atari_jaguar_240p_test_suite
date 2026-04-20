@@ -968,18 +968,22 @@ void ResolutionTest(void){
     textBox *titleTb = newTextBox("VIDEO MODE TEST", 192, 9, mainFont, 0, settings->d, 80, 40, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *regionTb = newTextBox("REGION : NTSC 60Hz", 224, 9, mainFont, 0, settings->d, 56, 64, 13, 1);
-    if(settings->PALNTSC == 0){
-        regionTb->text[9]  = 'P'; regionTb->text[10] = 'A'; regionTb->text[11] = 'L';
-        regionTb->text[12] = ' ';
-        regionTb->text[14] = '5'; regionTb->text[15] = '0';
-    }
+    /// Region label is fixed for the lifetime of this test, so pick the
+    /// right initial string instead of patching characters in place. The
+    /// previous in-place rewrite of "NTSC" -> "PAL" left a double space
+    /// before the Hz value because the tokens differ in length.
+    textBox *regionTb = newTextBox(
+        (settings->PALNTSC == 0) ? "REGION : PAL 50Hz " : "REGION : NTSC 60Hz",
+        224, 9, mainFont, 0, settings->d, 56, 64, 13, 1);
     updateLine(settings, mainFont, regionTb, NULL, 999999, 999999, WHITE);
 
     /// Mutable / informative rows. Refreshed in the `redraw` block so
-    /// pwidth/fmt/autoCenter edits show up next vsync.
+    /// pwidth/fmt/autoCenter edits show up next vsync. Initial strings
+    /// are pre-formatted to match the post-redraw layout exactly (no
+    /// parens around the hint text) so the first frame doesn't flash a
+    /// different format before the redraw fires.
     textBox *fmtTb     = newTextBox("FORMAT : RGB16              ", 256, 9, mainFont, 0, settings->d, 32, 88,  13, 1);
-    textBox *pwTb      = newTextBox("PWIDTH : 4 (320 native)     ", 256, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
+    textBox *pwTb      = newTextBox("PWIDTH : 4 320 native       ", 256, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
     textBox *vmodeTb   = newTextBox("VMODE  : 0x0000             ", 256, 9, mainFont, 0, settings->d, 32, 120, 13, 1);
     textBox *geomTb    = newTextBox("GEOM   : 320x000            ", 256, 9, mainFont, 0, settings->d, 32, 136, 13, 1);
     textBox *regsTb    = newTextBox("VP=000 HP=000               ", 256, 9, mainFont, 0, settings->d, 32, 152, 13, 1);
