@@ -3,7 +3,7 @@
 int main () {
   
     int i = 0;
-    int lastMenuLine = 7; //counting from zero
+    int lastMenuLine = 8; //counting from zero (Screen Savers added as slot 5)
   
     TOMREGS->vmode = RGB16|CSYNC|BGEN|PWIDTH4|VIDEN;
 
@@ -73,7 +73,7 @@ int main () {
         drawTextBoxAtOnce(lineTextBox[i]);
     }
     
-    loadMainMenuLines();
+    loadMainMenuLines(1);
     
     //set random colors in color lookup table
     for(i = 0; i != 20; i++){
@@ -154,6 +154,11 @@ int main () {
         
         if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
             settings->controllerLock = 1;
+            
+            /* Remember which main-menu slot launched the sub-menu so we can
+             * restore the highlight on it when the user comes back, instead
+             * of forcing the cursor back to "Test Patterns" every time. */
+            int returnSlot = settings->menuState;
         
             switch(settings->menuState){
                 
@@ -187,8 +192,15 @@ int main () {
                     
                 break;
                     
+                //Screen Savers
+                case 5:
+
+                    ScreenSaversMenu();
+
+                break;
+                    
                 //Help Menu
-                case 5:  
+                case 6:  
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -200,12 +212,14 @@ int main () {
                 break;
                     
                 //Options Menu
-                case 6:
-                    
+                case 7:
+
+                    OptionsMenu();
+
                 break;
                     
                 //Credits
-                case 7:
+                case 8:
 
                     SDSprite->invisible = 1;
                     drawCredits();
@@ -218,9 +232,26 @@ int main () {
                 
             }
             
-            resetAllLines();
-            loadMainMenuLines();
-            settings->menuState = 1;
+            /* Restore the highlight to whichever slot the user activated and
+             * redraw the main menu. loadMainMenuLines() also wipes every
+             * leftover sub-menu slot before painting (see its body for why). */
+            settings->menuState = returnSlot;
+            loadMainMenuLines(returnSlot);
+            
+            /* Drain whatever button(s) are still held from the sub-menu's
+             * exit (typically A on "Back to Main Menu", or A inside a test
+             * that returns on its own). Without this, scrollLock counts
+             * down to zero a few frames later and silently auto-fires A
+             * here, which re-enters whichever sub-menu the cursor is on
+             * and looks to the user like the highlight or focus jumped to
+             * a wrong slot on its own. */
+            while((settings->joy1 & 0xFFFFFF) != 0){
+                read_joypad_state(settings->j_state);
+                settings->joy1 = settings->j_state->j1;
+                vsync();
+            }
+            settings->controllerLock = 0;
+            settings->scrollLock = 12;
         
         }
     
@@ -228,23 +259,42 @@ int main () {
   
 };
 
-void loadMainMenuLines(){
+void loadMainMenuLines(int highlightLine){
     
     hide_display_layer(settings->d, 2);
     vsync();
     vsync();
     
+    /* Set the main menu's coordinate band BEFORE wiping every line slot.
+     * Sub-menus use their own (smaller) lineXOffset / lineYOffset and may
+     * touch up to LINESOFTEXT-1 slots; if we reset with stale sub-menu
+     * offsets, slots 8..LINESOFTEXT-1 stay parked at the sub-menu's
+     * positions (still showing the previously-highlighted red "Back"
+     * entry, etc). Resetting at the main-menu offsets relocates every
+     * leftover slot into the same consistent band as the items we are
+     * about to draw, so the blanked " " sprites overwrite the old text
+     * cleanly and nothing red lingers in the middle of the screen. */
     settings->lineXOffset = 64;
     settings->lineYOffset = 88 + settings->PALOffset;
     
-    updateLine(settings, mainFont, lineTextBox[1], "Test Patterns", settings->lineXOffset, setLineYPos(0), RED);
-    updateLine(settings, mainFont, lineTextBox[2], "Video Tests", settings->lineXOffset, setLineYPos(1), WHITE);
-    updateLine(settings, mainFont, lineTextBox[3], "Audio Tests", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "Hardware Tools", settings->lineXOffset, setLineYPos(3), WHITE);
+    resetAllLines();
     
-    updateLine(settings, mainFont, lineTextBox[5], "Help", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "(X)Options", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Credits", settings->lineXOffset, setLineYPos(8), WHITE);
+    /* Clamp to the legal slot range so a stale settings->menuState from a
+     * sub-menu that grew past 8 (e.g. testPatternMenu's 16) can never paint
+     * RED on a slot that doesn't exist on the main menu. */
+    if(highlightLine < 1 || highlightLine > 8){
+        highlightLine = 1;
+    }
+    
+    updateLine(settings, mainFont, lineTextBox[1], "Test Patterns",  settings->lineXOffset, setLineYPos(0), highlightLine == 1 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[2], "Video Tests",    settings->lineXOffset, setLineYPos(1), highlightLine == 2 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "Audio Tests",    settings->lineXOffset, setLineYPos(2), highlightLine == 3 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "Hardware Tools", settings->lineXOffset, setLineYPos(3), highlightLine == 4 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Screen Savers",  settings->lineXOffset, setLineYPos(4), highlightLine == 5 ? RED : WHITE);
+    
+    updateLine(settings, mainFont, lineTextBox[6], "Help",    settings->lineXOffset, setLineYPos(6), highlightLine == 6 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Options", settings->lineXOffset, setLineYPos(7), highlightLine == 7 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Credits", settings->lineXOffset, setLineYPos(8), highlightLine == 8 ? RED : WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -252,39 +302,49 @@ void loadMainMenuLines(){
     
 };
 
-void testPatternMenu(){
-    
-    int done = 0;
-    int lastMenuLine = 15; //counting from zero
-    settings->menuState = 1;
-    
-    hide_display_layer(settings->d, 2);
-    vsync();
-    
+/* Draw the Test Patterns menu's text lines. Extracted so the parent menu can
+ * redraw itself after morePatternsMenu() (which shares lineTextBox[]) returns. */
+static void drawTestPatternMenuLines(int highlightLine){
     settings->lineXOffset = 38;
     settings->lineYOffset = 52 + settings->PALOffset;
-    
+
     resetAllLines();
-        
-    updateLine(settings, mainFont, lineTextBox[1], "Pluge", settings->lineXOffset, setLineYPos(0), RED);
-    updateLine(settings, mainFont, lineTextBox[2], "Color Bars", settings->lineXOffset, setLineYPos(1), WHITE);
-    updateLine(settings, mainFont, lineTextBox[3], "EBU Color Bars", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "SMPTE Color Bars", settings->lineXOffset, setLineYPos(3), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "Referenced Color Bars", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Color Bleed Check", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Monoscope", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Grid", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[9], "Gray Ramp", settings->lineXOffset, setLineYPos(8), WHITE);
-    updateLine(settings, mainFont, lineTextBox[10], "White & RGB Screens", settings->lineXOffset, setLineYPos(9), WHITE);
-    updateLine(settings, mainFont, lineTextBox[11], "100 IRE", settings->lineXOffset, setLineYPos(10), WHITE);
-    updateLine(settings, mainFont, lineTextBox[12], "Sharpness", settings->lineXOffset, setLineYPos(11), WHITE);
-    updateLine(settings, mainFont, lineTextBox[13], "Overscan", settings->lineXOffset, setLineYPos(12), WHITE);
-    updateLine(settings, mainFont, lineTextBox[14], "Convergence", settings->lineXOffset, setLineYPos(13), WHITE);
-    
-    updateLine(settings, mainFont, lineTextBox[15], "Back to Main Menu", settings->lineXOffset, setLineYPos(15), WHITE);
-    
+
+    updateLine(settings, mainFont, lineTextBox[1], "Pluge", settings->lineXOffset, setLineYPos(0), highlightLine == 1 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[2], "Color Bars", settings->lineXOffset, setLineYPos(1), highlightLine == 2 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "EBU Color Bars", settings->lineXOffset, setLineYPos(2), highlightLine == 3 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "SMPTE Color Bars", settings->lineXOffset, setLineYPos(3), highlightLine == 4 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Referenced Color Bars", settings->lineXOffset, setLineYPos(4), highlightLine == 5 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Color Bleed Check", settings->lineXOffset, setLineYPos(5), highlightLine == 6 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Monoscope", settings->lineXOffset, setLineYPos(6), highlightLine == 7 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Grid", settings->lineXOffset, setLineYPos(7), highlightLine == 8 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Gray Ramp", settings->lineXOffset, setLineYPos(8), highlightLine == 9 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "White & RGB Screens", settings->lineXOffset, setLineYPos(9), highlightLine == 10 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "100 IRE", settings->lineXOffset, setLineYPos(10), highlightLine == 11 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Sharpness", settings->lineXOffset, setLineYPos(11), highlightLine == 12 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Overscan", settings->lineXOffset, setLineYPos(12), highlightLine == 13 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[14], "Convergence", settings->lineXOffset, setLineYPos(13), highlightLine == 14 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[15], "More Patterns...", settings->lineXOffset, setLineYPos(14), highlightLine == 15 ? RED : WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[16], "Back to Main Menu", settings->lineXOffset, setLineYPos(15), highlightLine == 16 ? RED : WHITE);
+
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
-       
+}
+
+void testPatternMenu(){
+
+    int done = 0;
+    /* Original 14 patterns + "More Patterns..." entry + "Back" = 16 lines.
+     * The 5 new procedural patterns live behind morePatternsMenu() so this
+     * menu still fits inside the 240p safe area without overlap. */
+    int lastMenuLine = 16; //counting from zero
+    settings->menuState = 1;
+
+    hide_display_layer(settings->d, 2);
+    vsync();
+
+    drawTestPatternMenuLines(1);
+
     show_display_layer(settings->d, 2);
         
     while(!done){
@@ -440,9 +500,22 @@ void testPatternMenu(){
                     DrawConvergence();
                     
                 break;
-                    
-                //return to main menu
+
+                //More Patterns submenu
                 case 15:
+
+                    morePatternsMenu();
+                    /* morePatternsMenu shares lineTextBox[]; redraw our own
+                     * menu state before the loop continues. */
+                    hide_display_layer(settings->d, 2);
+                    vsync();
+                    drawTestPatternMenuLines(15);
+                    show_display_layer(settings->d, 2);
+
+                break;
+
+                //return to main menu
+                case 16:
                     
                     done = 1;
                     
@@ -461,34 +534,234 @@ void testPatternMenu(){
     
 };
 
+/* Sub-menu for the procedurally-generated patterns added to the Jaguar build,
+ * separated from testPatternMenu so neither page overflows the 240p safe area. */
+void morePatternsMenu(){
+
+    int done = 0;
+    int lastMenuLine = 6; //counting from zero
+    settings->menuState = 1;
+
+    hide_display_layer(settings->d, 2);
+    vsync();
+
+    settings->lineXOffset = 38;
+    settings->lineYOffset = 80 + settings->PALOffset;
+
+    resetAllLines();
+
+    updateLine(settings, mainFont, lineTextBox[1], "Color Bars w/ Gray", settings->lineXOffset, setLineYPos(0), RED);
+    updateLine(settings, mainFont, lineTextBox[2], "Linearity", settings->lineXOffset, setLineYPos(1), WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "Phase", settings->lineXOffset, setLineYPos(2), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "Brightness", settings->lineXOffset, setLineYPos(3), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Contrast", settings->lineXOffset, setLineYPos(4), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[6], "Back to Test Patterns", settings->lineXOffset, setLineYPos(6), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
+
+    show_display_layer(settings->d, 2);
+
+    while(!done){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+            settings->scrollLock = 12;
+        }
+        else if(settings->scrollLock > 0){
+            settings->scrollLock--;
+            if(settings->scrollLock == 0){
+                settings->controllerLock = 0;
+                settings->scrollLock = 2;
+            }
+        }
+
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            settings->menuStateOld = settings->menuState;
+            if((settings->menuState + 1) < lastMenuLine + 1){
+                settings->menuState++;
+            }
+            else{
+                settings->menuState = 1;
+            }
+            updateLine(settings, mainFont, lineTextBox[settings->menuStateOld], '\0', 999999, 999999, WHITE);
+            updateLine(settings, mainFont, lineTextBox[settings->menuState], '\0', 999999, 999999, RED);
+        }
+
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            settings->menuStateOld = settings->menuState;
+            if((settings->menuState - 1) > 0){
+                settings->menuState--;
+            }
+            else{
+                settings->menuState = lastMenuLine;
+            }
+            updateLine(settings, mainFont, lineTextBox[settings->menuStateOld], '\0', 999999, 999999, WHITE);
+            updateLine(settings, mainFont, lineTextBox[settings->menuState], '\0', 999999, 999999, RED);
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+
+            if(settings->menuState != lastMenuLine){
+                hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+            }
+
+            switch(settings->menuState){
+
+                case 1: DrawColorBarsGray(); break;
+                case 2: DrawLinearity();    break;
+                case 3: DrawPhase();        break;
+                case 4: DrawBrightness();   break;
+                case 5: DrawContrast();     break;
+
+                //return to Test Patterns menu
+                case 6:
+                    done = 1;
+                break;
+
+                default:
+                    TOMREGS->bg = 0x000F;
+            }
+        }
+
+        hide_or_show_display_layer_range(settings->d, 1, 0, 2);
+    }
+};
+
+/* Screen Savers sub-menu. Mirrors the Screensavers section that ships in
+ * the canonical 240p test suite (Genesis / SNES / Dreamcast). All three
+ * patterns are procedural (see extra_tests.c) so this menu doesn't drag
+ * any new LZ77 assets into the cart. Layout follows morePatternsMenu()'s
+ * conventions for consistency. */
+void ScreenSaversMenu(){
+
+    int done = 0;
+    int lastMenuLine = 4; //counting from zero
+    settings->menuState = 1;
+
+    hide_display_layer(settings->d, 2);
+    vsync();
+
+    settings->lineXOffset = 38;
+    settings->lineYOffset = 80 + settings->PALOffset;
+
+    resetAllLines();
+
+    updateLine(settings, mainFont, lineTextBox[1], "Color Cycle",      settings->lineXOffset, setLineYPos(0), RED);
+    updateLine(settings, mainFont, lineTextBox[2], "Bouncing Square",  settings->lineXOffset, setLineYPos(1), WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "Scrolling Bars",   settings->lineXOffset, setLineYPos(2), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[4], "Back to Main Menu", settings->lineXOffset, setLineYPos(4), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
+
+    show_display_layer(settings->d, 2);
+
+    while(!done){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+            settings->scrollLock = 12;
+        }
+        else if(settings->scrollLock > 0){
+            settings->scrollLock--;
+            if(settings->scrollLock == 0){
+                settings->controllerLock = 0;
+                settings->scrollLock = 2;
+            }
+        }
+
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            settings->menuStateOld = settings->menuState;
+            if((settings->menuState + 1) < lastMenuLine + 1){
+                settings->menuState++;
+            }
+            else{
+                settings->menuState = 1;
+            }
+            updateLine(settings, mainFont, lineTextBox[settings->menuStateOld], '\0', 999999, 999999, WHITE);
+            updateLine(settings, mainFont, lineTextBox[settings->menuState], '\0', 999999, 999999, RED);
+        }
+
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            settings->menuStateOld = settings->menuState;
+            if((settings->menuState - 1) > 0){
+                settings->menuState--;
+            }
+            else{
+                settings->menuState = lastMenuLine;
+            }
+            updateLine(settings, mainFont, lineTextBox[settings->menuStateOld], '\0', 999999, 999999, WHITE);
+            updateLine(settings, mainFont, lineTextBox[settings->menuState], '\0', 999999, 999999, RED);
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+
+            if(settings->menuState != lastMenuLine){
+                hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+            }
+
+            switch(settings->menuState){
+
+                case 1: ColorCycleSaver();     break;
+                case 2: BouncingSquareSaver(); break;
+                case 3: ScrollingBarsSaver();  break;
+
+                //return to main menu
+                case 4:
+                    done = 1;
+                break;
+
+                default:
+                    TOMREGS->bg = 0x000F;
+            }
+        }
+
+        hide_or_show_display_layer_range(settings->d, 1, 0, 2);
+    }
+};
+
 void VideoTestsMenu(){
     
     int done = 0;
-    int lastMenuLine = 13; //counting from zero
+    int lastMenuLine = 14; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 60 + settings->PALOffset;
+    settings->lineYOffset = 56 + settings->PALOffset;
     
     resetAllLines();
         
     updateLine(settings, mainFont, lineTextBox[1], "Drop Shadow Test", settings->lineXOffset, setLineYPos(0), RED);
     updateLine(settings, mainFont, lineTextBox[2], "Striped Sprite Test", settings->lineXOffset, setLineYPos(1), WHITE);
     updateLine(settings, mainFont, lineTextBox[3], "Lag Test", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "Timing & Reflex Test", settings->lineXOffset, setLineYPos(3), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "Scroll Test", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Grid Scroll Test", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Horiz/Vert Stripes", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Checkerboard", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[9], "Backlit Zone Test", settings->lineXOffset, setLineYPos(8), WHITE);
-    updateLine(settings, mainFont, lineTextBox[10], "(x)Alternate 240p/480i", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "Manual Lag Test", settings->lineXOffset, setLineYPos(3), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Timing & Reflex Test", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Scroll Test", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Grid Scroll Test", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Horiz/Vert Stripes", settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Checkerboard", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "Backlit Zone Test", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "Alternate 240p/480i", settings->lineXOffset, setLineYPos(10), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[11], "Help", settings->lineXOffset, setLineYPos(11), WHITE);
-    updateLine(settings, mainFont, lineTextBox[12], "(x)Options", settings->lineXOffset, setLineYPos(12), WHITE);
-    updateLine(settings, mainFont, lineTextBox[13], "Back to Main Menu", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Help", settings->lineXOffset, setLineYPos(12), WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Options", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[14], "Back to Main Menu", settings->lineXOffset, setLineYPos(14), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -572,56 +845,65 @@ void VideoTestsMenu(){
                     PassiveLagTest();
                     
                 break;
+
+                //ManualLagTest
+                case 4:
+
+                    ManualLagTest();
+
+                break;
                     
                 //ReflexNTiming
-                case 4:
+                case 5:
                     
                     ReflexNTiming();
                     
                 break;
                     
                 //HScrollTest
-                case 5:  
+                case 6:  
                     
                     HScrollTest();
                     
                 break;
                     
                 //VScrollTest
-                case 6:
+                case 7:
                     
                     VScrollTest();
                     
                 break;
                     
                 //DrawStripes
-                case 7:
+                case 8:
                     
                     DrawStripes();
                     
                 break;
                     
                 //DrawCheckBoard
-                case 8:
+                case 9:
                     
                     DrawCheckBoard();
                     
                 break;
                     
                 //LEDZoneTest
-                case 9:
+                case 10:
                     
                     LEDZoneTest();
                     
                 break;
                     
                 //Alternate240p480i
-                case 10:
-                    
+                case 11:
+
+                    Alternate240p480iTest();
+
                 break;
                     
                 //DrawHelp
-                case 11:
+                case 12:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -633,12 +915,14 @@ void VideoTestsMenu(){
                 break;
                     
                 //OptionsMenu
-                case 12:
-                    
+                case 13:
+
+                    OptionsMenu();
+
                 break;
                     
                 //return to main menu
-                case 13:
+                case 14:
                     
                     done = 1;
                     
@@ -660,24 +944,25 @@ void VideoTestsMenu(){
 void AudioTestsMenu(){
     
     int done = 0;
-    int lastMenuLine = 6; //counting from zero
+    int lastMenuLine = 7; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 90 + settings->PALOffset;
+    settings->lineYOffset = 86 + settings->PALOffset;
     
     resetAllLines();
         
     updateLine(settings, mainFont, lineTextBox[1], "Sound Test", settings->lineXOffset, setLineYPos(0), RED);
     updateLine(settings, mainFont, lineTextBox[2], "Audio Sync Test", settings->lineXOffset, setLineYPos(1), WHITE);
-    updateLine(settings, mainFont, lineTextBox[3], "(x)MDFourier", settings->lineXOffset, setLineYPos(2), WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "L/R Balance + 1kHz Tone", settings->lineXOffset, setLineYPos(2), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "MDFourier Sweep", settings->lineXOffset, setLineYPos(3), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[4], "Help", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "(x)Options", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Back to Main Menu", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Help", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Options", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Back to Main Menu", settings->lineXOffset, setLineYPos(7), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -754,14 +1039,23 @@ void AudioTestsMenu(){
                     AudioSyncTest();
                     
                 break;
+
+                //AudioBalanceTest
+                case 3:
+
+                    AudioBalanceTest();
+
+                break;
                     
                 //MDFourier
-                case 3:
+                case 4:
+                    
+                    MDFourierTest();
                     
                 break;
                     
                 //DrawHelp
-                case 4:
+                case 5:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -773,11 +1067,13 @@ void AudioTestsMenu(){
                 break;
                     
                 //OptionsMenu
-                case 5:
-                    
+                case 6:
+
+                    OptionsMenu();
+
                 break;
                     
-                case 6:
+                case 7:
                     
                     done = 1;
                     
@@ -799,14 +1095,14 @@ void AudioTestsMenu(){
 void HardwareMenu(){
     
     int done = 0;
-    int lastMenuLine = 8; //counting from zero
+    int lastMenuLine = 9; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 80 + settings->PALOffset;
+    settings->lineYOffset = 76 + settings->PALOffset;
     
     resetAllLines();
         
@@ -814,11 +1110,12 @@ void HardwareMenu(){
     updateLine(settings, mainFont, lineTextBox[2], "GPU Memory Viewer", settings->lineXOffset, setLineYPos(1), WHITE);
     updateLine(settings, mainFont, lineTextBox[3], "DSP Memory Viewer", settings->lineXOffset, setLineYPos(2), WHITE);
     updateLine(settings, mainFont, lineTextBox[4], "DRAM Memory Viewer", settings->lineXOffset, setLineYPos(3), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "(x)Jaguar CD Tests", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "System Info", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Jaguar CD Probe", settings->lineXOffset, setLineYPos(5), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[6], "(x)Help", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "(x)Options", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Back to Main Menu", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Help", settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Options", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Back to Main Menu", settings->lineXOffset, setLineYPos(9), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -909,19 +1206,40 @@ void HardwareMenu(){
                     
                 break;
                     
+                //System Info
                 case 5:
-                    
+
+                    HardwareInfo();
+
                 break;
                     
+                //Jaguar CD Tests
                 case 6:
                     
+                    JaguarCDTest();
+                    
                 break;
                     
+                //Help
                 case 7:
-                    
+
+                    hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+                    hide_or_show_display_layer_range(settings->d, 1, 14, 14);
+                    settings->controllerLock = 1;
+                    DrawHelp(HELP_GENERAL);
+                    hide_or_show_display_layer_range(settings->d, 0, 14, 14);
+                    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+
                 break;
                     
+                //Options
                 case 8:
+
+                    OptionsMenu();
+
+                break;
+                    
+                case 9:
                     
                     done = 1;
                     
@@ -984,7 +1302,7 @@ void drawCredits(){
                     updateLine(settings, mainFont, lineTextBox[14], "Advisor:", settings->lineXOffset, setLineYPos(13), GREEN);
                     updateLine(settings, mainFont, lineTextBox[15], "  ()  ", settings->lineXOffset, setLineYPos(14), WHITE);
 
-                    updateLine(settings, mainFont, lineTextBox[16], "                   Ver. 0.5.1 - 11/01/2022", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
+                    updateLine(settings, mainFont, lineTextBox[16], "                   Ver. 0.6.4 - 04/19/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
 
                     updateLine(settings, mainFont, lineTextBox[17], "Option - Return To Main Menu", settings->lineXOffset, setLineYPos(16) + 4, WHITE);
                 break;

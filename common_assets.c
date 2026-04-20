@@ -32,6 +32,8 @@ globalSettings *initGlobalSettings(){
     s->teamTap1 = 0; //0 - no team tap, 1 - yes team tap
     s->teamTap2 = 0; //0 - no team tap, 1 - yes team tap
     
+    s->masterVolume = 63; //full -- preserves the original hardcoded behavior
+    
     for(i = 0; i != 20; i++){
         uint16_t red = (rand()%19+6) << 11;
         uint16_t blue = (rand()%12) << 6;

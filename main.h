@@ -19,6 +19,7 @@
 #include "common_assets.h"
 #include "patterns.h"
 #include "tests.h"
+#include "extra_tests.h"
 #include "controller_test.h"
 
 extern uint8_t back;
@@ -28,15 +29,18 @@ extern uint8_t SD;
 phrase *SDData;
 sprite *SDSprite;
 
-void loadMainMenuLines();
+void loadMainMenuLines(int highlightLine);
 
 void testPatternMenu();
+void morePatternsMenu();
 
 void VideoTestsMenu();
 
 void AudioTestsMenu();
 
 void HardwareMenu();
+
+void ScreenSaversMenu();
 
 void drawCredits();
 

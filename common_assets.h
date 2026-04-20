@@ -50,7 +50,10 @@ phrase *fontMapGreyData;
 font *mainFont;
 
 
-#define LINESOFTEXT 20
+/* LINESOFTEXT bumped from 20 to 24 to fit the expanded Test Patterns menu
+ * (PLUGE -> Color Bars w/ Gray + Linearity + Phase + Brightness + Contrast +
+ * Back). 4 more pointers + textbox structs cost ~1 KiB of RAM total. */
+#define LINESOFTEXT 24
 textBox *lineTextBox[LINESOFTEXT];
 
 typedef struct {
@@ -79,6 +82,12 @@ typedef struct {
     
     int teamTap1;
     int teamTap2;
+    
+    /* User-adjustable master audio volume (0..63), wired into every set_voice
+     * call site so the Options menu knob actually does something. Default 63
+     * matches the previous hardcoded VOICE_VOLUME(63) behavior so existing
+     * tests sound identical until the user turns it down. */
+    int masterVolume;
     
     //line options
     int linePos;

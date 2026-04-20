@@ -26,3 +26,4 @@ jag_240p_test_suite-debug/
 *.so
 *.dll
 *.dylib
+scripts/__pycache__/
