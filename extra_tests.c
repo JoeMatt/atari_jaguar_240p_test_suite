@@ -1273,12 +1273,16 @@ void ColorCycleSaver(void){
 /* ---------------------------------------------------------------------------
  * Screen Saver: Bouncing Square
  *
- * A 32x32 white sprite that bounces around the active area on a fixed
- * trajectory, similar to the classic DVD logo screen saver. Forces every
- * pixel of the panel to light up at least once over a few minutes, which
- * is the canonical OLED burn-in mitigation use case. The bounce trail
- * is intentionally NOT drawn so that any latent pixels show up against
- * the otherwise-black background.
+ * A 32x32 DEPTH16 white sprite that bounces around the active area on a
+ * fixed trajectory, similar to the classic DVD logo screen saver. Forces
+ * every pixel of the panel to light up at least once over a few minutes,
+ * which is the canonical OLED burn-in mitigation use case. The bounce
+ * trail is intentionally NOT drawn so that any latent pixels show up
+ * against the otherwise-black background.
+ *
+ * Implementation note: uses DEPTH16 with explicit RGB16 white (0xFFFF)
+ * rather than DEPTH8 + CLUT lookup, so the saver doesn't depend on
+ * (or have to restore) any particular state in TOMREGS->clut1.
  *
  * Controls: OPTION = exit. Velocity is hard-coded; A presses do nothing
  * by design (any sub-frame button latency would bias the trajectory).
@@ -1290,26 +1294,39 @@ void BouncingSquareSaver(void){
     const int sh = 32;
     const int screenH = (settings->PALNTSC > 0) ? 240 : 288;
 
-    /* 32x32 DEPTH8 sprite filled with CLUT entry 1 (white in the default
-     * background palette). Allocated heap-side so we can free it cleanly
-     * on exit; the static-LED test does the same thing for consistency. */
-    uint8_t *sqData = malloc(sizeof(uint8_t)*sw*sh);
-    for(i = 0; i < sw*sh; i++){ sqData[i] = 0x01; }
+    /* 32x32 DEPTH16 sprite filled with explicit white = R5+B5+G6 all max.
+     *
+     * The earlier DEPTH8 implementation indexed CLUT entry 1, but the menu
+     * doesn't guarantee any particular value at TOMREGS->clut1[1] (the LED
+     * test in tests.c explicitly populates clut1 entries; we'd have had to
+     * do the same and then restore the menu's CLUT on exit). Going DEPTH16
+     * with literal RGB16 pixels sidesteps the CLUT plumbing entirely and
+     * survives any future menu palette changes. */
+    const uint16_t white = (uint16_t)((31u << 11) | (31u << 6) | 63u);
+    uint16_t *sqData = malloc(sizeof(uint16_t)*sw*sh);
+    for(i = 0; i < sw*sh; i++){ sqData[i] = white; }
 
-    sprite *sq = new_sprite(sw, sh, 80, 80, DEPTH8, sqData);
-    /* Match every other sprite in extra_tests.c / patterns.c -- the new_sprite
-     * default for trans is non-zero, so without this the corner texels of the
-     * square render see-through depending on the BG palette. */
+    /* Layer state on entry: the menu has just hidden every layer it owns,
+     * so by default *no* layer is visible -- attaching to layer 12 is not
+     * enough on its own, we still have to explicitly hide_or_show it.
+     * Hide everything first as a known-good baseline, then bring up only
+     * the two layers we actually use (12 = bouncing square, 13 = help
+     * text). The previous version skipped the layer-12 show and so the
+     * sprite was attached but invisible -- pure black screen. */
+    hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+
+    sprite *sq = new_sprite(sw, sh, 80, 80, DEPTH16, (uint8_t*)sqData);
+    /* Match every other DEPTH16 sprite in the project -- new_sprite()'s
+     * default trans is non-zero, which would otherwise punch holes through
+     * texels that happen to match the magic transparent value. */
     sq->trans = 0;
     attach_sprite_to_display_at_layer(sq, settings->d, 12);
+    hide_or_show_display_layer_range(settings->d, 1, 12, 12);
 
     int vx = 2;
     int vy = 1;
     int x = 80;
     int y = 80;
-
-    hide_or_show_display_layer_range(settings->d, 0, 0, 11);
-    hide_or_show_display_layer_range(settings->d, 0, 13, 15);
 
     textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 8, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
@@ -1343,7 +1360,9 @@ void BouncingSquareSaver(void){
     free(sq);
     free(sqData);
 
-    hide_or_show_display_layer_range(settings->d, 0, 13, 13);
+    /* Hide the saver-owned layers, then re-show every layer so the menu
+     * (layers 0-11) is visible again on return. Matches ColorCycleSaver. */
+    hide_or_show_display_layer_range(settings->d, 0, 12, 13);
     hide_or_show_display_layer_range(settings->d, 1, 0, 15);
     helpTb = freeTextBox(helpTb);
 }
@@ -1351,11 +1370,23 @@ void BouncingSquareSaver(void){
 /* ---------------------------------------------------------------------------
  * Screen Saver: Scrolling Color Bars
  *
- * Builds a single 320-pixel-wide horizontal rainbow strip in RGB16 and
- * scrolls its source X every frame so the bars appear to slide across
- * the screen. Doubles as a chroma-bleed / scroll-jitter eyeball test
- * because the color transitions never sit still long enough for the
- * display's color converter to settle on any one transition.
+ * Builds a single 320 x screenH RGB16 framebuffer of vertical rainbow bars
+ * and attaches it as TWO sprites side-by-side, both pointing at the same
+ * pixel data. Scrolling just nudges both sprite x positions in lockstep:
+ * as one slides off the left edge, the other slides in from the right.
+ * When the leading sprite has fully exited (sx hits -320), we snap sx
+ * back to 0 -- the picture is identical at sx=0 and sx=-320, so the seam
+ * is invisible.
+ *
+ * Doubles as a chroma-bleed / scroll-jitter eyeball test because the color
+ * transitions never sit still long enough for the display's color
+ * converter to settle on any one transition.
+ *
+ * The previous single-sprite implementation let sx range across [-320, 320]
+ * and so spent half its cycle with the sprite fully off-screen, which
+ * looked like a blank frame followed by a sudden snap. The two-sprite
+ * trick is the same idea every Genesis/SNES scrolling-background routine
+ * uses, just expressed via the Jaguar OP instead of an HW scroll register.
  *
  * Controls: A = reverse direction, OPTION = exit.
  * --------------------------------------------------------------------------- */
@@ -1365,14 +1396,14 @@ void ScrollingBarsSaver(void){
     int i, x;
     const int screenH = (settings->PALNTSC > 0) ? 240 : 288;
 
-    /* Allocate a 320 x screenH RGB16 framebuffer and fill with vertical
-     * rainbow bars. We rebuild the colors for each pixel-column so the
-     * scroll just nudges sprite->x and re-renders -- much cheaper than
-     * memmove'ing the whole buffer every frame. */
+    /* Single 320 x screenH RGB16 framebuffer. Both sprites read from this
+     * one buffer -- no need to double the memory just to get seamless
+     * wraparound. */
     uint16_t *fb = malloc(sizeof(uint16_t)*320*screenH);
 
     /* Six-color rainbow bars (R, Y, G, C, B, M) repeated to fill 320 wide.
-     * Each bar is ~53px so the cycle wraps cleanly at the screen edge. */
+     * Each bar is ~53px (320/6 = 53.3) so the cycle wraps cleanly at the
+     * screen edge -- both halves of the bar pair line up at sx == -320. */
     static const uint16_t bars[6] = {
         (uint16_t)((31<<11) | (0 <<6) | 0 ),    /* red    */
         (uint16_t)((31<<11) | (0 <<6) | 63),    /* yellow */
@@ -1388,21 +1419,34 @@ void ScrollingBarsSaver(void){
         }
     }
 
-    sprite *fbS = new_sprite(320, screenH, 0, 0, DEPTH16, (uint8_t*)fb);
-    /* DEPTH16 fullscreen sprites everywhere else in the project (Draw100IRE,
-     * DrawWhiteScreen, all five new procedural patterns...) explicitly disable
-     * trans; honor that contract here so the bars don't acquire transparent
-     * pixels if the sprite engine default ever changes. */
-    fbS->trans = 0;
-    attach_sprite_to_display_at_layer(fbS, settings->d, 12);
+    /* Same layer-state baseline as BouncingSquareSaver: hide everything,
+     * then bring up only the layers we need. Without an explicit show on
+     * layer 12 the sprites attach but never become visible (the menu had
+     * everything hidden) -- previously caused a black screen. */
+    hide_or_show_display_layer_range(settings->d, 0, 0, 15);
 
-    hide_or_show_display_layer_range(settings->d, 0, 0, 11);
-    hide_or_show_display_layer_range(settings->d, 0, 13, 15);
+    /* Two sprites, identical pixel source, x positions kept 320 apart so
+     * the visible scroll is always covered. trans=0 for both -- DEPTH16
+     * fullscreen sprites in this project always disable trans (matches
+     * Draw100IRE, DrawWhiteScreen, all the new procedural patterns).
+     * Both sprites share layer 12 -- a single show call covers both. */
+    sprite *fbS1 = new_sprite(320, screenH, 0,   0, DEPTH16, (uint8_t*)fb);
+    fbS1->trans = 0;
+    attach_sprite_to_display_at_layer(fbS1, settings->d, 12);
+    sprite *fbS2 = new_sprite(320, screenH, 320, 0, DEPTH16, (uint8_t*)fb);
+    fbS2->trans = 0;
+    attach_sprite_to_display_at_layer(fbS2, settings->d, 12);
+    hide_or_show_display_layer_range(settings->d, 1, 12, 12);
 
     textBox *helpTb = newTextBox("A: reverse  OPTION: exit", 192, 9, mainFont, 0, settings->d, 64, 8, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
     hide_or_show_display_layer_range(settings->d, 1, 13, 13);
 
+    /* sx is the x position of the LEFT sprite; the right sprite always
+     * sits at sx + 320. Confined to (-320, 0]: when sx slides below
+     * -320, snap to 0 (right sprite has just become the left one). When
+     * scrolling the other direction, sx slides above 0 and we snap to
+     * -320 (left sprite has just become the right one). */
     int sx = 0;
     while(!exit){
         read_joypad_state(settings->j_state);
@@ -1410,9 +1454,10 @@ void ScrollingBarsSaver(void){
         vsync();
 
         sx += dir;
-        if(sx > 320)  sx = -320;
-        if(sx < -320) sx =  320;
-        fbS->x = sx;
+        if(sx <= -320) sx = 0;
+        if(sx >    0)  sx = -320;
+        fbS1->x = sx;
+        fbS2->x = sx + 320;
 
         if((settings->joy1 & 0xFFFFFF) == 0){
             settings->controllerLock = 0;
@@ -1427,12 +1472,17 @@ void ScrollingBarsSaver(void){
         }
     }
 
-    fbS->invisible = 1;
-    detach_sprite_from_display(fbS);
-    free(fbS);
+    fbS1->invisible = 1;
+    fbS2->invisible = 1;
+    detach_sprite_from_display(fbS1);
+    detach_sprite_from_display(fbS2);
+    free(fbS1);
+    free(fbS2);
     free(fb);
 
-    hide_or_show_display_layer_range(settings->d, 0, 13, 13);
+    /* Hide saver-owned layers, then re-show every layer so the menu
+     * (layers 0-11) is visible again on return. */
+    hide_or_show_display_layer_range(settings->d, 0, 12, 13);
     hide_or_show_display_layer_range(settings->d, 1, 0, 15);
     helpTb = freeTextBox(helpTb);
 }

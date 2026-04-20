@@ -88,13 +88,63 @@ void DrawColorBars(){
     
 };
 
+/* ---------------------------------------------------------------------------
+ * IRE intensity table (upstream issue #3: IRE Measuring & Documenting in Code)
+ *
+ * The Jaguar TOM in RGB16 mode packs pixels as R5 B5 G6 (red/blue 0..31,
+ * green 0..63 -- i.e. 64 distinct levels per channel). To produce a neutral
+ * gray at a given IRE percentage we drive the green channel to
+ * round((IRE/100) * 64) (scaling by the 6-bit level count is the convention
+ * used here, and integer-rounds cleanly for every rung in the ladder) and
+ * balance red/blue at half the green value (since they only have 5 bits) so
+ * the resulting RGB16 word reads as gray on the analog output:
+ *
+ *       g = round((IRE / 100) * 64)          (clamped to 0..63 max)
+ *       r = b = g >> 1                       (5-bit half of the 6-bit green)
+ *       pixel = (r << 11) | (b << 6) | g
+ *
+ * Note on the *64 vs *63 choice: scaling by 64 (the level count) instead of
+ * 63 (the max value) keeps the integer math clean -- e.g. 53 IRE * 64 / 100
+ * = 33.92 -> 34, while *63 would give 33.39 -> 33. The ladder maxes at
+ * 94 IRE -> 60, so the theoretical 100 IRE -> 64 clip case never occurs.
+ *
+ * The seven-step IRE ladder below matches the canonical 240p-test-suite
+ * intensities used on every other platform (Genesis / SNES / Dreamcast):
+ *
+ *       index   IRE %   green (0..63)   r,b (0..31)   notes
+ *       -----   -----   -------------   -----------   -----
+ *         0      13          8               4        ~ HW black floor + 7
+ *         1      25         16               8        low-IRE convergence
+ *         2      41         26              13        ~ NTSC mid-gray
+ *         3      53         34              17        ~ 50% IRE pivot
+ *         4      66         42              21        upper-mid gray
+ *         5      82         52              26        bright reference
+ *         6      94         60              30        ~ peak white, no clip
+ *
+ * Notes on regional reference levels:
+ *   - NTSC-J (Japan) and PC RGB use 0 IRE as black -- the table above maps
+ *     directly onto the analog signal.
+ *   - NTSC-M (US) traditionally uses a 7.5 IRE setup pedestal for black, so
+ *     the "true" picture range is 7.5..100 IRE. Software can't compensate
+ *     for this at the DAC; consult your display's setup-level menu.
+ *   - PAL and most modern flat panels treat 0 IRE as black, matching the
+ *     NTSC-J / PC RGB behavior.
+ *
+ * The Jaguar's hardware analog black floor sits around 6 IRE (see HELP_PLUGE
+ * text) -- below that the DAC clamps. That is why this ladder starts at 13
+ * IRE rather than 0.
+ * --------------------------------------------------------------------------- */
 void Draw100IRE(){
     
     int i = 0;
     int selection = 6;
     int selectionOld = 5;
     int displayDelay = 45;
-    int ireValues[7] = {8, 16, 26, 34, 42, 52, 60}; //Converted from a 0-100 to a 0-64 scale
+    /* IRE -> 6-bit green channel: round((IRE/100) * 64). See block comment
+     * above for the full derivation table and the rationale for *64 over
+     * *63. Red/blue are set to (green >> 1) at the CLUT write below to
+     * keep the resulting pixel neutral gray. */
+    int ireValues[7] = {8, 16, 26, 34, 42, 52, 60};
     int redraw = 1;
     
     settings->fadeToColor = 0x0000;
