@@ -134,6 +134,15 @@ make libretro-frames      # render 180 frames and dump every 30th to ./frames/*.
 
 The first invocation auto-creates `.venv-libretro/` and `pip install`s [JesseTG/libretro.py](https://github.com/JesseTG/libretro.py) into it; subsequent runs reuse it. The core is not committed to the repo (it's in `.gitignore`); grab the build that matches your platform from the [virtualjaguar_libretro releases](https://github.com/libretro/virtualjaguar-libretro) or RetroArch's online updater.
 
+**What the smoke test actually proves**
+
+- `load_game` returned `True` (the libretro core accepted the ROM header / size / extension filter).
+- N `retro_run()` calls execute without raising or `_exit()`-ing.
+
+**What it does NOT prove (intentional)**
+
+- That the cart's menu is *visually* correct on a real Jaguar. The Virtual Jaguar BIOS animation requires a real Atari Jaguar BIOS ROM (copyrighted, not redistributable) to advance into cart code. Without a BIOS, the libretro framebuffer stays at the cyan-stripe init state for the entire run -- every captured frame is bit-identical regardless of frame count. The CI screenshot artifact (`smoke-test-frame-<sha>/frame-0000.png`) is therefore the *boot framebuffer*, not a render-regression baseline. If those init pixels ever change shape something fundamental broke (linker layout, fastboot signature, video init); otherwise the meaningful signal is in the log, not the image.
+
 > **macOS caveat:** the Virtual Jaguar libretro core has an upstream bug where it calls `_exit(0)` from inside the first `retro_run()` invocation on macOS. The `libretro-load-test.py` harness treats `load_game returned True` in the log as success regardless of subsequent crashes, so `make test` still gives a meaningful signal — but the process exit code may misreport. CI runs on Linux where the bug doesn't apply.
 
 If you'd rather wrap the `.bin` with a different tool, the original sources of the same fastboot algorithm are:
