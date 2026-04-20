@@ -1306,20 +1306,27 @@ void BouncingSquareSaver(void){
     uint16_t *sqData = malloc(sizeof(uint16_t)*sw*sh);
     for(i = 0; i < sw*sh; i++){ sqData[i] = white; }
 
+    /* Layer state on entry: the menu has just hidden every layer it owns,
+     * so by default *no* layer is visible -- attaching to layer 12 is not
+     * enough on its own, we still have to explicitly hide_or_show it.
+     * Hide everything first as a known-good baseline, then bring up only
+     * the two layers we actually use (12 = bouncing square, 13 = help
+     * text). The previous version skipped the layer-12 show and so the
+     * sprite was attached but invisible -- pure black screen. */
+    hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+
     sprite *sq = new_sprite(sw, sh, 80, 80, DEPTH16, (uint8_t*)sqData);
     /* Match every other DEPTH16 sprite in the project -- new_sprite()'s
      * default trans is non-zero, which would otherwise punch holes through
      * texels that happen to match the magic transparent value. */
     sq->trans = 0;
     attach_sprite_to_display_at_layer(sq, settings->d, 12);
+    hide_or_show_display_layer_range(settings->d, 1, 12, 12);
 
     int vx = 2;
     int vy = 1;
     int x = 80;
     int y = 80;
-
-    hide_or_show_display_layer_range(settings->d, 0, 0, 11);
-    hide_or_show_display_layer_range(settings->d, 0, 13, 15);
 
     textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 8, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
@@ -1353,7 +1360,9 @@ void BouncingSquareSaver(void){
     free(sq);
     free(sqData);
 
-    hide_or_show_display_layer_range(settings->d, 0, 13, 13);
+    /* Hide the saver-owned layers, then re-show every layer so the menu
+     * (layers 0-11) is visible again on return. Matches ColorCycleSaver. */
+    hide_or_show_display_layer_range(settings->d, 0, 12, 13);
     hide_or_show_display_layer_range(settings->d, 1, 0, 15);
     helpTb = freeTextBox(helpTb);
 }
@@ -1410,19 +1419,24 @@ void ScrollingBarsSaver(void){
         }
     }
 
+    /* Same layer-state baseline as BouncingSquareSaver: hide everything,
+     * then bring up only the layers we need. Without an explicit show on
+     * layer 12 the sprites attach but never become visible (the menu had
+     * everything hidden) -- previously caused a black screen. */
+    hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+
     /* Two sprites, identical pixel source, x positions kept 320 apart so
      * the visible scroll is always covered. trans=0 for both -- DEPTH16
      * fullscreen sprites in this project always disable trans (matches
-     * Draw100IRE, DrawWhiteScreen, all the new procedural patterns). */
+     * Draw100IRE, DrawWhiteScreen, all the new procedural patterns).
+     * Both sprites share layer 12 -- a single show call covers both. */
     sprite *fbS1 = new_sprite(320, screenH, 0,   0, DEPTH16, (uint8_t*)fb);
     fbS1->trans = 0;
     attach_sprite_to_display_at_layer(fbS1, settings->d, 12);
     sprite *fbS2 = new_sprite(320, screenH, 320, 0, DEPTH16, (uint8_t*)fb);
     fbS2->trans = 0;
     attach_sprite_to_display_at_layer(fbS2, settings->d, 12);
-
-    hide_or_show_display_layer_range(settings->d, 0, 0, 11);
-    hide_or_show_display_layer_range(settings->d, 0, 13, 15);
+    hide_or_show_display_layer_range(settings->d, 1, 12, 12);
 
     textBox *helpTb = newTextBox("A: reverse  OPTION: exit", 192, 9, mainFont, 0, settings->d, 64, 8, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
@@ -1466,7 +1480,9 @@ void ScrollingBarsSaver(void){
     free(fbS2);
     free(fb);
 
-    hide_or_show_display_layer_range(settings->d, 0, 13, 13);
+    /* Hide saver-owned layers, then re-show every layer so the menu
+     * (layers 0-11) is visible again on return. */
+    hide_or_show_display_layer_range(settings->d, 0, 12, 13);
     hide_or_show_display_layer_range(settings->d, 1, 0, 15);
     helpTb = freeTextBox(helpTb);
 }
