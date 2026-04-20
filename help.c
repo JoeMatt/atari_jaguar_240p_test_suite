@@ -16,9 +16,9 @@ static int helpStrlen(const char *s){
 }
 
 static int helpStrstrIndex(const char *hay, const char *needle){
+    int i, j;
     if(hay == NULL || needle == NULL){ return -1; }
     if(needle[0] == '\0'){ return 0; }
-    int i, j;
     for(i = 0; hay[i] != '\0'; i++){
         for(j = 0; needle[j] != '\0' && hay[i + j] == needle[j]; j++){ /* match */ }
         if(needle[j] == '\0'){ return i; }
