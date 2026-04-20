@@ -201,7 +201,9 @@ int main () {
                     
                 //Options Menu
                 case 6:
-                    
+
+                    OptionsMenu();
+
                 break;
                     
                 //Credits
@@ -243,7 +245,7 @@ void loadMainMenuLines(){
     updateLine(settings, mainFont, lineTextBox[4], "Hardware Tools", settings->lineXOffset, setLineYPos(3), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[5], "Help", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "(X)Options", settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Options", settings->lineXOffset, setLineYPos(7), WHITE);
     updateLine(settings, mainFont, lineTextBox[7], "Credits", settings->lineXOffset, setLineYPos(8), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
@@ -255,14 +257,14 @@ void loadMainMenuLines(){
 void testPatternMenu(){
     
     int done = 0;
-    int lastMenuLine = 15; //counting from zero
+    int lastMenuLine = 20; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 52 + settings->PALOffset;
+    settings->lineYOffset = 36 + settings->PALOffset;
     
     resetAllLines();
         
@@ -280,8 +282,13 @@ void testPatternMenu(){
     updateLine(settings, mainFont, lineTextBox[12], "Sharpness", settings->lineXOffset, setLineYPos(11), WHITE);
     updateLine(settings, mainFont, lineTextBox[13], "Overscan", settings->lineXOffset, setLineYPos(12), WHITE);
     updateLine(settings, mainFont, lineTextBox[14], "Convergence", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[15], "Color Bars w/ Gray", settings->lineXOffset, setLineYPos(14), WHITE);
+    updateLine(settings, mainFont, lineTextBox[16], "Linearity", settings->lineXOffset, setLineYPos(15), WHITE);
+    updateLine(settings, mainFont, lineTextBox[17], "Phase", settings->lineXOffset, setLineYPos(16), WHITE);
+    updateLine(settings, mainFont, lineTextBox[18], "Brightness", settings->lineXOffset, setLineYPos(17), WHITE);
+    updateLine(settings, mainFont, lineTextBox[19], "Contrast", settings->lineXOffset, setLineYPos(18), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[15], "Back to Main Menu", settings->lineXOffset, setLineYPos(15), WHITE);
+    updateLine(settings, mainFont, lineTextBox[20], "Back to Main Menu", settings->lineXOffset, setLineYPos(20), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -440,9 +447,44 @@ void testPatternMenu(){
                     DrawConvergence();
                     
                 break;
-                    
-                //return to main menu
+
+                //Color Bars w/ Gray
                 case 15:
+
+                    DrawColorBarsGray();
+
+                break;
+
+                //Linearity
+                case 16:
+
+                    DrawLinearity();
+
+                break;
+
+                //Phase
+                case 17:
+
+                    DrawPhase();
+
+                break;
+
+                //Brightness
+                case 18:
+
+                    DrawBrightness();
+
+                break;
+
+                //Contrast
+                case 19:
+
+                    DrawContrast();
+
+                break;
+
+                //return to main menu
+                case 20:
                     
                     done = 1;
                     
@@ -464,31 +506,32 @@ void testPatternMenu(){
 void VideoTestsMenu(){
     
     int done = 0;
-    int lastMenuLine = 13; //counting from zero
+    int lastMenuLine = 14; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 60 + settings->PALOffset;
+    settings->lineYOffset = 56 + settings->PALOffset;
     
     resetAllLines();
         
     updateLine(settings, mainFont, lineTextBox[1], "Drop Shadow Test", settings->lineXOffset, setLineYPos(0), RED);
     updateLine(settings, mainFont, lineTextBox[2], "Striped Sprite Test", settings->lineXOffset, setLineYPos(1), WHITE);
     updateLine(settings, mainFont, lineTextBox[3], "Lag Test", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "Timing & Reflex Test", settings->lineXOffset, setLineYPos(3), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "Scroll Test", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Grid Scroll Test", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Horiz/Vert Stripes", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Checkerboard", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[9], "Backlit Zone Test", settings->lineXOffset, setLineYPos(8), WHITE);
-    updateLine(settings, mainFont, lineTextBox[10], "(x)Alternate 240p/480i", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "Manual Lag Test", settings->lineXOffset, setLineYPos(3), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Timing & Reflex Test", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Scroll Test", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Grid Scroll Test", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Horiz/Vert Stripes", settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Checkerboard", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "Backlit Zone Test", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "(x)Alternate 240p/480i", settings->lineXOffset, setLineYPos(10), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[11], "Help", settings->lineXOffset, setLineYPos(11), WHITE);
-    updateLine(settings, mainFont, lineTextBox[12], "(x)Options", settings->lineXOffset, setLineYPos(12), WHITE);
-    updateLine(settings, mainFont, lineTextBox[13], "Back to Main Menu", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Help", settings->lineXOffset, setLineYPos(12), WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Options", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[14], "Back to Main Menu", settings->lineXOffset, setLineYPos(14), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -572,56 +615,63 @@ void VideoTestsMenu(){
                     PassiveLagTest();
                     
                 break;
+
+                //ManualLagTest
+                case 4:
+
+                    ManualLagTest();
+
+                break;
                     
                 //ReflexNTiming
-                case 4:
+                case 5:
                     
                     ReflexNTiming();
                     
                 break;
                     
                 //HScrollTest
-                case 5:  
+                case 6:  
                     
                     HScrollTest();
                     
                 break;
                     
                 //VScrollTest
-                case 6:
+                case 7:
                     
                     VScrollTest();
                     
                 break;
                     
                 //DrawStripes
-                case 7:
+                case 8:
                     
                     DrawStripes();
                     
                 break;
                     
                 //DrawCheckBoard
-                case 8:
+                case 9:
                     
                     DrawCheckBoard();
                     
                 break;
                     
                 //LEDZoneTest
-                case 9:
+                case 10:
                     
                     LEDZoneTest();
                     
                 break;
                     
                 //Alternate240p480i
-                case 10:
+                case 11:
                     
                 break;
                     
                 //DrawHelp
-                case 11:
+                case 12:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -633,12 +683,14 @@ void VideoTestsMenu(){
                 break;
                     
                 //OptionsMenu
-                case 12:
-                    
+                case 13:
+
+                    OptionsMenu();
+
                 break;
                     
                 //return to main menu
-                case 13:
+                case 14:
                     
                     done = 1;
                     
@@ -660,24 +712,25 @@ void VideoTestsMenu(){
 void AudioTestsMenu(){
     
     int done = 0;
-    int lastMenuLine = 6; //counting from zero
+    int lastMenuLine = 7; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 90 + settings->PALOffset;
+    settings->lineYOffset = 86 + settings->PALOffset;
     
     resetAllLines();
         
     updateLine(settings, mainFont, lineTextBox[1], "Sound Test", settings->lineXOffset, setLineYPos(0), RED);
     updateLine(settings, mainFont, lineTextBox[2], "Audio Sync Test", settings->lineXOffset, setLineYPos(1), WHITE);
-    updateLine(settings, mainFont, lineTextBox[3], "(x)MDFourier", settings->lineXOffset, setLineYPos(2), WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "L/R Balance + 1kHz Tone", settings->lineXOffset, setLineYPos(2), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "(x)MDFourier", settings->lineXOffset, setLineYPos(3), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[4], "Help", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "(x)Options", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Back to Main Menu", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "Help", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Options", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Back to Main Menu", settings->lineXOffset, setLineYPos(7), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -754,14 +807,21 @@ void AudioTestsMenu(){
                     AudioSyncTest();
                     
                 break;
+
+                //AudioBalanceTest
+                case 3:
+
+                    AudioBalanceTest();
+
+                break;
                     
                 //MDFourier
-                case 3:
+                case 4:
                     
                 break;
                     
                 //DrawHelp
-                case 4:
+                case 5:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -773,11 +833,13 @@ void AudioTestsMenu(){
                 break;
                     
                 //OptionsMenu
-                case 5:
-                    
+                case 6:
+
+                    OptionsMenu();
+
                 break;
                     
-                case 6:
+                case 7:
                     
                     done = 1;
                     
@@ -799,14 +861,14 @@ void AudioTestsMenu(){
 void HardwareMenu(){
     
     int done = 0;
-    int lastMenuLine = 8; //counting from zero
+    int lastMenuLine = 9; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 80 + settings->PALOffset;
+    settings->lineYOffset = 76 + settings->PALOffset;
     
     resetAllLines();
         
@@ -814,11 +876,12 @@ void HardwareMenu(){
     updateLine(settings, mainFont, lineTextBox[2], "GPU Memory Viewer", settings->lineXOffset, setLineYPos(1), WHITE);
     updateLine(settings, mainFont, lineTextBox[3], "DSP Memory Viewer", settings->lineXOffset, setLineYPos(2), WHITE);
     updateLine(settings, mainFont, lineTextBox[4], "DRAM Memory Viewer", settings->lineXOffset, setLineYPos(3), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "(x)Jaguar CD Tests", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "System Info", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "(x)Jaguar CD Tests", settings->lineXOffset, setLineYPos(5), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[6], "(x)Help", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "(x)Options", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Back to Main Menu", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Help", settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Options", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Back to Main Menu", settings->lineXOffset, setLineYPos(9), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -909,19 +972,38 @@ void HardwareMenu(){
                     
                 break;
                     
+                //System Info
                 case 5:
-                    
+
+                    HardwareInfo();
+
                 break;
                     
+                //Jaguar CD Tests
                 case 6:
                     
                 break;
                     
+                //Help
                 case 7:
-                    
+
+                    hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+                    hide_or_show_display_layer_range(settings->d, 1, 14, 14);
+                    settings->controllerLock = 1;
+                    DrawHelp(HELP_GENERAL);
+                    hide_or_show_display_layer_range(settings->d, 0, 14, 14);
+                    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+
                 break;
                     
+                //Options
                 case 8:
+
+                    OptionsMenu();
+
+                break;
+                    
+                case 9:
                     
                     done = 1;
                     
@@ -984,7 +1066,7 @@ void drawCredits(){
                     updateLine(settings, mainFont, lineTextBox[14], "Advisor:", settings->lineXOffset, setLineYPos(13), GREEN);
                     updateLine(settings, mainFont, lineTextBox[15], "  ()  ", settings->lineXOffset, setLineYPos(14), WHITE);
 
-                    updateLine(settings, mainFont, lineTextBox[16], "                   Ver. 0.5.1 - 11/01/2022", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
+                    updateLine(settings, mainFont, lineTextBox[16], "                   Ver. 0.6.0 - 04/19/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
 
                     updateLine(settings, mainFont, lineTextBox[17], "Option - Return To Main Menu", settings->lineXOffset, setLineYPos(16) + 4, WHITE);
                 break;

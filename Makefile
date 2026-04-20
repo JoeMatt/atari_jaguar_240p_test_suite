@@ -103,6 +103,7 @@ SRCC=	main.c\
 	help.c\
 	patterns.c\
 	tests.c\
+	extra_tests.c\
 	controller_test.c
 SRCS=
 SRCH=
