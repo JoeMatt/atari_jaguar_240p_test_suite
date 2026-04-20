@@ -155,7 +155,7 @@ jobs:
       # rebuild. Cache miss = build from scratch and populate the cache.
       - name: Cache built libretro core
         id: core-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: vj-core/virtualjaguar_libretro.so
           key: vj-core-${{ runner.os }}-${{ hashFiles('vj-core/.git/HEAD') }}
@@ -193,17 +193,19 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install 'libretro.py[cli]' Pillow
 
-      - name: Boot ROM (60 frames + dump final frame)
-        # --frames 60 gives ~1s of menu activity (NTSC). --dump-every 60
-        # captures only the final frame as PNG so we get a single visual
-        # artifact per CI run instead of a 60-image dump.
+      - name: Boot ROM (90 frames + dump 3 checkpoints)
+        # --frames 90 gives ~1.5s of menu activity (NTSC). --dump-every 30
+        # captures frames 0 / 30 / 60 -- the first is BIOS init (mostly
+        # black with the cyan top stripe), the latter two should show the
+        # menu fully drawn. Three checkpoints is a useful evolution view
+        # for ~0.5s of extra runtime over a single capture.
         # --summary prints per-frame pixel-format / non-black ratio so
         # the CI log shows whether the menu actually drew pixels.
         run: |
           mkdir -p smoke-out
           .venv/bin/python rom/scripts/libretro-load-test.py \
-            --frames 60 \
-            --dump-frames smoke-out --dump-every 60 \
+            --frames 90 \
+            --dump-frames smoke-out --dump-every 30 \
             --summary \
             vj-core/virtualjaguar_libretro.so \
             rom-artifact/${PROJECT}.jag
@@ -232,7 +234,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Sticky comment with download links
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         # Belt-and-braces: even within the same repo, never let a comment
         # failure block the merge -- the artifacts upload is the source of truth.
         continue-on-error: true
