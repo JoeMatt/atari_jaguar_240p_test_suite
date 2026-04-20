@@ -895,7 +895,6 @@ void HardwareInfo(void){
 /// here (file-scope static, not in extra_tests.h) avoids polluting the
 /// header with a struct used by exactly one test.
 typedef struct {
-    const char *label;      /// drawn into the pad
     uint32_t    mask;       /// JOYPAD_* bit to query against settings->joy1
     int         x, y;       /// top-left of the pad on screen
     int         w, h;       /// pad dimensions
@@ -903,7 +902,6 @@ typedef struct {
 
 void ProControllerTest(void){
     int exit = 0;
-    int redraw = 1;
     int i;
 
     /// Physical layout (approx. CatBox / 6-button): A B C bottom-row,
@@ -912,29 +910,29 @@ void ProControllerTest(void){
     /// (NTSC) with the title/help strings.
     static proPad pads[] = {
         /// Top row: Z Y X (read right-to-left because L/R are on outer edges)
-        { "Z", JOYPAD_Z,      152, 80,  32, 24 },
-        { "Y", JOYPAD_Y,      192, 80,  32, 24 },
-        { "X", JOYPAD_X,      232, 80,  32, 24 },
+        { JOYPAD_Z,      152, 80,  32, 24 },
+        { JOYPAD_Y,      192, 80,  32, 24 },
+        { JOYPAD_X,      232, 80,  32, 24 },
         /// Bottom row (red action buttons): C B A
-        { "C", JOYPAD_C,      152, 112, 32, 24 },
-        { "B", JOYPAD_B,      192, 112, 32, 24 },
-        { "A", JOYPAD_A,      232, 112, 32, 24 },
+        { JOYPAD_C,      152, 112, 32, 24 },
+        { JOYPAD_B,      192, 112, 32, 24 },
+        { JOYPAD_A,      232, 112, 32, 24 },
         /// Shoulders: L on far left, R on far right
-        { "L", JOYPAD_L,      56,  64,  40, 16 },
-        { "R", JOYPAD_R,      264, 64,  40, 16 },
+        { JOYPAD_L,      56,  64,  40, 16 },
+        { JOYPAD_R,      264, 64,  40, 16 },
         /// Centre: PAUSE and OPTION
-        { "PAU", JOYPAD_PAUSE, 56, 112, 40, 24 },
-        { "OPT", JOYPAD_OPTION,56, 144, 40, 24 },
+        { JOYPAD_PAUSE,  56, 112, 40, 24 },
+        { JOYPAD_OPTION, 56, 144, 40, 24 },
     };
     const int padCount = (int)(sizeof(pads)/sizeof(pads[0]));
 
-    /// Allocate a single 256x144 DEPTH16 framebuffer that holds every pad
-    /// rectangle. We re-render it from scratch each `redraw`, so the
-    /// buffer position must be screen-aligned: anchor the sprite at (32, 64)
-    /// so coordinates stored in `pads[].x/y` are absolute screen pixels.
-    const int fbW = 256;
+    /// Full-width DEPTH16 framebuffer so every pad in `pads[]` (including
+    /// the R shoulder at x=264..303) fits without OOB writes -- rectPACK_RGB16
+    /// does no clipping, and a previous 256-wide / fbX=32 layout corrupted
+    /// the heap when R was redrawn each frame.
+    const int fbW = 320;
     const int fbH = 144;
-    const int fbX = 32;
+    const int fbX = 0;
     const int fbY = 64;
     uint16_t *fb = malloc(sizeof(uint16_t)*fbW*fbH);
 
@@ -953,39 +951,24 @@ void ProControllerTest(void){
 
     hide_or_show_display_layer_range(settings->d, 1, 12, 13);
 
-    /// Held-down state is checked every frame, so the pad redraw runs
-    /// every loop too -- not gated by `redraw` (which only governs text
-    /// updates that don't need to track per-frame).
     while(!exit){
         read_joypad_state(settings->j_state);
         settings->joy1 = settings->j_state->j1;
         vsync();
 
-        /// Redraw the pads framebuffer every frame so held / released
-        /// states track the user's input live.
         fillPACK_RGB16(fb, fbW*fbH, COLOR_BLACK);
         for(i = 0; i < padCount; i++){
             int held = (settings->joy1 & pads[i].mask) ? 1 : 0;
             uint16_t bg = held ? COLOR_GREEN : COLOR_GRAY25;
             int rx = pads[i].x - fbX;
             int ry = pads[i].y - fbY;
-            /// Border box (1px white frame).
             rectPACK_RGB16(fb, fbW, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
             rectPACK_RGB16(fb, fbW, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
             rectPACK_RGB16(fb, fbW, rx, ry,             1,         pads[i].h, COLOR_WHITE);
             rectPACK_RGB16(fb, fbW, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
-            /// Filled interior in the active colour.
             rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
         }
 
-        if(redraw){
-            /// Pad labels are drawn via 8x8 placeholder stamps inside the
-            /// fillRGB16 loop above for cheap rendering -- we keep those
-            /// labels in a separate small text overlay so they're sharp.
-            redraw = 0;
-        }
-
-        /// Live raw joypad value, hex.
         char buf[12] = "00000000";
         itostring(buf, (int)(settings->joy1 & 0xFFFFFFu), 16);
         int n = 0; while(buf[n] != '\0' && n < 8) n++;
@@ -1061,11 +1044,15 @@ void RotaryControllerTest(void){
     int rightCnt  = 0;
     int signedVal = 0;
 
-    /// Rate measurement: total edges in the last 60 frames (~1s NTSC).
+    /// Rate measurement: total edges in the last 1 second.
+    /// NTSC = 60 fps, PAL = 50 fps; PALNTSC > 0 selects NTSC. The ring is
+    /// sized for the larger window and we only walk `rateFrames` slots so
+    /// the displayed "p/s" is honest on both regions.
+    const int rateFrames = (settings->PALNTSC > 0) ? 60 : 50;
     int rateRing[60];
     int rateIdx = 0;
     int i;
-    for(i = 0; i < 60; i++){ rateRing[i] = 0; }
+    for(i = 0; i < rateFrames; i++){ rateRing[i] = 0; }
 
     /// --- Reference frame + position-bar fb -----------------------------
     /// Reuse the screen-saver sprite recipe: 320 x 80 DEPTH16 strip across
@@ -1129,9 +1116,9 @@ void RotaryControllerTest(void){
 
         /// Rolling rate ring: store this frame's edge total; rate = sum.
         rateRing[rateIdx] = edgeL + edgeR;
-        rateIdx = (rateIdx + 1) % 60;
+        rateIdx = (rateIdx + 1) % rateFrames;
         int rate = 0;
-        for(i = 0; i < 60; i++){ rate += rateRing[i]; }
+        for(i = 0; i < rateFrames; i++){ rate += rateRing[i]; }
 
         /// Indicator squares: green when bit held, dim otherwise.
         fillPACK_RGB16(indL, indSize*indSize, curLeft  ? COLOR_GREEN : COLOR_GRAY25);
@@ -1208,7 +1195,7 @@ void RotaryControllerTest(void){
         if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
             settings->controllerLock = 1;
             leftCnt = 0; rightCnt = 0; signedVal = 0;
-            for(i = 0; i < 60; i++){ rateRing[i] = 0; }
+            for(i = 0; i < rateFrames; i++){ rateRing[i] = 0; }
             redraw = 1;
         }
 
@@ -1391,15 +1378,17 @@ void ResolutionTest(void){
                               | ((uint16_t)(fmt    & 0x3) << 1);
             TOMREGS->vmode = newVmode;
 
-            /// Auto-recenter: scale display->x by the PWIDTH ratio. boot
-            /// is PWIDTH4 (divisor 4); at PWIDTH8 (divisor 8) pixels are
-            /// 2x as wide so the centering offset (in pixel-clock units)
-            /// halves; conversely PWIDTH2 doubles it. Integer math, +divisor/2
-            /// for round-to-nearest.
+            /// Auto-recenter: scale display->x by the PWIDTH ratio. The
+            /// boot divisor comes from vmodeBoot's PWIDTH bits (not a hard
+            /// 4) so this stays correct if main.c ever changes its boot
+            /// vmode. Wider pixels (larger divisor) shrink the centering
+            /// offset proportionally; narrower pixels grow it. Integer
+            /// math, +divisor/2 for round-to-nearest.
             int newDispX = bootDisplayX;
             if(autoCenter){
                 int divisor = pwidth + 1;
-                newDispX = (bootDisplayX * 4 + divisor/2) / divisor;
+                int bootDivisor = ((vmodeBoot >> 9) & 0x7) + 1;
+                newDispX = (bootDisplayX * bootDivisor + divisor/2) / divisor;
             }
             settings->d->x = (short int)newDispX;
 
