@@ -1,13 +1,14 @@
 #include "./help.h"
 
-/* helpStrlen() / helpStrstr()
+/* helpStrlen() / helpStrstrIndex()
  *
  * Tiny in-house substring search. The Jaguar SDK's jlibc ships strlen() but
  * not strstr(), so we roll our own naive O(n*m) scan. Only ever called
  * during help-screen redraws on user-pressed OPTION+DOWN, so the
  * worst-case ~360-char haystack search is irrelevant for performance.
- * Returns the byte index of the first occurrence of `needle` in `hay`, or
- * -1 if not found. NULL inputs are treated as not-found. */
+ * helpStrstrIndex() returns the byte index of the first occurrence of
+ * `needle` in `hay`, or -1 if not found. NULL inputs are treated as not-
+ * found. */
 static int helpStrlen(const char *s){
     int n = 0;
     while(s[n] != '\0'){ n++; }
@@ -162,7 +163,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "PLUGE (1/3)", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "NTSC levels require black to beat 7.5 IRE for video. This HW lowest is 6 IRE (6%), so using this value for general 240p use is not recommended.^^Of course using it as reference will work perfectly for games in this platform.^^In PAL - and console gaming in general - it is advised to use a value of 2 IRE as black.", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "NTSC-M levels set black at a 7.5 IRE setup pedestal for video. The Jaguar's HW analog floor is 6 IRE (6%), so using that value for general 240p use is not recommended.^^Of course using it as reference will work perfectly for games on this platform.^^In PAL - and console gaming in general - it is advised to use a value of 2 IRE as black.", 999999, 999999, WHITE);
                             
                             updateLine(settings, mainFont, helpLineTextBox[1], "Continued...", 999999, 999999, WHITE);
                         break;
@@ -267,7 +268,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "100 IRE", 999999, 999999, GREEN);
                             
-                            updateLine(settings, mainFont, helpTextBox, "You can vary IRE intensity with A and B. Values are: 13, 25, 41, 53, 66, 82, 94.^^Each step maps to (IRE/100) * 63 on the Jaguar's 6-bit green channel; red and blue are driven at half that to stay neutral.^^NTSC-J / PAL / PC RGB use 0 IRE as black; NTSC-M (US) uses a 7.5 IRE pedestal -- check your display's setup-level menu. The Jaguar DAC clamps below ~6 IRE, which is why this ladder starts at 13.", 999999, 999999, WHITE);        
+                            updateLine(settings, mainFont, helpTextBox, "You can vary IRE intensity with A and B. Values are: 13, 25, 41, 53, 66, 82, 94.^^Each step is computed as g = round((IRE/100) * 64) on the Jaguar's 6-bit green channel (0..63); red and blue (5-bit, 0..31) are driven at g >> 1 to stay neutral.^^NTSC-J / PAL / PC RGB use 0 IRE as black; NTSC-M (US) uses a 7.5 IRE setup pedestal -- check your display's setup-level menu. The Jaguar DAC clamps below ~6 IRE, which is why this ladder starts at 13.", 999999, 999999, WHITE);        
                         break;
                     }
                     
