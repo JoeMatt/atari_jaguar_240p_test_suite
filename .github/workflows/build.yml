@@ -193,19 +193,21 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install 'libretro.py[cli]' Pillow
 
-      - name: Boot ROM (90 frames + dump 3 checkpoints)
-        # --frames 90 gives ~1.5s of menu activity (NTSC). --dump-every 30
-        # captures frames 0 / 30 / 60 -- the first is BIOS init (mostly
-        # black with the cyan top stripe), the latter two should show the
-        # menu fully drawn. Three checkpoints is a useful evolution view
-        # for ~0.5s of extra runtime over a single capture.
+      - name: Boot ROM (400 frames + dump 4 checkpoints)
+        # The Jaguar BIOS animation runs ~5s before yielding to cart code,
+        # so anything < 300 frames at 60fps just captures the BIOS splash
+        # (every frame ~1.2% non-black, only the cyan top stripe drawn).
+        # --frames 400 gives ~6.6s of runtime which lands well past BIOS
+        # entry into the cart's main menu. --dump-every 100 captures
+        # frames 0 / 100 / 200 / 300 -- a clear evolution view from BIOS
+        # init through menu render for ~6s of CI wall-clock.
         # --summary prints per-frame pixel-format / non-black ratio so
-        # the CI log shows whether the menu actually drew pixels.
+        # the CI log shows the moment the menu actually starts drawing.
         run: |
           mkdir -p smoke-out
           .venv/bin/python rom/scripts/libretro-load-test.py \
-            --frames 90 \
-            --dump-frames smoke-out --dump-every 30 \
+            --frames 400 \
+            --dump-frames smoke-out --dump-every 100 \
             --summary \
             vj-core/virtualjaguar_libretro.so \
             rom-artifact/${PROJECT}.jag

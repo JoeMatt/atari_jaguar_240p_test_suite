@@ -103,7 +103,10 @@ def main(argv: list[str]) -> int:
     # NOT flush -- they only run on synchronous errors and Python exits
     # cleanly after them. Anything printed AFTER session.run() may not
     # appear if the core takes that exit path even with flush=True.
-    if args.frames > 0:
+    ## The Virtual Jaguar libretro core calls raw _exit(0) from inside the
+    ## first retro_run() invocation on macOS only -- gate the warning so it
+    ## doesn't pollute Linux/Windows CI logs (where the core runs cleanly).
+    if args.frames > 0 and sys.platform == "darwin":
         print(
             ">> NOTE: requesting >0 frames against virtualjaguar on macOS will\n"
             "         likely cause the core to call _exit(0) from inside\n"
