@@ -83,6 +83,12 @@ typedef struct {
     int teamTap1;
     int teamTap2;
     
+    /* User-adjustable master audio volume (0..63), wired into every set_voice
+     * call site so the Options menu knob actually does something. Default 63
+     * matches the previous hardcoded VOICE_VOLUME(63) behavior so existing
+     * tests sound identical until the user turns it down. */
+    int masterVolume;
+    
     //line options
     int linePos;
     int lineXOffset;

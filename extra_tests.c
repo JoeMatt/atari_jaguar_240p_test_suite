@@ -4,27 +4,33 @@
 /* ---------------------------------------------------------------------------
  * Helpers
  *
- * Jaguar TOM RGB16 (RGB16 video mode + DEPTH16 framebuffers) packs pixels as
+ * Jaguar TOM RGB16 video mode + DEPTH16 framebuffers pack pixels as
  * R5 B5 G6 in a single 16-bit word: (red<<11) | (blue<<6) | green
  * with red/blue 0..31 and green 0..63. This matches the existing patterns
  * (Draw100IRE, DrawWhiteScreen, DropShadowTest, etc).
+ *
+ * NOTE: this macro is named PACK_RGB16 (not RGB16) because the SDK already
+ * uses the bare identifier RGB16 as a TOM vmode bitflag (e.g. main.c does
+ * `TOMREGS->vmode = RGB16 | CSYNC | BGEN | PWIDTH4 | VIDEN`). Reusing the
+ * name for a pixel-pack macro would mask the SDK constant inside this TU
+ * and trigger -Wmacro-redefined.
  * --------------------------------------------------------------------------- */
 
-#define RGB16(r, b, g) (uint16_t)( ((uint16_t)((r) & 0x1F) << 11) | ((uint16_t)((b) & 0x1F) << 6) | (uint16_t)((g) & 0x3F) )
+#define PACK_RGB16(r, b, g) (uint16_t)( ((uint16_t)((r) & 0x1F) << 11) | ((uint16_t)((b) & 0x1F) << 6) | (uint16_t)((g) & 0x3F) )
 
-#define COLOR_BLACK   RGB16(0,  0,  0)
-#define COLOR_WHITE   RGB16(31, 31, 63)
-#define COLOR_GRAY50  RGB16(16, 16, 32)
-#define COLOR_GRAY25  RGB16(8,  8,  16)
-#define COLOR_RED     RGB16(31, 0,  0)
-#define COLOR_GREEN   RGB16(0,  0,  63)
-#define COLOR_BLUE    RGB16(0,  31, 0)
-#define COLOR_YELLOW  RGB16(31, 0,  63)
-#define COLOR_CYAN    RGB16(0,  31, 63)
-#define COLOR_MAGENTA RGB16(31, 31, 0)
+#define COLOR_BLACK   PACK_RGB16(0,  0,  0)
+#define COLOR_WHITE   PACK_RGB16(31, 31, 63)
+#define COLOR_GRAY50  PACK_RGB16(16, 16, 32)
+#define COLOR_GRAY25  PACK_RGB16(8,  8,  16)
+#define COLOR_RED     PACK_RGB16(31, 0,  0)
+#define COLOR_GREEN   PACK_RGB16(0,  0,  63)
+#define COLOR_BLUE    PACK_RGB16(0,  31, 0)
+#define COLOR_YELLOW  PACK_RGB16(31, 0,  63)
+#define COLOR_CYAN    PACK_RGB16(0,  31, 63)
+#define COLOR_MAGENTA PACK_RGB16(31, 31, 0)
 
 /* Fill a DEPTH16 RGB16 framebuffer of (w*h) pixels with a constant color. */
-static void fillRGB16(uint16_t *buf, int count, uint16_t color){
+static void fillPACK_RGB16(uint16_t *buf, int count, uint16_t color){
     int i;
     for(i = 0; i != count; i++){
         buf[i] = color;
@@ -33,7 +39,7 @@ static void fillRGB16(uint16_t *buf, int count, uint16_t color){
 
 /* Draw an axis-aligned filled rectangle into a DEPTH16 framebuffer.
  * No clipping -- caller must keep the rect inside the buffer. */
-static void rectRGB16(uint16_t *buf, int stride, int x, int y, int w, int h, uint16_t color){
+static void rectPACK_RGB16(uint16_t *buf, int stride, int x, int y, int w, int h, uint16_t color){
     int row, col;
     for(row = 0; row < h; row++){
         uint16_t *line = buf + (y + row) * stride + x;
@@ -72,13 +78,13 @@ static void teardownFullscreenSprite(sprite *s, void *data){
 void DrawColorBarsGray(void){
     const int W = 320, H = 240;
     static const uint16_t bars75[7] = {
-        RGB16(24, 24, 48), /* 75% gray   */
-        RGB16(24, 0,  48), /* 75% yellow */
-        RGB16(0,  24, 48), /* 75% cyan   */
-        RGB16(0,  0,  48), /* 75% green  */
-        RGB16(24, 24, 0),  /* 75% magenta*/
-        RGB16(24, 0,  0),  /* 75% red    */
-        RGB16(0,  24, 0)   /* 75% blue   */
+        PACK_RGB16(24, 24, 48), /* 75% gray   */
+        PACK_RGB16(24, 0,  48), /* 75% yellow */
+        PACK_RGB16(0,  24, 48), /* 75% cyan   */
+        PACK_RGB16(0,  0,  48), /* 75% green  */
+        PACK_RGB16(24, 24, 0),  /* 75% magenta*/
+        PACK_RGB16(24, 0,  0),  /* 75% red    */
+        PACK_RGB16(0,  24, 0)   /* 75% blue   */
     };
 
     int exit = 0;
@@ -90,13 +96,13 @@ void DrawColorBarsGray(void){
     settings->fadeToColor = 0x0000;
 
     uint16_t *buf = malloc(sizeof(uint16_t) * W * H);
-    fillRGB16(buf, W * H, COLOR_BLACK);
+    fillPACK_RGB16(buf, W * H, COLOR_BLACK);
 
     /* 75% color bars in the top 2/3 */
     for(i = 0; i < 7; i++){
         int x0 = i * barW;
         int w  = (i == 6) ? (W - x0) : barW;
-        rectRGB16(buf, W, x0, 0, w, barsH, bars75[i]);
+        rectPACK_RGB16(buf, W, x0, 0, w, barsH, bars75[i]);
     }
 
     /* 11-step gray ramp across the bottom 1/3 */
@@ -106,8 +112,8 @@ void DrawColorBarsGray(void){
         int w = (i == 10) ? (W - x) : stepW;
         int g6 = (i * 63) / 10;     /* 0..63   */
         int rb5 = (i * 31) / 10;    /* 0..31   */
-        uint16_t c = RGB16(rb5, rb5, g6);
-        rectRGB16(buf, W, x, barsH, w, rampH, c);
+        uint16_t c = PACK_RGB16(rb5, rb5, g6);
+        rectPACK_RGB16(buf, W, x, barsH, w, rampH, c);
     }
 
     sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
@@ -152,14 +158,13 @@ void DrawLinearity(void){
     const int W = 320, H = 240;
     const int STEP = 16;     /* 20x15 grid of 16-pixel squares */
     const int CX = W/2, CY = H/2;
-    const int RINGS = 5;
     int exit = 0;
     int x, y, r, dx, dy;
 
     settings->fadeToColor = 0x0000;
 
     uint16_t *buf = malloc(sizeof(uint16_t) * W * H);
-    fillRGB16(buf, W * H, COLOR_BLACK);
+    fillPACK_RGB16(buf, W * H, COLOR_BLACK);
 
     /* Vertical rules */
     for(x = 0; x <= W; x += STEP){
@@ -270,7 +275,7 @@ void DrawPhase(void){
     settings->fadeToColor = 0x0000;
 
     uint16_t *buf = malloc(sizeof(uint16_t) * W * H);
-    fillRGB16(buf, W * H, COLOR_GRAY50);
+    fillPACK_RGB16(buf, W * H, COLOR_GRAY50);
 
     for(i = 0; i < 8; i++){
         row = i / 4;
@@ -279,7 +284,7 @@ void DrawPhase(void){
         int y = row * cellH;
         int w = (col == 3) ? (W - x) : cellW;
         int h = (row == 1) ? (H - y) : cellH;
-        rectRGB16(buf, W, x, y, w, h, blocks[i]);
+        rectPACK_RGB16(buf, W, x, y, w, h, blocks[i]);
         /* small complementary-color cross in the middle of each block */
         int ccx = x + w/2, ccy = y + h/2;
         int len = 8;
@@ -332,10 +337,10 @@ void DrawBrightness(void){
     const int W = 320, H = 240;
     /* 4 levels of "just-above-black" gray, 6-bit green / 5-bit red+blue. */
     static const uint16_t levels[4] = {
-        RGB16(1, 1, 2),   /* ~ 2 IRE  */
-        RGB16(2, 2, 4),   /* ~ 4 IRE  */
-        RGB16(3, 3, 6),   /* ~ 7.5 IRE */
-        RGB16(4, 4, 8)    /* ~10 IRE  */
+        PACK_RGB16(1, 1, 2),   /* ~ 2 IRE  */
+        PACK_RGB16(2, 2, 4),   /* ~ 4 IRE  */
+        PACK_RGB16(3, 3, 6),   /* ~ 7.5 IRE */
+        PACK_RGB16(4, 4, 8)    /* ~10 IRE  */
     };
 
     int exit = 0;
@@ -349,11 +354,11 @@ void DrawBrightness(void){
     settings->fadeToColor = 0x0000;
 
     uint16_t *buf = malloc(sizeof(uint16_t) * W * H);
-    fillRGB16(buf, W * H, COLOR_BLACK);
+    fillPACK_RGB16(buf, W * H, COLOR_BLACK);
 
     for(i = 0; i < 4; i++){
         int x = x0 + i * (barW + gap);
-        rectRGB16(buf, W, x, y0, barW, barH, levels[i]);
+        rectPACK_RGB16(buf, W, x, y0, barW, barH, levels[i]);
     }
 
     sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
@@ -396,10 +401,10 @@ void DrawBrightness(void){
 void DrawContrast(void){
     const int W = 320, H = 240;
     static const uint16_t levels[4] = {
-        RGB16(28, 28, 56),  /* ~ 90 IRE */
-        RGB16(29, 29, 59),  /* ~ 95 IRE */
-        RGB16(31, 31, 62),  /* ~100 IRE */
-        RGB16(31, 31, 63)   /* peak     */
+        PACK_RGB16(28, 28, 56),  /* ~ 90 IRE */
+        PACK_RGB16(29, 29, 59),  /* ~ 95 IRE */
+        PACK_RGB16(31, 31, 62),  /* ~100 IRE */
+        PACK_RGB16(31, 31, 63)   /* peak     */
     };
 
     int exit = 0;
@@ -413,11 +418,11 @@ void DrawContrast(void){
     settings->fadeToColor = 0x0000;
 
     uint16_t *buf = malloc(sizeof(uint16_t) * W * H);
-    fillRGB16(buf, W * H, COLOR_GRAY50);
+    fillPACK_RGB16(buf, W * H, COLOR_GRAY50);
 
     for(i = 0; i < 4; i++){
         int x = x0 + i * (barW + gap);
-        rectRGB16(buf, W, x, y0, barW, barH, levels[i]);
+        rectPACK_RGB16(buf, W, x, y0, barW, barH, levels[i]);
     }
 
     sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
@@ -456,8 +461,8 @@ void DrawContrast(void){
  * A 16x16 white square moves once per frame across the bottom of the screen
  * synchronised with a row of frame-number digits along the top. Two displays
  * placed side-by-side will land on different digits per frame of lag, just
- * like the SNES/Genesis "Manual Lag Test" mode. A and B nudge the square
- * one pixel left/right; OPTION exits.
+ * like the SNES/Genesis "Manual Lag Test" mode. A pauses/resumes the
+ * auto-scroll; OPTION exits.
  * --------------------------------------------------------------------------- */
 void ManualLagTest(void){
     const int W = 320, H = 240;
@@ -470,13 +475,13 @@ void ManualLagTest(void){
     /* Background: a 16-cell horizontal ramp 0..F so the user always knows
      * which "frame slice" the square is over. */
     uint16_t *bg = malloc(sizeof(uint16_t) * W * H);
-    fillRGB16(bg, W * H, COLOR_BLACK);
+    fillPACK_RGB16(bg, W * H, COLOR_BLACK);
     int i;
     for(i = 0; i < 16; i++){
         int g6 = (i * 63) / 15;
         int rb5 = (i * 31) / 15;
-        uint16_t c = RGB16(rb5, rb5, g6);
-        rectRGB16(bg, W, i * (W/16), 0, W/16, 32, c);
+        uint16_t c = PACK_RGB16(rb5, rb5, g6);
+        rectPACK_RGB16(bg, W, i * (W/16), 0, W/16, 32, c);
     }
     sprite *bgS = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, bg);
     bgS->trans = 0;
@@ -663,10 +668,11 @@ void Alternate240p480iTest(void){
 /* ---------------------------------------------------------------------------
  * Audio test: L/R Balance + 1 kHz reference tone
  *
- * Cycles through Left, Right, Center and Mute at the press of A; the on-
- * screen indicator shows which channel is active. C plays a continuous
+ * Cycles through Center, Left, Right and Mute at the press of A; the on-
+ * screen indicator shows which channel is active. B toggles a continuous
  * 1 kHz reference tone (using the DSP rom_sine wavetable) at the chosen
- * panning. Useful for verifying RCA/SCART wiring and balance trim.
+ * panning, played at settings->masterVolume so the Options knob applies.
+ * Useful for verifying RCA/SCART wiring and balance trim.
  * --------------------------------------------------------------------------- */
 void AudioBalanceTest(void){
     int exit = 0;
@@ -723,7 +729,7 @@ void AudioBalanceTest(void){
 
             clear_voice(0);
             if(playing && state != 0){
-                set_voice(0, VOICE_16|VOICE_BALANCE(pan)|VOICE_VOLUME(63)|VOICE_FREQ(C7, freq),
+                set_voice(0, VOICE_16|VOICE_BALANCE(pan)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(C7, freq),
                           (char*)DSPSample, sampleSize*2,
                           (char*)DSPSample, sampleSize*2);
             }
@@ -860,8 +866,11 @@ void HardwareInfo(void){
  * can be added here without touching the menu plumbing in main.c.
  * --------------------------------------------------------------------------- */
 void OptionsMenu(void){
-    static int audioVolume = 63;     /* 0..63 -- persists across calls */
-
+    /* Read/write the shared master volume directly so the value survives
+     * across OptionsMenu invocations *and* is visible to every audio test
+     * (AudioBalanceTest, MDFourierTest, SoundTest, etc) the next time they
+     * call set_voice(). No private static -- the previous static-local copy
+     * was the bug Qodo + Copilot flagged. */
     int exit = 0;
     int redraw = 1;
     int sel = 0;
@@ -884,7 +893,7 @@ void OptionsMenu(void){
 
         if(redraw){
             char nbuf[4] = "00\0";
-            itostring(nbuf, audioVolume, 10);
+            itostring(nbuf, settings->masterVolume, 10);
             volTb->text[15] = ' ';
             volTb->text[16] = ' ';
             int len = 0; while(nbuf[len] != '\0' && len < 2) len++;
@@ -900,11 +909,11 @@ void OptionsMenu(void){
 
         if((settings->joy1 & JOYPAD_LEFT) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            if(audioVolume > 0){ audioVolume--; redraw = 1; }
+            if(settings->masterVolume > 0){ settings->masterVolume--; redraw = 1; }
         }
         if((settings->joy1 & JOYPAD_RIGHT) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            if(audioVolume < 63){ audioVolume++; redraw = 1; }
+            if(settings->masterVolume < 63){ settings->masterVolume++; redraw = 1; }
         }
         if(extraExitPressed()){
             settings->controllerLock = 1;
@@ -1022,7 +1031,7 @@ void MDFourierTest(void){
 
             clear_voice(0);
             if(playing){
-                set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(63)|VOICE_FREQ(sweepFreq[tone], freq),
+                set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(sweepFreq[tone], freq),
                           (char*)DSPSample, sampleSize*2,
                           (char*)DSPSample, sampleSize*2);
             }

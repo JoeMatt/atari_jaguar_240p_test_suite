@@ -1940,11 +1940,11 @@ void SoundTest(){
             if(playback){
                 clear_voice(0);
                 if(menuSelection != 3){
-                    set_voice(0, VOICE_16|VOICE_BALANCE(panning)|VOICE_VOLUME(63)|VOICE_FREQ(playbackFreq, freq), (char*)DSPSample, sampleSize*2, (char*)DSPSample, sampleSize*2);
+                    set_voice(0, VOICE_16|VOICE_BALANCE(panning)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(playbackFreq, freq), (char*)DSPSample, sampleSize*2, (char*)DSPSample, sampleSize*2);
                 }
                 
                 else{
-                    set_voice(0, VOICE_16|VOICE_BALANCE(panning)|VOICE_VOLUME(63)|VOICE_FREQ(20000, freq), songData + 64, 446572, songData + 64, 446572);
+                    set_voice(0, VOICE_16|VOICE_BALANCE(panning)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(20000, freq), songData + 64, 446572, songData + 64, 446572);
                 }
                 
             }
@@ -2165,7 +2165,7 @@ void AudioSyncTest(){
             }
             else if(flash < 2){
                 
-                set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(63)|VOICE_FREQ(2148,freq), (char*)DSPSample, sampleSize*2, NULL, 0);
+                set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(2148,freq), (char*)DSPSample, sampleSize*2, NULL, 0);
                 TOMREGS->bg = 0xFFFF;
                 flash++;
             }
@@ -2868,7 +2868,7 @@ void ReflexNTiming(){
                     else{
                         soundFreq = C4;
                     }
-                    set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(63)|VOICE_FREQ(soundFreq,freq), (char*)DSPSample, 256, (char*)DSPSample, 256);
+                    set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(soundFreq,freq), (char*)DSPSample, 256, (char*)DSPSample, 256);
 					usersound = 1;
                 }
             }
@@ -3060,7 +3060,7 @@ void ReflexNTiming(){
             if(audio)
             {
                 soundFreq = C4;
-                set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(63)|VOICE_FREQ(soundFreq,freq), (char*)DSPSample, 256, (char*)DSPSample, 256);
+                set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(soundFreq,freq), (char*)DSPSample, 256, (char*)DSPSample, 256);
             }
             TOMREGS->bg = (15<<11)|(15<<6)|(31);
         }
