@@ -118,6 +118,105 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  smoke-test:
+    name: Smoke test (libretro boot)
+    # Boots the built ROM in a Linux libretro core for a few dozen frames
+    # to catch init / main() regressions before they ship. This is the
+    # closest thing this bare-metal codebase can have to a unit test --
+    # there's no host runtime, so the only meaningful "did it work?"
+    # signal comes from running the ROM in an emulator.
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PROJECT: jag_240p_test_suite
+      # Pin to upstream master. To test against a fork or pinned SHA,
+      # override here -- for example:
+      #   VJ_CORE_REPO: Provenance-Emu/virtualjaguar-libretro
+      #   VJ_CORE_REF:  some-feature-branch
+      VJ_CORE_REPO: libretro/virtualjaguar-libretro
+      VJ_CORE_REF: master
+    steps:
+      - name: Checkout ROM repo
+        uses: actions/checkout@v5
+        with:
+          path: rom
+
+      - name: Checkout virtualjaguar-libretro
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.VJ_CORE_REPO }}
+          ref: ${{ env.VJ_CORE_REF }}
+          path: vj-core
+
+      # Cache the built core keyed on the VJ source tree's commit SHA so
+      # subsequent CI runs (with the same upstream HEAD) skip the ~90s
+      # rebuild. Cache miss = build from scratch and populate the cache.
+      - name: Cache built libretro core
+        id: core-cache
+        uses: actions/cache@v4
+        with:
+          path: vj-core/virtualjaguar_libretro.so
+          key: vj-core-${{ runner.os }}-${{ hashFiles('vj-core/.git/HEAD') }}
+
+      - name: Build virtualjaguar_libretro.so
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        run: make -j$(nproc) -C vj-core
+
+      - name: Compute release artifact name
+        id: artifact
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          echo "name=${PROJECT}-release-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release ROM artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: rom-artifact
+
+      - name: Prepare libretro content (.cof -> .jag)
+        # The Virtual Jaguar libretro core's content-type filter accepts
+        # .jag/.j64. The .j64 is a $802000-mapped cart image which the
+        # core can't currently boot via libretro (signature/header path
+        # is bypassed); the .cof renamed to .jag is the dev-test content
+        # that actually loads. The shipping .j64 is still verified
+        # byte-perfect by the verify-sig step in the build job.
+        run: |
+          ls -lh rom-artifact/
+          cp "rom-artifact/${PROJECT}.cof" "rom-artifact/${PROJECT}.jag"
+
+      - name: Set up Python venv with libretro.py
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install 'libretro.py[cli]' Pillow
+
+      - name: Boot ROM (60 frames + dump final frame)
+        # --frames 60 gives ~1s of menu activity (NTSC). --dump-every 60
+        # captures only the final frame as PNG so we get a single visual
+        # artifact per CI run instead of a 60-image dump.
+        # --summary prints per-frame pixel-format / non-black ratio so
+        # the CI log shows whether the menu actually drew pixels.
+        run: |
+          mkdir -p smoke-out
+          .venv/bin/python rom/scripts/libretro-load-test.py \
+            --frames 60 \
+            --dump-frames smoke-out --dump-every 60 \
+            --summary \
+            vj-core/virtualjaguar_libretro.so \
+            rom-artifact/${PROJECT}.jag
+
+      - name: Upload smoke screenshot
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: smoke-test-frame-${{ github.sha }}
+          path: smoke-out/
+          retention-days: 14
+          if-no-files-found: warn
+
   pr-comment:
     name: Post PR build summary
     needs: build
