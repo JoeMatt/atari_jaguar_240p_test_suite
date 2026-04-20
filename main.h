@@ -40,6 +40,8 @@ void AudioTestsMenu();
 
 void HardwareMenu();
 
+void ScreenSaversMenu();
+
 void drawCredits();
 
 //audio assets

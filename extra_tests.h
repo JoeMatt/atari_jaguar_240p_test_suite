@@ -48,6 +48,14 @@ void MDFourierTest(void);
 void HardwareInfo(void);
 void JaguarCDTest(void);
 
+/* Screen savers (animated full-screen patterns for OLED burn-in / demo)
+ * Mirrors the Screensavers section that ships with the canonical 240p
+ * test suite (Genesis / SNES / Dreamcast). All three are procedural, no
+ * extra LZ77 assets required. */
+void ColorCycleSaver(void);
+void BouncingSquareSaver(void);
+void ScrollingBarsSaver(void);
+
 /* Options menu (replaces the old (x)Options stub everywhere it appeared) */
 void OptionsMenu(void);
 

@@ -1178,3 +1178,239 @@ void JaguarCDTest(void){
     statusTb = freeTextBox(statusTb);
     titleTb  = freeTextBox(titleTb);
 }
+
+/* ---------------------------------------------------------------------------
+ * Screen Saver: Color Cycle
+ *
+ * Pure background-color sweep through the HSV-ish hue space using TOM's
+ * BG color register. Costs zero sprite bandwidth -- we just rewrite the
+ * BG register every frame -- which makes it a perfect OLED-burn check
+ * because the color is uniform across the entire active picture area.
+ *
+ * Controls: any non-OPTION button = pause/resume cycling. OPTION = exit.
+ * --------------------------------------------------------------------------- */
+void ColorCycleSaver(void){
+    int exit = 0;
+    int paused = 0;
+    /* Walk the 16-bit RGB16 color cube along the standard 6-step rainbow
+     * (R -> Y -> G -> C -> B -> M -> R). step counter tracks the current
+     * leg + position within it; tone toggles between dim and full
+     * saturation across passes so we exercise both ends of the DAC. */
+    int leg = 0;          /* 0..5 */
+    int pos = 0;          /* 0..63 */
+    int frameDelay = 0;   /* sub-frame counter for slowing the cycle */
+
+    /* Hide the menu sprite layer + background. Screen savers want a fully
+     * empty active picture so only the BG color shows through. */
+    hide_or_show_display_layer_range(settings->d, 0, 0, 15);
+
+    textBox *helpTb = newTextBox("OPTION: exit  A: pause", 192, 9, mainFont, 0, settings->d, 64, 8, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+    hide_or_show_display_layer_range(settings->d, 1, 13, 13);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(!paused){
+            frameDelay++;
+            if(frameDelay >= 2){     /* ~30 Hz hue updates -- silky on a CRT */
+                frameDelay = 0;
+                pos++;
+                if(pos > 63){
+                    pos = 0;
+                    leg = (leg + 1) % 6;
+                }
+            }
+
+            uint16_t r = 0, g = 0, b = 0;
+            int p = pos & 63;
+            switch(leg){
+                case 0: r = 31; g = (uint16_t)p;        b = 0;             break;     /* R -> Y */
+                case 1: r = (uint16_t)(63 - p); g = 63; b = 0;             break;     /* Y -> G */
+                case 2: r = 0;  g = 63;                 b = (uint16_t)(p>>1); break;  /* G -> C */
+                case 3: r = 0;  g = (uint16_t)(63 - p); b = 31;            break;     /* C -> B */
+                case 4: r = (uint16_t)(p>>1); g = 0;    b = 31;            break;     /* B -> M */
+                case 5: r = 31; g = 0;                  b = (uint16_t)(31 - (p>>1)); break; /* M -> R */
+            }
+            /* Jaguar RGB16 packed format: r<<11 | b<<6 | g (R5 B5 G6). */
+            TOMREGS->bg = (uint16_t)((r << 11) | (b << 6) | g);
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            paused = !paused;
+        }
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    TOMREGS->bg = 0x0000;
+    hide_or_show_display_layer_range(settings->d, 0, 13, 13);
+    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+    helpTb = freeTextBox(helpTb);
+}
+
+/* ---------------------------------------------------------------------------
+ * Screen Saver: Bouncing Square
+ *
+ * A 32x32 white sprite that bounces around the active area on a fixed
+ * trajectory, similar to the classic DVD logo screen saver. Forces every
+ * pixel of the panel to light up at least once over a few minutes, which
+ * is the canonical OLED burn-in mitigation use case. The bounce trail
+ * is intentionally NOT drawn so that any latent pixels show up against
+ * the otherwise-black background.
+ *
+ * Controls: OPTION = exit. Velocity is hard-coded; A presses do nothing
+ * by design (any sub-frame button latency would bias the trajectory).
+ * --------------------------------------------------------------------------- */
+void BouncingSquareSaver(void){
+    int exit = 0;
+    int i;
+    const int sw = 32;
+    const int sh = 32;
+    const int screenH = (settings->PALNTSC > 0) ? 240 : 288;
+
+    /* 32x32 DEPTH8 sprite filled with CLUT entry 1 (white in the default
+     * background palette). Allocated heap-side so we can free it cleanly
+     * on exit; the static-LED test does the same thing for consistency. */
+    uint8_t *sqData = malloc(sizeof(uint8_t)*sw*sh);
+    for(i = 0; i < sw*sh; i++){ sqData[i] = 0x01; }
+
+    sprite *sq = new_sprite(sw, sh, 80, 80, DEPTH8, sqData);
+    attach_sprite_to_display_at_layer(sq, settings->d, 12);
+
+    int vx = 2;
+    int vy = 1;
+    int x = 80;
+    int y = 80;
+
+    hide_or_show_display_layer_range(settings->d, 0, 0, 11);
+    hide_or_show_display_layer_range(settings->d, 0, 13, 15);
+
+    textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 8, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+    hide_or_show_display_layer_range(settings->d, 1, 13, 13);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        x += vx;
+        y += vy;
+        if(x < 0)             { x = 0;          vx = -vx; }
+        if(x + sw > 320)      { x = 320 - sw;   vx = -vx; }
+        if(y < 0)             { y = 0;          vy = -vy; }
+        if(y + sh > screenH)  { y = screenH - sh; vy = -vy; }
+        sq->x = x;
+        sq->y = y;
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    sq->invisible = 1;
+    detach_sprite_from_display(sq);
+    free(sq);
+    free(sqData);
+
+    hide_or_show_display_layer_range(settings->d, 0, 13, 13);
+    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+    helpTb = freeTextBox(helpTb);
+}
+
+/* ---------------------------------------------------------------------------
+ * Screen Saver: Scrolling Color Bars
+ *
+ * Builds a single 320-pixel-wide horizontal rainbow strip in RGB16 and
+ * scrolls its source X every frame so the bars appear to slide across
+ * the screen. Doubles as a chroma-bleed / scroll-jitter eyeball test
+ * because the color transitions never sit still long enough for the
+ * display's color converter to settle on any one transition.
+ *
+ * Controls: A = reverse direction, OPTION = exit.
+ * --------------------------------------------------------------------------- */
+void ScrollingBarsSaver(void){
+    int exit = 0;
+    int dir = 1;
+    int i, x;
+    const int screenH = (settings->PALNTSC > 0) ? 240 : 288;
+
+    /* Allocate a 320 x screenH RGB16 framebuffer and fill with vertical
+     * rainbow bars. We rebuild the colors for each pixel-column so the
+     * scroll just nudges sprite->x and re-renders -- much cheaper than
+     * memmove'ing the whole buffer every frame. */
+    uint16_t *fb = malloc(sizeof(uint16_t)*320*screenH);
+
+    /* Six-color rainbow bars (R, Y, G, C, B, M) repeated to fill 320 wide.
+     * Each bar is ~53px so the cycle wraps cleanly at the screen edge. */
+    static const uint16_t bars[6] = {
+        (uint16_t)((31<<11) | (0 <<6) | 0 ),    /* red    */
+        (uint16_t)((31<<11) | (0 <<6) | 63),    /* yellow */
+        (uint16_t)((0 <<11) | (0 <<6) | 63),    /* green  */
+        (uint16_t)((0 <<11) | (31<<6) | 63),    /* cyan   */
+        (uint16_t)((0 <<11) | (31<<6) | 0 ),    /* blue   */
+        (uint16_t)((31<<11) | (31<<6) | 0 )     /* magenta*/
+    };
+    for(x = 0; x < 320; x++){
+        uint16_t color = bars[(x / 54) % 6];
+        for(i = 0; i < screenH; i++){
+            fb[i*320 + x] = color;
+        }
+    }
+
+    sprite *fbS = new_sprite(320, screenH, 0, 0, DEPTH16, (uint8_t*)fb);
+    attach_sprite_to_display_at_layer(fbS, settings->d, 12);
+
+    hide_or_show_display_layer_range(settings->d, 0, 0, 11);
+    hide_or_show_display_layer_range(settings->d, 0, 13, 15);
+
+    textBox *helpTb = newTextBox("A: reverse  OPTION: exit", 192, 9, mainFont, 0, settings->d, 64, 8, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+    hide_or_show_display_layer_range(settings->d, 1, 13, 13);
+
+    int sx = 0;
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        sx += dir;
+        if(sx > 320)  sx = -320;
+        if(sx < -320) sx =  320;
+        fbS->x = sx;
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            dir = -dir;
+        }
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    fbS->invisible = 1;
+    detach_sprite_from_display(fbS);
+    free(fbS);
+    free(fb);
+
+    hide_or_show_display_layer_range(settings->d, 0, 13, 13);
+    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+    helpTb = freeTextBox(helpTb);
+}
