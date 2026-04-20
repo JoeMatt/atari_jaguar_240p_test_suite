@@ -113,7 +113,7 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
         docker-up colima-start colima-stop colima-status \
         ensure-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
-        verify-sig
+        verify-sig test test-core test-deps
 
 # ---------------------------------------------------------------------------
 # docker-up: order-only prereq for every target that touches the docker CLI.
@@ -481,6 +481,73 @@ libretro-frames: ensure-j64 libretro-venv
 verify-sig:
 	python3 scripts/verify-sig.py
 
+# ---------------------------------------------------------------------------
+# Smoke test targets.
+#
+# This project is a bare-metal Jaguar ROM with no host runtime, so there
+# are no traditional unit tests -- the "tests" are the on-screen patterns
+# the ROM itself draws. What we *can* meaningfully automate is a boot
+# smoke test: load the built ROM into a Jaguar libretro core, run a few
+# dozen frames, assert nothing crashes. That catches main() / init
+# regressions before they ship, which covers the lion's share of what a
+# unit suite would catch in a host-side codebase.
+#
+#   make test         -- verify-sig + libretro boot (default 60 frames)
+#   make test-core    -- build virtualjaguar_libretro.{so,dylib,dll} from
+#                        a sibling checkout of libretro/virtualjaguar-libretro
+#                        and copy it next to the Makefile
+#   make test-deps    -- print resolved test-related variables for debug
+#
+# Tunable:
+#   TEST_FRAMES=N     -- frames to run after load (default 60). 0 = load only
+#   VJ_CORE_SRC=DIR   -- where to find the VJ libretro source for `test-core`
+#                        (default ../virtualjaguar-libretro)
+#
+# CI runs the same flow on every push (see .github/workflows/build.yml
+# `smoke-test` job), so what passes locally passes in CI.
+# ---------------------------------------------------------------------------
+# TEST_FRAMES and VJ_CORE_SRC live in Makefile.config (alongside DEBUG and
+# the other host-tunable knobs); the rules below stay here so they sit
+# next to verify-sig / libretro-test / libretro-run, which they delegate to.
+
+test: verify-sig
+	@printf '>> Booting ROM in libretro core for %s frame(s)...\n' "$(TEST_FRAMES)"
+	@$(MAKE) --no-print-directory LIBRETRO_FRAMES=$(TEST_FRAMES) libretro-test
+
+# Build the Linux/macOS libretro core from a sibling checkout. We
+# deliberately do NOT auto-clone -- if the user wants a specific fork or
+# branch (Provenance-Emu/virtualjaguar-libretro, a feature branch, a
+# pinned rev), they should set that up manually.
+test-core:
+	@if [ ! -d "$(VJ_CORE_SRC)" ]; then \
+		printf '!! virtualjaguar-libretro source not found at %s\n' "$(VJ_CORE_SRC)" >&2; \
+		printf '   Clone it as a sibling of this repo:\n' >&2; \
+		printf '     git clone https://github.com/libretro/virtualjaguar-libretro %s\n' "$(VJ_CORE_SRC)" >&2; \
+		printf '   Or point at an existing checkout:\n' >&2; \
+		printf '     make test-core VJ_CORE_SRC=/path/to/virtualjaguar-libretro\n' >&2; \
+		exit 1; \
+	fi
+	$(MAKE) -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) -C "$(VJ_CORE_SRC)"
+	@_ext=so; \
+	case "$$(uname)" in \
+		Darwin) _ext=dylib ;; \
+		Linux)  _ext=so ;; \
+		MINGW*|CYGWIN*|MSYS*) _ext=dll ;; \
+	esac; \
+	if [ ! -f "$(VJ_CORE_SRC)/virtualjaguar_libretro.$$_ext" ]; then \
+		printf '!! Build succeeded but %s/virtualjaguar_libretro.%s is missing.\n' "$(VJ_CORE_SRC)" "$$_ext" >&2; \
+		exit 1; \
+	fi; \
+	cp -f "$(VJ_CORE_SRC)/virtualjaguar_libretro.$$_ext" "./virtualjaguar_libretro.$$_ext"; \
+	printf '>> Core ready: ./virtualjaguar_libretro.%s. Run `make test`.\n' "$$_ext"
+
+test-deps:
+	@printf 'TEST_FRAMES      = %s\n'   "$(TEST_FRAMES)"
+	@printf 'VJ_CORE_SRC      = %s (%s)\n' "$(VJ_CORE_SRC)" "$(if $(wildcard $(VJ_CORE_SRC)),exists,not found)"
+	@printf 'LIBRETRO_CORE    = %s\n'   "$(LIBRETRO_CORE)"
+	@printf 'LIBRETRO_CONTENT = %s\n'   "$(LIBRETRO_CONTENT)"
+	@printf 'LIBRETRO_PYTHON  = %s\n'   "$(LIBRETRO_PYTHON)"
+
 sdk-pull: | docker-up
 	$(DOCKER) pull $(SDK_IMAGE)
 
@@ -578,6 +645,12 @@ help:
 	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 0 frames (load-only smoke-test, see comment in target)'
 	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
 	@printf '  %-22s %s\n' 'verify-sig'       'check fastboot signature matches tursilion/makefastboot'
+	@printf '\n'
+	@printf 'Smoke tests (this codebase has no host-runnable unit tests by design;\n'
+	@printf 'the "tests" are visual patterns drawn by the ROM itself):\n'
+	@printf '  %-22s %s\n' 'test'             'verify-sig + boot in libretro core for $$(TEST_FRAMES) frames (default 60)'
+	@printf '  %-22s %s\n' 'test-core'        'build virtualjaguar_libretro.* from $$(VJ_CORE_SRC) (default ../virtualjaguar-libretro)'
+	@printf '  %-22s %s\n' 'test-deps'        'print resolved test variables (debug)'
 	@printf '  %-22s %s\n' 'bjl'              'send .bin via BJL (lo -8)'
 	@printf '  %-22s %s\n' 'alpine / debug'   'launch under Alpine debugger / WDB'
 	@printf '\n'

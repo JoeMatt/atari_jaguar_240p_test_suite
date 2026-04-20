@@ -106,16 +106,47 @@ ROM output is padded with trailing `0xFF` to the next 1 MiB boundary. This is re
 
 #### Smoke-testing against a libretro core
 
-If you want to verify a build actually loads (and runs) before pushing to a real device, drop your libretro core (e.g. `virtualjaguar_libretro.dylib`) into the repo root and run:
+This codebase has no host-runnable unit tests by design — it's bare-metal Jaguar M68K with hardware register pokes, and the "tests" the project provides are the on-screen patterns the ROM itself draws. What we *can* automate is a boot smoke test: load the built ROM into a Jaguar libretro core and assert it runs N frames without crashing.
+
+```bash
+make test                 # verify-sig + boot in libretro core for 60 frames (default)
+make test TEST_FRAMES=300 # tweak frame count
+make test-core            # build virtualjaguar_libretro.* from ../virtualjaguar-libretro
+make test-deps            # show resolved test variables (debug)
+```
+
+`make test` is the recommended one-command "did I break boot?" check. It runs the fastboot-signature regression test (`scripts/verify-sig.py`) and then boots the ROM in your local libretro core. CI runs the same flow on every push (see `.github/workflows/build.yml` `smoke-test` job, which builds the core from `libretro/virtualjaguar-libretro@master` and uploads the final-frame screenshot as a downloadable artifact).
+
+If you don't have a libretro core handy:
+
+- Run `make test-core` to build one from a sibling checkout of `libretro/virtualjaguar-libretro` (clone it as `../virtualjaguar-libretro` first, or override `VJ_CORE_SRC=/path/to/checkout`).
+- Or drop a prebuilt `virtualjaguar_libretro.{dylib,so,dll}` next to the Makefile manually.
+
+The lower-level targets are still available for finer control:
 
 ```bash
 make run                  # build .j64 and do a deterministic headless smoke run
 make run-ui               # attempt UI launch (RetroArch; may crash on broken setups)
-make libretro-run         # build .j64, init core, run 60 frames
-make libretro-test        # init core + load_game only (faster)
+make libretro-run         # build, init core, load_game on $(OUT_PROJECT).jag (the .cof renamed),
+                          # run 0 frames -- proves the core's content filter accepts the cart.
+                          # Override with LIBRETRO_CONTENT=$(OUT_PROJECT).j64 to test the cart-image
+                          # path instead (currently fails to boot without a real BIOS, see notes below).
+make libretro-test        # init core + load_game (use LIBRETRO_FRAMES=N for frames)
+make libretro-frames      # render 180 frames and dump every 30th to ./frames/*.png
 ```
 
 The first invocation auto-creates `.venv-libretro/` and `pip install`s [JesseTG/libretro.py](https://github.com/JesseTG/libretro.py) into it; subsequent runs reuse it. The core is not committed to the repo (it's in `.gitignore`); grab the build that matches your platform from the [virtualjaguar_libretro releases](https://github.com/libretro/virtualjaguar-libretro) or RetroArch's online updater.
+
+**What the smoke test actually proves**
+
+- `load_game` returned `True` (the libretro core accepted the ROM header / size / extension filter).
+- N `retro_run()` calls execute without raising or `_exit()`-ing.
+
+**What it does NOT prove (intentional)**
+
+- That the cart's menu is *visually* correct on a real Jaguar. The Virtual Jaguar BIOS animation requires a real Atari Jaguar BIOS ROM (copyrighted, not redistributable) to advance into cart code. Without a BIOS, the libretro framebuffer stays at the cyan-stripe init state for the entire run -- every captured frame is bit-identical regardless of frame count. The CI screenshot artifact (`smoke-test-frame-<sha>/frame-0000.png`) is therefore the *boot framebuffer*, not a render-regression baseline. If those init pixels ever change shape something fundamental broke (linker layout, fastboot signature, video init); otherwise the meaningful signal is in the log, not the image.
+
+> **macOS caveat:** the Virtual Jaguar libretro core has an upstream bug where it calls `_exit(0)` from inside the first `retro_run()` invocation on macOS. The `libretro-load-test.py` harness treats `load_game returned True` in the log as success regardless of subsequent crashes, so `make test` still gives a meaningful signal — but the process exit code may misreport. CI runs on Linux where the bug doesn't apply.
 
 If you'd rather wrap the `.bin` with a different tool, the original sources of the same fastboot algorithm are:
 
