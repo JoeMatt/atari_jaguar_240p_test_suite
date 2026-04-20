@@ -539,6 +539,128 @@ void ManualLagTest(void){
 }
 
 /* ---------------------------------------------------------------------------
+ * Video test: Alternate 240p / 480i
+ *
+ * The Jaguar always outputs progressive 240p (or 288p in PAL) from this cart.
+ * What this test actually verifies is whether the *display* is treating the
+ * signal as true 240p or as a deinterlaced 480i input. We render a
+ * full-screen horizontal-stripe pattern (1-pixel-on / 1-pixel-off) and let
+ * the user toggle between three modes:
+ *
+ *   Static:  the stripes never change.  On a real 240p path you see crisp
+ *            alternating lines; an aggressive 480i deinterlacer will smear
+ *            them into uniform gray.
+ *   Toggle:  every frame we invert the pattern (white <-> black).  On true
+ *            240p this looks like solid gray @ 60 Hz flicker.  A display
+ *            that thinks it's 480i will lock onto one field and show
+ *            stable stripes (or visible flicker artifacts).
+ *   Vertical: same as Static but vertical stripes -- useful as a sanity
+ *            check that the display geometry isn't smearing horizontally.
+ *
+ * A cycles modes, OPTION exits.
+ * --------------------------------------------------------------------------- */
+void Alternate240p480iTest(void){
+    const int W = 320, H = 240;
+    enum { MODE_STATIC = 0, MODE_TOGGLE = 1, MODE_VERTICAL = 2, MODE_COUNT = 3 };
+    int mode = MODE_STATIC;
+    int field = 0;
+    int exit = 0;
+    int redrawLabel = 1;
+    int x, y;
+
+    settings->fadeToColor = 0x0000;
+
+    /* Two pre-baked framebuffers we ping-pong between for the Toggle mode.
+     * `fbA` is "white-on-even-rows", `fbB` is the inverse. */
+    uint16_t *fbA = malloc(sizeof(uint16_t) * W * H);
+    uint16_t *fbB = malloc(sizeof(uint16_t) * W * H);
+    uint16_t *fbV = malloc(sizeof(uint16_t) * W * H);
+
+    for(y = 0; y < H; y++){
+        uint16_t cA = (y & 1) ? COLOR_BLACK : COLOR_WHITE;
+        uint16_t cB = (y & 1) ? COLOR_WHITE : COLOR_BLACK;
+        for(x = 0; x < W; x++){
+            fbA[y * W + x] = cA;
+            fbB[y * W + x] = cB;
+        }
+    }
+    for(y = 0; y < H; y++){
+        for(x = 0; x < W; x++){
+            fbV[y * W + x] = (x & 1) ? COLOR_BLACK : COLOR_WHITE;
+        }
+    }
+
+    sprite *fbS = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, fbA);
+    fbS->trans = 0;
+    attach_sprite_to_display_at_layer(fbS, settings->d, 12);
+
+    /* Mode label sits inside the safe area but stays small so it doesn't
+     * obscure the centre of the test pattern. */
+    textBox *modeTb = newTextBox("MODE: STATIC 240p ", 192, 9, mainFont, 0, settings->d, 8, 8, 13, 1);
+    updateLine(settings, mainFont, modeTb, NULL, 999999, 999999, GREEN);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(mode == MODE_TOGGLE){
+            field ^= 1;
+            fbS->data = (phrase*)(field ? fbB : fbA);
+        }
+
+        if(redrawLabel){
+            const char *label = "STATIC 240p ";
+            switch(mode){
+                case MODE_STATIC:   label = "STATIC 240p "; fbS->data = (phrase*)fbA; break;
+                case MODE_TOGGLE:   label = "TOGGLE FIELD"; field = 0; fbS->data = (phrase*)fbA; break;
+                case MODE_VERTICAL: label = "VERT 240p   "; fbS->data = (phrase*)fbV; break;
+            }
+            int j;
+            for(j = 0; j < 12; j++){ modeTb->text[6 + j] = label[j]; }
+            updateLine(settings, mainFont, modeTb, NULL, 999999, 999999, GREEN);
+            redrawLabel = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            DrawHelp(HELP_GENERAL);
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            mode = (mode + 1) % MODE_COUNT;
+            redrawLabel = 1;
+        }
+
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    modeTb = freeTextBox(modeTb);
+    /* Detach + free sprite, then free both ping-pong buffers. The sprite's
+     * data pointer may currently point at fbA, fbB or fbV; teardown only
+     * frees what we pass it explicitly. */
+    if(fbS != NULL){
+        fbS->invisible = 1;
+        detach_sprite_from_display(fbS);
+        free(fbS);
+    }
+    free(fbA);
+    free(fbB);
+    free(fbV);
+}
+
+/* ---------------------------------------------------------------------------
  * Audio test: L/R Balance + 1 kHz reference tone
  *
  * Cycles through Left, Right, Center and Mute at the press of A; the on-

@@ -610,7 +610,7 @@ void VideoTestsMenu(){
     updateLine(settings, mainFont, lineTextBox[8], "Horiz/Vert Stripes", settings->lineXOffset, setLineYPos(7), WHITE);
     updateLine(settings, mainFont, lineTextBox[9], "Checkerboard", settings->lineXOffset, setLineYPos(8), WHITE);
     updateLine(settings, mainFont, lineTextBox[10], "Backlit Zone Test", settings->lineXOffset, setLineYPos(9), WHITE);
-    updateLine(settings, mainFont, lineTextBox[11], "(x)Alternate 240p/480i", settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "Alternate 240p/480i", settings->lineXOffset, setLineYPos(10), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[12], "Help", settings->lineXOffset, setLineYPos(12), WHITE);
     updateLine(settings, mainFont, lineTextBox[13], "Options", settings->lineXOffset, setLineYPos(13), WHITE);
@@ -750,7 +750,9 @@ void VideoTestsMenu(){
                     
                 //Alternate240p480i
                 case 11:
-                    
+
+                    Alternate240p480iTest();
+
                 break;
                     
                 //DrawHelp

@@ -38,6 +38,7 @@ void DrawContrast(void);
 
 /* Video tests */
 void ManualLagTest(void);
+void Alternate240p480iTest(void);
 
 /* Audio tests */
 void AudioBalanceTest(void);
