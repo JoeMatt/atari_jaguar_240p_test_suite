@@ -42,9 +42,11 @@ void Alternate240p480iTest(void);
 
 /* Audio tests */
 void AudioBalanceTest(void);
+void MDFourierTest(void);
 
 /* Hardware tests */
 void HardwareInfo(void);
+void JaguarCDTest(void);
 
 /* Options menu (replaces the old (x)Options stub everywhere it appeared) */
 void OptionsMenu(void);

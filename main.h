@@ -29,7 +29,7 @@ extern uint8_t SD;
 phrase *SDData;
 sprite *SDSprite;
 
-void loadMainMenuLines();
+void loadMainMenuLines(int highlightLine);
 
 void testPatternMenu();
 void morePatternsMenu();

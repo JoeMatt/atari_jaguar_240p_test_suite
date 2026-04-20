@@ -73,7 +73,7 @@ int main () {
         drawTextBoxAtOnce(lineTextBox[i]);
     }
     
-    loadMainMenuLines();
+    loadMainMenuLines(1);
     
     //set random colors in color lookup table
     for(i = 0; i != 20; i++){
@@ -154,6 +154,11 @@ int main () {
         
         if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
             settings->controllerLock = 1;
+            
+            /* Remember which main-menu slot launched the sub-menu so we can
+             * restore the highlight on it when the user comes back, instead
+             * of forcing the cursor back to "Test Patterns" every time. */
+            int returnSlot = settings->menuState;
         
             switch(settings->menuState){
                 
@@ -220,8 +225,26 @@ int main () {
                 
             }
             
-            settings->menuState = 1;
-            loadMainMenuLines();
+            /* Restore the highlight to whichever slot the user activated and
+             * redraw the main menu. loadMainMenuLines() also wipes every
+             * leftover sub-menu slot before painting (see its body for why). */
+            settings->menuState = returnSlot;
+            loadMainMenuLines(returnSlot);
+            
+            /* Drain whatever button(s) are still held from the sub-menu's
+             * exit (typically A on "Back to Main Menu", or A inside a test
+             * that returns on its own). Without this, scrollLock counts
+             * down to zero a few frames later and silently auto-fires A
+             * here, which re-enters whichever sub-menu the cursor is on
+             * and looks to the user like the highlight or focus jumped to
+             * a wrong slot on its own. */
+            while((settings->joy1 & 0xFFFFFF) != 0){
+                read_joypad_state(settings->j_state);
+                settings->joy1 = settings->j_state->j1;
+                vsync();
+            }
+            settings->controllerLock = 0;
+            settings->scrollLock = 12;
         
         }
     
@@ -229,7 +252,7 @@ int main () {
   
 };
 
-void loadMainMenuLines(){
+void loadMainMenuLines(int highlightLine){
     
     hide_display_layer(settings->d, 2);
     vsync();
@@ -249,14 +272,21 @@ void loadMainMenuLines(){
     
     resetAllLines();
     
-    updateLine(settings, mainFont, lineTextBox[1], "Test Patterns", settings->lineXOffset, setLineYPos(0), RED);
-    updateLine(settings, mainFont, lineTextBox[2], "Video Tests", settings->lineXOffset, setLineYPos(1), WHITE);
-    updateLine(settings, mainFont, lineTextBox[3], "Audio Tests", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "Hardware Tools", settings->lineXOffset, setLineYPos(3), WHITE);
+    /* Clamp to the legal slot range so a stale settings->menuState from a
+     * sub-menu that grew past 7 (e.g. testPatternMenu's 16) can never paint
+     * RED on a slot that doesn't exist on the main menu. */
+    if(highlightLine < 1 || highlightLine > 7){
+        highlightLine = 1;
+    }
     
-    updateLine(settings, mainFont, lineTextBox[5], "Help", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Options", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Credits", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[1], "Test Patterns",  settings->lineXOffset, setLineYPos(0), highlightLine == 1 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[2], "Video Tests",    settings->lineXOffset, setLineYPos(1), highlightLine == 2 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[3], "Audio Tests",    settings->lineXOffset, setLineYPos(2), highlightLine == 3 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "Hardware Tools", settings->lineXOffset, setLineYPos(3), highlightLine == 4 ? RED : WHITE);
+    
+    updateLine(settings, mainFont, lineTextBox[5], "Help",    settings->lineXOffset, setLineYPos(6), highlightLine == 5 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Options", settings->lineXOffset, setLineYPos(7), highlightLine == 6 ? RED : WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Credits", settings->lineXOffset, setLineYPos(8), highlightLine == 7 ? RED : WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -821,7 +851,7 @@ void AudioTestsMenu(){
     updateLine(settings, mainFont, lineTextBox[1], "Sound Test", settings->lineXOffset, setLineYPos(0), RED);
     updateLine(settings, mainFont, lineTextBox[2], "Audio Sync Test", settings->lineXOffset, setLineYPos(1), WHITE);
     updateLine(settings, mainFont, lineTextBox[3], "L/R Balance + 1kHz Tone", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "(x)MDFourier", settings->lineXOffset, setLineYPos(3), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4], "MDFourier Sweep", settings->lineXOffset, setLineYPos(3), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[5], "Help", settings->lineXOffset, setLineYPos(5), WHITE);
     updateLine(settings, mainFont, lineTextBox[6], "Options", settings->lineXOffset, setLineYPos(6), WHITE);
@@ -913,6 +943,8 @@ void AudioTestsMenu(){
                 //MDFourier
                 case 4:
                     
+                    MDFourierTest();
+                    
                 break;
                     
                 //DrawHelp
@@ -972,7 +1004,7 @@ void HardwareMenu(){
     updateLine(settings, mainFont, lineTextBox[3], "DSP Memory Viewer", settings->lineXOffset, setLineYPos(2), WHITE);
     updateLine(settings, mainFont, lineTextBox[4], "DRAM Memory Viewer", settings->lineXOffset, setLineYPos(3), WHITE);
     updateLine(settings, mainFont, lineTextBox[5], "System Info", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "(x)Jaguar CD Tests", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Jaguar CD Probe", settings->lineXOffset, setLineYPos(5), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[7], "Help", settings->lineXOffset, setLineYPos(7), WHITE);
     updateLine(settings, mainFont, lineTextBox[8], "Options", settings->lineXOffset, setLineYPos(8), WHITE);
@@ -1077,6 +1109,8 @@ void HardwareMenu(){
                 //Jaguar CD Tests
                 case 6:
                     
+                    JaguarCDTest();
+                    
                 break;
                     
                 //Help
@@ -1161,7 +1195,7 @@ void drawCredits(){
                     updateLine(settings, mainFont, lineTextBox[14], "Advisor:", settings->lineXOffset, setLineYPos(13), GREEN);
                     updateLine(settings, mainFont, lineTextBox[15], "  ()  ", settings->lineXOffset, setLineYPos(14), WHITE);
 
-                    updateLine(settings, mainFont, lineTextBox[16], "                   Ver. 0.6.0 - 04/19/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
+                    updateLine(settings, mainFont, lineTextBox[16], "                   Ver. 0.6.1 - 04/19/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
 
                     updateLine(settings, mainFont, lineTextBox[17], "Option - Return To Main Menu", settings->lineXOffset, setLineYPos(16) + 4, WHITE);
                 break;

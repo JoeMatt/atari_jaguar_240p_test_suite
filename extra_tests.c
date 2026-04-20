@@ -917,3 +917,264 @@ void OptionsMenu(void){
     volTb   = freeTextBox(volTb);
     titleTb = freeTextBox(titleTb);
 }
+
+/* ---------------------------------------------------------------------------
+ * Audio test: MDFourier-style frequency sweep
+ *
+ * The canonical MDFourier reference signal is a long series of pure sine
+ * tones at known frequencies that, when captured and FFT'd, fingerprints
+ * a console's audio hardware (DAC linearity, low-pass filter, output
+ * impedance, etc). The full upstream signal is ~200 tones over ~30s and
+ * needs an external recorder + the MDFourier desktop app to interpret.
+ *
+ * Here we generate a representative subset on-cart: a 7-octave sweep in
+ * octaves of C (C2 -> C8) using JERRY's 128-sample ROM sine wavetable
+ * resampled at each target frequency via VOICE_FREQ. Each tone holds for
+ * ~1 second so the user can capture the output and feed the resulting
+ * .wav into MDFourier offline.
+ *
+ * Controls: A = play/pause sweep, B = step to next tone manually,
+ *           OPTION = exit. Current tone index + Hz shown on screen.
+ * --------------------------------------------------------------------------- */
+void MDFourierTest(void){
+    /* Octave-spaced sine sweep. Each entry pairs the target frequency in Hz
+     * with a printable label so we can show it without sprintf. The Jaguar
+     * SDK's C2..C8 macros encode the playback rate divisor for VOICE_FREQ. */
+    static const int sweepFreq[]   = { C2,    C3,    C4,    C5,    C6,    C7,    C8    };
+    static const char *sweepLabel[] = { "65Hz","131Hz","262Hz","523Hz","1kHz","2kHz","4kHz" };
+    const int sweepCount = (int)(sizeof(sweepFreq)/sizeof(sweepFreq[0]));
+
+    int exit = 0;
+    int redraw = 1;
+    int playing = 0;        /* sweep auto-advancing or idle */
+    int tone = 0;           /* current index into sweepFreq[] */
+    int holdFrames = 0;     /* frames remaining on current tone in auto mode */
+    int i, ii;
+
+    /* 128-sample wavetable replicated 75x so the voice loop covers ~1s of
+     * sustain at C7. set_voice() loops the buffer so a longer buffer just
+     * hides the loop seam from the listener. */
+    int sampleRepeat = 75;
+    int sampleSize = 128 * sampleRepeat;
+    int16_t DSPSample[sampleSize];
+    for(ii = 0; ii < sampleRepeat; ii++){
+        for(i = 0; i < 128; i++){
+            DSPSample[(ii*128) + i] = (int16_t)JERRYREGS->rom_sine[i];
+        }
+    }
+
+    settings->fadeToColor = 0x0000;
+
+    textBox *titleTb = newTextBox("MDFOURIER SWEEP", 192, 9, mainFont, 0, settings->d, 80, 48, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    textBox *toneTb  = newTextBox("TONE 1/7  : 65Hz   ", 192, 9, mainFont, 0, settings->d, 64, 88, 13, 1);
+    updateLine(settings, mainFont, toneTb, NULL, 999999, 999999, WHITE);
+
+    textBox *stateTb = newTextBox("STATE     : IDLE   ", 192, 9, mainFont, 0, settings->d, 64, 104, 13, 1);
+    updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
+
+    textBox *helpTb  = newTextBox("A: play/pause  B: next  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+
+    textBox *infoTb  = newTextBox("Capture line-out then run MDFourier", 256, 9, mainFont, 0, settings->d, 24, 200, 13, 1);
+    updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        /* In auto mode, hold each tone for ~60 frames (~1s NTSC) then step. */
+        if(playing){
+            if(holdFrames > 0){
+                holdFrames--;
+            }
+            else{
+                tone++;
+                if(tone >= sweepCount){
+                    tone = 0;
+                    playing = 0;        /* sweep complete -- stop auto-advance */
+                }
+                holdFrames = 60;
+                redraw = 1;
+            }
+        }
+
+        if(redraw){
+            /* Patch tone index ("1/7") + label in-place so we don't keep
+             * re-allocating textBox->text. The buffer was sized for the
+             * widest possible value at construction. */
+            toneTb->text[5]  = (char)('0' + (tone + 1));
+            toneTb->text[7]  = (char)('0' + sweepCount);
+            for(i = 0; i < 7; i++){
+                char c = sweepLabel[tone][i];
+                if(c == '\0'){ c = ' '; }
+                toneTb->text[12 + i] = c;
+            }
+            updateLine(settings, mainFont, toneTb, NULL, 999999, 999999, WHITE);
+
+            const char *st = playing ? "PLAYING" : "IDLE   ";
+            for(i = 0; i < 7; i++){ stateTb->text[12 + i] = st[i]; }
+            updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, playing ? RED : WHITE);
+
+            clear_voice(0);
+            if(playing){
+                set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(63)|VOICE_FREQ(sweepFreq[tone], freq),
+                          (char*)DSPSample, sampleSize*2,
+                          (char*)DSPSample, sampleSize*2);
+            }
+            redraw = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            playing = !playing;
+            holdFrames = 60;
+            redraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_B) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            tone = (tone + 1) % sweepCount;
+            holdFrames = 60;
+            redraw = 1;
+        }
+
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    clear_voice(0);
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    infoTb  = freeTextBox(infoTb);
+    helpTb  = freeTextBox(helpTb);
+    stateTb = freeTextBox(stateTb);
+    toneTb  = freeTextBox(toneTb);
+    titleTb = freeTextBox(titleTb);
+}
+
+/* ---------------------------------------------------------------------------
+ * Hardware test: Jaguar CD detection / probe screen
+ *
+ * The Jaguar CD attachment maps Butch (the CD audio + transport ASIC) into
+ * the host bus at $F14000+, and on power-on the CD BIOS (the well-known
+ * "Memory Track" boot) gets paged in at $00800000. When no CD unit is
+ * attached, those addresses read open-bus / 0xFFFF.
+ *
+ * We don't ship the upstream Memory-Track flow here -- that requires
+ * actually driving the CD transport -- but we DO probe a few well-known
+ * register addresses, print their raw values in hex, and apply a simple
+ * heuristic: if at least one of the probed words returns something other
+ * than 0x0000 / 0xFFFF, the unit is almost certainly attached.
+ *
+ * On a stock Jaguar console (no CD) this screen will report "NOT DETECTED"
+ * and is purely informational. On a Jag CD it gives the user a quick
+ * sanity check that the CD's data bus is alive without booting media.
+ * --------------------------------------------------------------------------- */
+void JaguarCDTest(void){
+    int exit = 0;
+    char buf[12] = "00000000\0";
+    int i;
+
+    /* Three Butch register addresses we sample. The first two are part of
+     * the CD audio interface (subcode + status); the third is well inside
+     * the paged-in CD BIOS window when the unit is attached. */
+    volatile uint16_t *butchA  = (volatile uint16_t*)0xF14000;
+    volatile uint16_t *butchB  = (volatile uint16_t*)0xF14002;
+    volatile uint16_t *cdBios  = (volatile uint16_t*)0x00800000;
+
+    uint16_t vA = *butchA;
+    uint16_t vB = *butchB;
+    uint16_t vC = *cdBios;
+
+    /* Heuristic: open bus on this region tends to read 0x0000 or 0xFFFF.
+     * If anything else comes back from at least one probe, the CD is
+     * almost certainly mapped in. This is identical in spirit to the
+     * "CD detected?" probe used by Skunkboard and homebrew loaders. */
+    int detected = 0;
+    if(vA != 0x0000 && vA != 0xFFFF) detected = 1;
+    if(vB != 0x0000 && vB != 0xFFFF) detected = 1;
+    if(vC != 0x0000 && vC != 0xFFFF) detected = 1;
+
+    textBox *titleTb = newTextBox("JAGUAR CD PROBE", 192, 9, mainFont, 0, settings->d, 80, 48, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    textBox *statusTb = newTextBox("STATUS  : NOT DETECTED  ", 256, 9, mainFont, 0, settings->d, 48, 80, 13, 1);
+    if(detected){
+        const char *yes = "DETECTED      ";
+        for(i = 0; i < 14; i++){ statusTb->text[10 + i] = yes[i]; }
+    }
+    updateLine(settings, mainFont, statusTb, NULL, 999999, 999999, detected ? GREEN : RED);
+
+    /* Print each probed value as a 4-char hex word so the user can sanity
+     * check against schematics or compare to a known-good unit. */
+    textBox *aTb = newTextBox("$F14000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 104, 13, 1);
+    itostring(buf, (int)vA, 16);
+    {
+        int n = 0; while(buf[n] != '\0' && n < 4) n++;
+        int pad;
+        for(pad = 0; pad < 4 - n; pad++) aTb->text[10 + pad] = '0';
+        for(i = 0; i < n; i++) aTb->text[10 + (4 - n) + i] = buf[i];
+    }
+    updateLine(settings, mainFont, aTb, NULL, 999999, 999999, WHITE);
+
+    textBox *bTb = newTextBox("$F14002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 120, 13, 1);
+    itostring(buf, (int)vB, 16);
+    {
+        int n = 0; while(buf[n] != '\0' && n < 4) n++;
+        int pad;
+        for(pad = 0; pad < 4 - n; pad++) bTb->text[10 + pad] = '0';
+        for(i = 0; i < n; i++) bTb->text[10 + (4 - n) + i] = buf[i];
+    }
+    updateLine(settings, mainFont, bTb, NULL, 999999, 999999, WHITE);
+
+    textBox *cTb = newTextBox("$800000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 136, 13, 1);
+    itostring(buf, (int)vC, 16);
+    {
+        int n = 0; while(buf[n] != '\0' && n < 4) n++;
+        int pad;
+        for(pad = 0; pad < 4 - n; pad++) cTb->text[10 + pad] = '0';
+        for(i = 0; i < n; i++) cTb->text[10 + (4 - n) + i] = buf[i];
+    }
+    updateLine(settings, mainFont, cTb, NULL, 999999, 999999, WHITE);
+
+    textBox *noteTb = newTextBox("0000/FFFF on all = open bus, no CD", 256, 9, mainFont, 0, settings->d, 24, 168, 13, 1);
+    updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
+
+    textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 200, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    helpTb   = freeTextBox(helpTb);
+    noteTb   = freeTextBox(noteTb);
+    cTb      = freeTextBox(cTb);
+    bTb      = freeTextBox(bTb);
+    aTb      = freeTextBox(aTb);
+    statusTb = freeTextBox(statusTb);
+    titleTb  = freeTextBox(titleTb);
+}
