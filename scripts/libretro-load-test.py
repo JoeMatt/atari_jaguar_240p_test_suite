@@ -92,14 +92,17 @@ def main(argv: list[str]) -> int:
         if save_png is None:
             return 1
 
-    # Note on flushing: every print uses flush=True. The Virtual Jaguar
-    # libretro core on macOS calls raw _exit(0) from inside the first
-    # retro_run() invocation (upstream bug -- reproduces with any
-    # non-RetroArch harness), which bypasses Python's stdio buffering and
-    # atexit hooks. Without flush=True the user would see zero output and
-    # think the script silently did nothing. Even with flush=True, anything
-    # printed AFTER session.run() may not appear if the core takes that
-    # exit path.
+    # Note on flushing: every status print on the hot path (everything
+    # around session creation and the per-frame loop) uses flush=True.
+    # The Virtual Jaguar libretro core on macOS calls raw _exit(0) from
+    # inside the first retro_run() invocation (upstream bug -- reproduces
+    # with any non-RetroArch harness), which bypasses Python's stdio
+    # buffering and atexit hooks. Without flush=True the user would see
+    # zero output and think the script silently did nothing. Pre-session
+    # error/help prints (missing core, install hints) deliberately do
+    # NOT flush -- they only run on synchronous errors and Python exits
+    # cleanly after them. Anything printed AFTER session.run() may not
+    # appear if the core takes that exit path even with flush=True.
     if args.frames > 0:
         print(
             ">> NOTE: requesting >0 frames against virtualjaguar on macOS will\n"
@@ -110,6 +113,14 @@ def main(argv: list[str]) -> int:
             flush=True,
         )
 
+    ## Print the "about to load" marker BEFORE entering the with-block so a
+    ## SIGKILL during retro_init / load_game (Virtual Jaguar libretro core
+    ## has a known upstream bug where init can SIGKILL the host process on
+    ## macOS) is distinguishable from a clean rejection. `make verify`
+    ## treats "about to call load_game" + clean exit as failure, but
+    ## "load_game returned True" anywhere in the log as success regardless
+    ## of subsequent crashes.
+    print(">> about to call load_game...", flush=True)
     try:
         with builder.build() as session:
             print(">> load_game returned True; core initialised successfully.", flush=True)

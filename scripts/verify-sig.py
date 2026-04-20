@@ -20,6 +20,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,7 +41,28 @@ def _fetch_reference(local: Path | None) -> Path:
     if cpp.is_file():
         return cpp
 
+    ## Self-heal: a previous interrupted/failed run can leave CACHE_DIR
+    ## present-but-incomplete (no .git, partial checkout, etc.). `git clone`
+    ## refuses to write into a non-empty directory, so the next invocation
+    ## would error out with "destination path exists" and never recover.
+    ## Either reuse the existing checkout via fetch+reset if it's a real
+    ## git working tree, or wipe and re-clone if it isn't.
     CACHE_DIR.parent.mkdir(parents=True, exist_ok=True)
+    if CACHE_DIR.exists():
+        if (CACHE_DIR / ".git").is_dir():
+            rc = subprocess.call(
+                ["git", "-C", str(CACHE_DIR), "fetch", "--quiet", "--depth", "1",
+                 "origin", "HEAD"]
+            )
+            if rc == 0:
+                subprocess.call(
+                    ["git", "-C", str(CACHE_DIR), "reset", "--hard", "--quiet",
+                     "FETCH_HEAD"]
+                )
+                if cpp.is_file():
+                    return cpp
+        shutil.rmtree(CACHE_DIR, ignore_errors=True)
+
     rc = subprocess.call(
         ["git", "clone", "--depth", "1", "--quiet", UPSTREAM, str(CACHE_DIR)]
     )
