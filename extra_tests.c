@@ -1237,7 +1237,11 @@ void ColorCycleSaver(void){
             int p = pos & 63;
             switch(leg){
                 case 0: r = 31; g = (uint16_t)p;        b = 0;             break;     /* R -> Y */
-                case 1: r = (uint16_t)(63 - p); g = 63; b = 0;             break;     /* Y -> G */
+                /* Red is a 5-bit channel (0..31) -- earlier (63 - p) overflowed
+                 * into the upper RGB16 bits and made Y->G hitch instead of fading
+                 * smoothly. Mirror the (p>>1) scaling used by the other legs so
+                 * red ramps cleanly from 31 down to 0 across the 64-step leg. */
+                case 1: r = (uint16_t)(31 - (p>>1)); g = 63; b = 0;        break;     /* Y -> G */
                 case 2: r = 0;  g = 63;                 b = (uint16_t)(p>>1); break;  /* G -> C */
                 case 3: r = 0;  g = (uint16_t)(63 - p); b = 31;            break;     /* C -> B */
                 case 4: r = (uint16_t)(p>>1); g = 0;    b = 31;            break;     /* B -> M */
@@ -1293,6 +1297,10 @@ void BouncingSquareSaver(void){
     for(i = 0; i < sw*sh; i++){ sqData[i] = 0x01; }
 
     sprite *sq = new_sprite(sw, sh, 80, 80, DEPTH8, sqData);
+    /* Match every other sprite in extra_tests.c / patterns.c -- the new_sprite
+     * default for trans is non-zero, so without this the corner texels of the
+     * square render see-through depending on the BG palette. */
+    sq->trans = 0;
     attach_sprite_to_display_at_layer(sq, settings->d, 12);
 
     int vx = 2;
@@ -1381,6 +1389,11 @@ void ScrollingBarsSaver(void){
     }
 
     sprite *fbS = new_sprite(320, screenH, 0, 0, DEPTH16, (uint8_t*)fb);
+    /* DEPTH16 fullscreen sprites everywhere else in the project (Draw100IRE,
+     * DrawWhiteScreen, all five new procedural patterns...) explicitly disable
+     * trans; honor that contract here so the bars don't acquire transparent
+     * pixels if the sprite engine default ever changes. */
+    fbS->trans = 0;
     attach_sprite_to_display_at_layer(fbS, settings->d, 12);
 
     hide_or_show_display_layer_range(settings->d, 0, 0, 11);
