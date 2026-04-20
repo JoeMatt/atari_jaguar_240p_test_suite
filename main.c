@@ -1095,7 +1095,7 @@ void AudioTestsMenu(){
 void HardwareMenu(){
     
     int done = 0;
-    int lastMenuLine = 9; //counting from zero
+    int lastMenuLine = 10; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
@@ -1112,10 +1112,11 @@ void HardwareMenu(){
     updateLine(settings, mainFont, lineTextBox[4], "DRAM Memory Viewer", settings->lineXOffset, setLineYPos(3), WHITE);
     updateLine(settings, mainFont, lineTextBox[5], "System Info", settings->lineXOffset, setLineYPos(4), WHITE);
     updateLine(settings, mainFont, lineTextBox[6], "Jaguar CD Probe", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Video Mode Test", settings->lineXOffset, setLineYPos(6), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[7], "Help", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Options", settings->lineXOffset, setLineYPos(8), WHITE);
-    updateLine(settings, mainFont, lineTextBox[9], "Back to Main Menu", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Help", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Options", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "Back to Main Menu", settings->lineXOffset, setLineYPos(10), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -1220,8 +1221,15 @@ void HardwareMenu(){
                     
                 break;
                     
-                //Help
+                //Video Mode / Resolution Test
                 case 7:
+
+                    ResolutionTest();
+
+                break;
+                    
+                //Help
+                case 8:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -1233,13 +1241,13 @@ void HardwareMenu(){
                 break;
                     
                 //Options
-                case 8:
+                case 9:
 
                     OptionsMenu();
 
                 break;
                     
-                case 9:
+                case 10:
                     
                     done = 1;
                     

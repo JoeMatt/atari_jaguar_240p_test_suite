@@ -857,6 +857,212 @@ void HardwareInfo(void){
 }
 
 /* ---------------------------------------------------------------------------
+ * Hardware tools: Video Mode / Resolution test
+ *
+ * Addresses upstream BitJag #2 ("Resolution Switching") within the bounds of
+ * what is actually safe to flip at runtime in the Removers' Library display
+ * model. The library has no `delete_display` and the menu's long-lived
+ * sprites (backdrop, status line, lineTextBox[]) are sized for the boot-time
+ * vmode. So a "global runtime resolution change" would require a second boot
+ * path -- out of scope for a single test.
+ *
+ * What we *can* do safely while a test is the only thing on the display:
+ *   - read every relevant TOM video register live (vmode, vp, hp, hdb1/hde,
+ *     vdb/vde, vs) and show the user what the hardware is actually doing,
+ *   - flip the PWIDTH (pixel-clock divider) and pixel-format bits inside
+ *     `vmode` and let the user see how the connected display reacts -- this
+ *     does not change any framebuffer dimensions, only how pixels are
+ *     clocked out of the line buffer, so the test sprites remain valid,
+ *   - restore the boot defaults on exit so the rest of the menu / tests
+ *     come back exactly as before.
+ *
+ * This is the minimum viable answer to "give users a way to see and probe
+ * Jaguar video modes" without lying about a feature we can't actually
+ * deliver across every test in the suite.
+ *
+ * Controls: UP/DOWN cycles PWIDTH (1..8), LEFT/RIGHT cycles pixel format
+ *           (CRY16 / RGB24 / DIRECT16 / RGB16), A restores the boot vmode,
+ *           OPTION exits (and also restores the boot vmode as a safety).
+ * --------------------------------------------------------------------------- */
+void ResolutionTest(void){
+    /// Snapshot the boot vmode so we can always get back to a sane display.
+    /// main.c sets `RGB16 | CSYNC | BGEN | PWIDTH4 | VIDEN` before init.
+    const uint16_t vmodeBoot = TOMREGS->vmode;
+
+    /// Pixel-format names line up with the bit pattern in (vmode >> 1) & 0x3.
+    static const char *fmtName[4] = { "CRY16   ", "RGB24   ", "DIRECT16", "RGB16   " };
+
+    /// PWIDTH divisor table. PWIDTH(n) clocks one pixel every (n+1) cycles
+    /// of the 26.59 MHz video clock (NTSC) / 26.42 MHz (PAL); the resulting
+    /// active pixels-per-line at 320 line-buffer columns work out roughly
+    /// to: PWIDTH4 ~= 320 native, PWIDTH2 ~= 640 squeezed, PWIDTH8 ~= 160
+    /// stretched. Useful for showing "this is what 256-pixel wide content
+    /// looks like on your TV" without resizing any framebuffers.
+
+    int exit = 0;
+    int redraw = 1;
+    int pwidth = ((vmodeBoot >> 9) & 0x7);   /// 0..7 maps to PWIDTH1..PWIDTH8
+    int fmt    = ((vmodeBoot >> 1) & 0x3);   /// 0..3 maps to fmtName[]
+
+    char buf[12];
+
+    textBox *titleTb = newTextBox("VIDEO MODE TEST", 192, 9, mainFont, 0, settings->d, 80, 40, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    textBox *regionTb = newTextBox("REGION : NTSC 60Hz", 224, 9, mainFont, 0, settings->d, 56, 64, 13, 1);
+    if(settings->PALNTSC == 0){
+        regionTb->text[9]  = 'P'; regionTb->text[10] = 'A'; regionTb->text[11] = 'L';
+        regionTb->text[12] = ' ';
+        regionTb->text[14] = '5'; regionTb->text[15] = '0';
+    }
+    updateLine(settings, mainFont, regionTb, NULL, 999999, 999999, WHITE);
+
+    /// The four mutable / informative rows. They get refreshed in the
+    /// `redraw` block so pwidth/fmt edits show up next vsync.
+    textBox *fmtTb    = newTextBox("FORMAT : RGB16        ", 256, 9, mainFont, 0, settings->d, 56, 88,  13, 1);
+    textBox *pwTb     = newTextBox("PWIDTH : 4 (320 native)", 256, 9, mainFont, 0, settings->d, 56, 104, 13, 1);
+    textBox *vmodeTb  = newTextBox("VMODE  : 0x0000       ", 256, 9, mainFont, 0, settings->d, 56, 120, 13, 1);
+    textBox *geomTb   = newTextBox("GEOM   : 320x000      ", 256, 9, mainFont, 0, settings->d, 56, 136, 13, 1);
+    textBox *regsTb   = newTextBox("VP=000 HP=000         ", 256, 9, mainFont, 0, settings->d, 56, 152, 13, 1);
+
+    textBox *help1Tb  = newTextBox("UP/DOWN: PWIDTH   LEFT/RIGHT: format", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
+    textBox *help2Tb  = newTextBox("A: restore boot mode   OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 200, 13, 1);
+    updateLine(settings, mainFont, help1Tb, NULL, 999999, 999999, GREY);
+    updateLine(settings, mainFont, help2Tb, NULL, 999999, 999999, GREY);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(redraw){
+            /// Compose a new vmode: keep all the non-PWIDTH/non-format bits
+            /// (CSYNC, BGEN, VIDEN, etc.) from the boot value, splice in the
+            /// user's PWIDTH and pixel-format choices.
+            uint16_t newVmode = (vmodeBoot & ~((0x7u << 9) | (0x3u << 1)))
+                              | ((uint16_t)(pwidth & 0x7) << 9)
+                              | ((uint16_t)(fmt    & 0x3) << 1);
+            TOMREGS->vmode = newVmode;
+
+            /// FORMAT row.
+            int i;
+            for(i = 0; i < 8; i++){ fmtTb->text[9 + i] = fmtName[fmt & 0x3][i]; }
+            updateLine(settings, mainFont, fmtTb, NULL, 999999, 999999, WHITE);
+
+            /// PWIDTH row -- show the divisor (1..8) and a short hint.
+            const char *pwHint = "         ";
+            switch(pwidth){
+                case 0: pwHint = "(1280 sq)"; break;
+                case 1: pwHint = "(640 sqs)"; break;
+                case 2: pwHint = "(427 sqs)"; break;
+                case 3: pwHint = "(320 nat)"; break;   /// boot default
+                case 4: pwHint = "(256 str)"; break;
+                case 5: pwHint = "(213 str)"; break;
+                case 6: pwHint = "(183 str)"; break;
+                case 7: pwHint = "(160 str)"; break;
+            }
+            pwTb->text[9]  = (char)('1' + pwidth);
+            pwTb->text[10] = ' ';
+            for(i = 0; i < 9; i++){ pwTb->text[11 + i] = pwHint[i]; }
+            updateLine(settings, mainFont, pwTb, NULL, 999999, 999999, WHITE);
+
+            /// VMODE register, hex.
+            buf[0] = '\0';
+            itostring(buf, (int)newVmode, 16);
+            int n = 0; while(buf[n] != '\0' && n < 4) n++;
+            int p;
+            for(p = 0; p < 4; p++){ vmodeTb->text[11 + p] = '0'; }
+            int k;
+            for(k = 0; k < n; k++){ vmodeTb->text[11 + (4 - n) + k] = buf[k]; }
+            updateLine(settings, mainFont, vmodeTb, NULL, 999999, 999999, WHITE);
+
+            /// GEOM row -- effective active resolution. Width is the line
+            /// buffer span (always 320 in this build) shown as the numerator
+            /// for clarity; height comes from PALNTSC.
+            int activeH = settings->PALNTSC ? 240 : 288;
+            buf[0] = '\0';
+            itostring(buf, activeH, 10);
+            int hn = 0; while(buf[hn] != '\0' && hn < 3) hn++;
+            for(p = 0; p < 3; p++){ geomTb->text[13 + p] = ' '; }
+            for(k = 0; k < hn; k++){ geomTb->text[13 + (3 - hn) + k] = buf[k]; }
+            updateLine(settings, mainFont, geomTb, NULL, 999999, 999999, WHITE);
+
+            /// VP / HP raw register dump, decimal -- handy for documenting
+            /// what an emulator vs real HW reports for region timing.
+            uint16_t vp = TOMREGS->vp;
+            uint16_t hp = TOMREGS->hp;
+            buf[0] = '\0';
+            itostring(buf, (int)vp, 10);
+            int vn = 0; while(buf[vn] != '\0' && vn < 3) vn++;
+            for(p = 0; p < 3; p++){ regsTb->text[3 + p] = ' '; }
+            for(k = 0; k < vn; k++){ regsTb->text[3 + (3 - vn) + k] = buf[k]; }
+            buf[0] = '\0';
+            itostring(buf, (int)hp, 10);
+            int hpn = 0; while(buf[hpn] != '\0' && hpn < 3) hpn++;
+            for(p = 0; p < 3; p++){ regsTb->text[10 + p] = ' '; }
+            for(k = 0; k < hpn; k++){ regsTb->text[10 + (3 - hpn) + k] = buf[k]; }
+            updateLine(settings, mainFont, regsTb, NULL, 999999, 999999, WHITE);
+
+            redraw = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            pwidth = (pwidth + 1) & 0x7;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            pwidth = (pwidth + 7) & 0x7;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_RIGHT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            fmt = (fmt + 1) & 0x3;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_LEFT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            fmt = (fmt + 3) & 0x3;
+            redraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            pwidth = ((vmodeBoot >> 9) & 0x7);
+            fmt    = ((vmodeBoot >> 1) & 0x3);
+            redraw = 1;
+        }
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    /// Always restore the boot vmode before handing control back to the menu,
+    /// even if the user exited via OPTION while a stretched / squeezed mode
+    /// was active. Otherwise the main menu sprites would render at the wrong
+    /// pixel clock and look mangled.
+    TOMREGS->vmode = vmodeBoot;
+
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    help2Tb  = freeTextBox(help2Tb);
+    help1Tb  = freeTextBox(help1Tb);
+    regsTb   = freeTextBox(regsTb);
+    geomTb   = freeTextBox(geomTb);
+    vmodeTb  = freeTextBox(vmodeTb);
+    pwTb     = freeTextBox(pwTb);
+    fmtTb    = freeTextBox(fmtTb);
+    regionTb = freeTextBox(regionTb);
+    titleTb  = freeTextBox(titleTb);
+}
+
+/* ---------------------------------------------------------------------------
  * Options menu
  *
  * Replaces the (x)Options stubs that appeared in every sub-menu. For now the
