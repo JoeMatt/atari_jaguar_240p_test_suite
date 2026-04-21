@@ -113,7 +113,8 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
         docker-up colima-start colima-stop colima-status \
         ensure-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
-        verify-sig test test-core test-deps
+        verify-sig test test-core test-deps \
+        unquarantine-core resign-core
 
 # ---------------------------------------------------------------------------
 # docker-up: order-only prereq for every target that touches the docker CLI.
@@ -265,7 +266,7 @@ libretro-venv: $(LIBRETRO_VENV)/bin/python
 ## (where the .jag rule lives), so the rule isn't visible yet at parse time.
 ## Instead, ensure-build is followed by a runtime check: if the content file
 ## is missing, recurse into make to build it via Makefile.example's pattern rule.
-libretro-test: libretro-venv ensure-build
+libretro-test: libretro-venv ensure-build unquarantine-core
 	@if [ -z "$(LIBRETRO_CORE)" ]; then \
 		printf '!! No libretro core found in CWD.\n'; \
 		printf '   Drop virtualjaguar_libretro.{dylib,so,dll} next to the Makefile,\n'; \
@@ -404,12 +405,65 @@ sys.exit(0 if ok else 1)
 endef
 export _VERIFY_HEADER_PY
 
-# Strip macOS quarantine xattr from the libretro core if present.
+# Re-sign the libretro core ad-hoc if its embedded code signature doesn't
+# cover the entire file. macOS-only no-op elsewhere.
+#
+# Why: when a libretro core is built on macOS the linker auto-applies an
+# ad-hoc signature at link time. Some build steps (strip, install_name_tool,
+# post-link patching) then modify the dylib WITHOUT re-signing, so the
+# embedded signature only covers part of the file. macOS hardened-runtime
+# processes (brew Python, anything built with default clang on macOS
+# 10.15+) refuse to dlopen such dylibs and SIGKILL the host before dyld
+# can return a useful errno -- the only diagnostic is lldb showing
+# `code signature does not cover entire file up to signature in ...`.
+#
+# RetroArch is unhardened so it loads broken-sig dylibs without complaint
+# (which is why this is invisible during normal play), but our libretro.py
+# smoke harness trips on it. `codesign --force --sign -` regenerates a
+# signature covering the entire current file, sufficient for dlopen by
+# hardened processes (no actual identity or notarization required).
+#
+# Override CORE=path/to/foo.dylib to re-sign a specific file, e.g.
+#   make resign-core CORE=~/Downloads/virtualjaguar_libretro.dylib
+CORE ?= $(LIBRETRO_CORE)
+resign-core:
+	@if [ -z "$(CORE)" ] || [ ! -f "$(CORE)" ]; then \
+		printf '!! resign-core: CORE=%s not found.\n' "$(CORE)" >&2; \
+		printf '   Usage: make resign-core CORE=/path/to/libretro_core.dylib\n' >&2; \
+		exit 1; \
+	fi
+	@if [ "$$(uname -s)" != "Darwin" ]; then \
+		printf '>> resign-core: skipped (non-Darwin host, codesign not applicable).\n'; \
+		exit 0; \
+	fi
+	@if ! command -v codesign >/dev/null 2>&1; then \
+		printf '!! resign-core: codesign not on PATH (install Xcode CLT: xcode-select --install)\n' >&2; \
+		exit 1; \
+	fi
+	@if codesign --verify --strict "$(CORE)" >/dev/null 2>&1; then \
+		printf '>> %s already has a valid signature -- nothing to do.\n' "$(CORE)"; \
+	else \
+		printf '>> Re-signing %s ad-hoc (existing signature is invalid or stale)\n' "$(CORE)"; \
+		if ! codesign --force --sign - --timestamp=none "$(CORE)" >/dev/null 2>&1; then \
+			printf '!! re-sign failed (try manually: codesign --force --sign - %s)\n' "$(CORE)" >&2; \
+			exit 1; \
+		fi; \
+		printf '>> OK: %s now signed ad-hoc.\n' "$(CORE)"; \
+	fi
+
+# Strip macOS quarantine xattr from the libretro core, and delegate to
+# resign-core to fix any stale embedded signature. Composed prereq for
+# every smoke-test / RetroArch-launch target.
 unquarantine-core:
 	@if [ -n "$(LIBRETRO_CORE)" ] && [ -f "$(LIBRETRO_CORE)" ]; then \
 		if xattr -l "$(LIBRETRO_CORE)" 2>/dev/null | grep -q 'com.apple.quarantine'; then \
 			printf '>> Stripping com.apple.quarantine from %s\n' "$(LIBRETRO_CORE)"; \
 			xattr -d com.apple.quarantine "$(LIBRETRO_CORE)"; \
+		fi; \
+		if [ "$$(uname -s)" = "Darwin" ] && command -v codesign >/dev/null 2>&1; then \
+			if ! codesign --verify --strict "$(LIBRETRO_CORE)" >/dev/null 2>&1; then \
+				$(MAKE) --no-print-directory CORE="$(LIBRETRO_CORE)" resign-core; \
+			fi; \
 		fi; \
 	fi
 
@@ -560,6 +614,7 @@ test-core:
 		exit 1; \
 	fi; \
 	cp -f "$(VJ_CORE_SRC)/virtualjaguar_libretro.$$_ext" "./virtualjaguar_libretro.$$_ext"; \
+	$(MAKE) --no-print-directory LIBRETRO_CORE_LOCAL="./virtualjaguar_libretro.$$_ext" unquarantine-core; \
 	printf '>> Core ready: ./virtualjaguar_libretro.%s. Run `make test`.\n' "$$_ext"
 
 test-deps:
@@ -821,6 +876,8 @@ help:
 	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 0 frames (load-only smoke-test, see comment in target)'
 	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
 	@printf '  %-22s %s\n' 'verify-sig'       'check fastboot signature matches tursilion/makefastboot'
+	@printf '  %-22s %s\n' 'resign-core'      'macOS: ad-hoc re-sign a libretro core (CORE=path; auto-runs as test prereq)'
+	@printf '  %-22s %s\n' 'unquarantine-core' 'macOS: strip com.apple.quarantine + delegate to resign-core'
 	@printf '\n'
 	@printf 'Smoke tests (this codebase has no host-runnable unit tests by design;\n'
 	@printf 'the "tests" are visual patterns drawn by the ROM itself):\n'

@@ -25,5 +25,9 @@ jag_240p_test_suite-debug/
 *.dylib
 *.so
 *.dll
-*.dylib
 scripts/__pycache__/
+
+# MAME scratch dirs (created by `make test-mame`)
+cfg/
+nvram/
+snap/
