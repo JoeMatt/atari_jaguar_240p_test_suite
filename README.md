@@ -20,6 +20,8 @@ A community build is also hosted at [jagcorner.com/240p-test-suite](https://jagc
 
 ## Table of contents
 
+- [Download](#download)
+- [Introduction](#introduction)
 - [What's included](#whats-included)
 - [Controls](#controls)
 - [Compiling & running](#compiling--running)
@@ -288,10 +290,14 @@ git push origin v1.2.3
 
 ## License
 
+**SPDX-License-Identifier:** [`GPL-2.0-or-later`](https://spdx.org/licenses/GPL-2.0-or-later.html)
+
 Copyright © 2011–2022 Artemio Urbina  
 Atari Jaguar port © 2022 William Thorup (BitJag)  
 Atari Jaguar fork updates © 2024–2026 Joe Mattiello
 
-This program is free software; you can redistribute it and/or modify it under the terms of the **GNU General Public License v2 or later** as published by the Free Software Foundation. See [`LICENSE`](LICENSE) for the full text.
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; **either version 2 of the License, or (at your option) any later version** — the standard GPL "v2-or-later" grant inherited from the upstream Artemio / BitJag releases. The [`LICENSE`](LICENSE) file ships the full text of GPL v2 (the version-floor); the "or later" clause is granted here in this README and in the per-file headers, matching the original BitJag distribution.
 
 This program is distributed in the hope that it will be useful, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+> **Why both "v2" and "v2-or-later"?** GitHub's licence detector keys off the verbatim text in [`LICENSE`](LICENSE) and reports `GPL-2.0` (it has no `GPL-2.0-or-later` heuristic — see [licensee/licensee#444](https://github.com/licensee/licensee/issues/444)). The actual *grant* is "v2 or later" per the source-header notices and the upstream BitJag README. The `GPL v2+` shield above and the SPDX id at the top of this section are the authoritative statement of intent.
