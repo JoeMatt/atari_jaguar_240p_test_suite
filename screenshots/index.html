@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atari Jaguar 240p Test Suite — Screenshot gallery</title>
+<style>
+:root {
+  --bg: #0c0a14;
+  --panel: #161224;
+  --border: #2a2342;
+  --text: #e8e4f5;
+  --muted: #9089b3;
+  --accent: #c43a3a;
+  --accent-soft: #e57878;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+header {
+  position: sticky; top: 0; z-index: 10;
+  padding: 1rem 1.5rem;
+  background: rgba(12, 10, 20, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+header h1 { margin: 0 0 0.5rem; font-size: 1.15rem; font-weight: 600;
+  color: var(--accent-soft); letter-spacing: 0.02em; }
+header .meta { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.75rem; }
+nav { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+nav a {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 120ms, color 120ms;
+}
+nav a:hover, nav a:focus { border-color: var(--accent); color: var(--accent-soft); }
+main { max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
+section { margin-bottom: 2.5rem; scroll-margin-top: 8.5rem; }
+section h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--accent-soft); margin: 0 0 0.25rem; }
+section .count { color: var(--muted); font-size: 0.8rem; margin-bottom: 1rem; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+figure {
+  margin: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+figure a { display: block; line-height: 0; }
+figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  background: #000;
+  transition: opacity 120ms;
+}
+figure a:hover img { opacity: 0.85; }
+figcaption { padding: 0.6rem 0.75rem; font-size: 0.85rem; }
+figcaption .label { color: var(--text); font-weight: 500; }
+figcaption .path { color: var(--muted); font-size: 0.7rem; margin-top: 0.2rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+footer { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.75rem; }
+footer code { color: var(--accent-soft); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Atari Jaguar 240p Test Suite — screenshot gallery</h1>
+  <div class="meta">
+    10 captures across 9 screens
+    &middot; core <code>virtualjaguar_libretro.dylib</code>
+    &middot; content <code>jag_240p_test_suite.jag</code>
+  </div>
+  <nav>
+      <a href="#main">Main menu</a>
+      <a href="#patterns">Test patterns</a>
+      <a href="#video">Video tests</a>
+      <a href="#audio">Audio tests</a>
+      <a href="#hardware">Hardware tools</a>
+      <a href="#screensavers">Screen savers</a>
+      <a href="#help">Help</a>
+      <a href="#options">Options</a>
+      <a href="#credits">Credits</a>
+  </nav>
+</header>
+<main>
+<section id="main">
+  <h2>Main menu</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="main/00-main-menu.png" target="_blank" rel="noopener"><img src="main/00-main-menu.png" alt="Top-level menu (8 entries)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Top-level menu (8 entries)</div>
+    <div class="path">main-menu &middot; main/00-main-menu.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="patterns">
+  <h2>Test patterns</h2>
+  <div class="count">2 captures</div>
+  <div class="grid">
+    <figure>
+  <a href="patterns/00-patterns-menu.png" target="_blank" rel="noopener"><img src="patterns/00-patterns-menu.png" alt="Test Patterns sub-menu" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Test Patterns sub-menu</div>
+    <div class="path">patterns-menu &middot; patterns/00-patterns-menu.png</div>
+  </figcaption>
+</figure>
+    <figure>
+  <a href="patterns/01-patterns-pluge.png" target="_blank" rel="noopener"><img src="patterns/01-patterns-pluge.png" alt="Pluge (first pattern)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Pluge (first pattern)</div>
+    <div class="path">patterns-pluge &middot; patterns/01-patterns-pluge.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="video">
+  <h2>Video tests</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="video/00-video-menu.png" target="_blank" rel="noopener"><img src="video/00-video-menu.png" alt="Video Tests sub-menu" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Video Tests sub-menu</div>
+    <div class="path">video-menu &middot; video/00-video-menu.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="audio">
+  <h2>Audio tests</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="audio/00-audio-menu.png" target="_blank" rel="noopener"><img src="audio/00-audio-menu.png" alt="Audio Tests sub-menu" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Audio Tests sub-menu</div>
+    <div class="path">audio-menu &middot; audio/00-audio-menu.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="hardware">
+  <h2>Hardware tools</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="hardware/00-hardware-menu.png" target="_blank" rel="noopener"><img src="hardware/00-hardware-menu.png" alt="Hardware Tools sub-menu" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Hardware Tools sub-menu</div>
+    <div class="path">hardware-menu &middot; hardware/00-hardware-menu.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="screensavers">
+  <h2>Screen savers</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="screensavers/00-screensavers-menu.png" target="_blank" rel="noopener"><img src="screensavers/00-screensavers-menu.png" alt="Screen Savers sub-menu" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Screen Savers sub-menu</div>
+    <div class="path">screensavers-menu &middot; screensavers/00-screensavers-menu.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="help">
+  <h2>Help</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="help/00-help-menu.png" target="_blank" rel="noopener"><img src="help/00-help-menu.png" alt="Help screen" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Help screen</div>
+    <div class="path">help-menu &middot; help/00-help-menu.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="options">
+  <h2>Options</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="options/00-options-menu.png" target="_blank" rel="noopener"><img src="options/00-options-menu.png" alt="Options screen" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Options screen</div>
+    <div class="path">options-menu &middot; options/00-options-menu.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="credits">
+  <h2>Credits</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="credits/00-credits-screen.png" target="_blank" rel="noopener"><img src="credits/00-credits-screen.png" alt="Credits" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Credits</div>
+    <div class="path">credits-screen &middot; credits/00-credits-screen.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+</main>
+<footer>
+  Generated by <code>scripts/screenshot-html.py</code>.
+  Re-run with <code>make screenshots-html</code> after a fresh tour.
+</footer>
+</body>
+</html>

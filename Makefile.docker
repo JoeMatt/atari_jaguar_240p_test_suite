@@ -113,7 +113,7 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
         docker-up colima-start colima-stop colima-status \
         ensure-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
-        screenshots screenshots-readme screenshots-check \
+        screenshots screenshots-readme screenshots-html screenshots-check \
         verify-sig test test-core test-deps \
         unquarantine-core resign-core
 
@@ -561,20 +561,35 @@ screenshots: ensure-j64 libretro-venv unquarantine-core
 		--out $(SCREENSHOT_DIR) \
 		$(foreach g,$(SCREENSHOT_GROUPS),--group $(g)) \
 		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
+	$(MAKE) --no-print-directory screenshots-html SCREENSHOT_DIR=$(SCREENSHOT_DIR)
 	@printf '>> next: regenerate the README gallery with `make screenshots-readme`.\n'
+	@printf '>> open $(SCREENSHOT_DIR)/index.html in a browser to preview.\n'
 
 screenshots-readme: libretro-venv
 	"$(LIBRETRO_PYTHON)" scripts/screenshot-readme.py \
 		--manifest $(SCREENSHOT_DIR)/manifest.json
 
-# CI/PR-friendly check: exit 1 if the gallery in README.md drifts from
-# what the current manifest would render. Skipped silently if no
-# manifest exists (e.g. fresh checkout that hasn't run `make
-# screenshots` yet) -- the goal is to catch *regressions* in
-# already-tracked galleries, not to require regen on every clone.
+# Standalone HTML viewer (single self-contained file). Dep-free --
+# pure stdlib -- so we deliberately use the host python3 instead of
+# the libretro venv, which keeps it usable on fresh checkouts that
+# haven't bootstrapped the venv yet.
+screenshots-html:
+	python3 scripts/screenshot-html.py \
+		--manifest $(SCREENSHOT_DIR)/manifest.json \
+		--out $(SCREENSHOT_DIR)/index.html
+
+# CI/PR-friendly check: exit 1 if the README gallery OR the HTML
+# viewer drifts from what the current manifest would render. Both
+# scripts no-op silently when the manifest is missing (e.g. fresh
+# checkout that hasn't run `make screenshots` yet) -- the goal is to
+# catch *regressions* in already-tracked galleries, not to require
+# regen on every clone.
 screenshots-check: libretro-venv
 	"$(LIBRETRO_PYTHON)" scripts/screenshot-readme.py --check \
 		--manifest $(SCREENSHOT_DIR)/manifest.json
+	python3 scripts/screenshot-html.py --check \
+		--manifest $(SCREENSHOT_DIR)/manifest.json \
+		--out $(SCREENSHOT_DIR)/index.html
 
 # Verify scripts/make-rom.py FASTBOOT_SIGNATURE is byte-identical to upstream
 # (tursilion/makefastboot). One-byte typos here brick carts on real hardware
@@ -925,7 +940,8 @@ help:
 	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
 	@printf '  %-22s %s\n' 'screenshots'      'walk every menu in libretro core and dump PNGs to ./screenshots/ (local-only)'
 	@printf '  %-22s %s\n' 'screenshots-readme' 'rewrite the gallery block in README.md from screenshots/manifest.json'
-	@printf '  %-22s %s\n' 'screenshots-check'  'CI-friendly: exit 1 if README gallery is stale relative to manifest.json'
+	@printf '  %-22s %s\n' 'screenshots-html'   'render screenshots/index.html viewer from manifest.json (open in any browser)'
+	@printf '  %-22s %s\n' 'screenshots-check'  'CI-friendly: exit 1 if README or index.html is stale relative to manifest.json'
 	@printf '  %-22s %s\n' 'verify-sig'       'check fastboot signature matches tursilion/makefastboot'
 	@printf '  %-22s %s\n' 'resign-core'      'macOS: ad-hoc re-sign a libretro core (CORE=path; auto-runs as test prereq)'
 	@printf '  %-22s %s\n' 'unquarantine-core' 'macOS: strip com.apple.quarantine + delegate to resign-core'
