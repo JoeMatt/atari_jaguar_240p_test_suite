@@ -18,8 +18,8 @@ include Makefile.docker
         docker-up colima-start colima-stop colima-status \
         ensure-build ensure-j64 fresh-build fresh-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
-        unquarantine-core verify-sig test test-core test-deps \
-        in-docker native-build help help-toolchain
+        unquarantine-core verify-sig test test-core test-deps test-mame \
+        doctor in-docker native-build help help-toolchain
 
 # ---------------------------------------------------------------------------
 # Default goal selection.

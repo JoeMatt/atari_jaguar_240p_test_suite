@@ -171,11 +171,16 @@ ROM output is padded with trailing `0xFF` to the next 1 MiB boundary. This is re
 This codebase has no host-runnable unit tests by design — it's bare-metal Jaguar M68K with hardware register pokes, and the "tests" the project provides are the on-screen patterns the ROM itself draws. What we *can* automate is a boot smoke test: load the built ROM into a Jaguar libretro core and assert it runs N frames without crashing.
 
 ```bash
+make doctor               # one-shot toolchain status (cc / SDK / docker / mame / libretro / BIOS)
 make test                 # verify-sig + boot in libretro core for 60 frames (default)
 make test TEST_FRAMES=300 # tweak frame count
 make test-core            # build virtualjaguar_libretro.* from ../virtualjaguar-libretro
+                          # (interactive: prompts to clone the repo if missing; CI errors clearly)
+make test-mame            # local-only: boot .j64 in MAME's jaguar driver for 5 seconds (needs BIOS, see below)
 make test-deps            # show resolved test variables (debug)
 ```
+
+> **`make test-mame`** is a second-emulator smoke test using MAME's `jaguar` driver. MAME has very different bug profile from Virtual Jaguar so a clean boot in both is meaningfully stronger evidence than either alone. It's local-only because MAME's driver hard-requires `jagboot.rom` + `jagwave.rom` (copyrighted Atari BIOS, not redistributable, no `-bios skip` flag in this driver). Drop them under your MAME hash dir (`~/Documents/MAME/roms/jaguar/` on macOS, `~/.mame/roms/jaguar/` on Linux) and `make doctor` will surface them as `[ OK ]`. CI doesn't have the BIOS so there's no `mame-smoke` workflow.
 
 `make test` is the recommended one-command "did I break boot?" check. It runs the fastboot-signature regression test (`scripts/verify-sig.py`) and then boots the ROM in your local libretro core. CI runs the same flow on every push (see `.github/workflows/build.yml` `smoke-test` job, which builds the core from `libretro/virtualjaguar-libretro@master` and uploads the final-frame screenshot as a downloadable artifact).
 
