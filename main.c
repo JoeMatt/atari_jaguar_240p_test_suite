@@ -1095,7 +1095,7 @@ void AudioTestsMenu(){
 void HardwareMenu(){
     
     int done = 0;
-    int lastMenuLine = 12; //counting from zero
+    int lastMenuLine = 13; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
@@ -1115,10 +1115,11 @@ void HardwareMenu(){
     updateLine(settings, mainFont, lineTextBox[7],  "System Info",            settings->lineXOffset, setLineYPos(6), WHITE);
     updateLine(settings, mainFont, lineTextBox[8],  "Jaguar CD Probe",        settings->lineXOffset, setLineYPos(7), WHITE);
     updateLine(settings, mainFont, lineTextBox[9],  "Video Mode Test",        settings->lineXOffset, setLineYPos(8), WHITE);
-    
-    updateLine(settings, mainFont, lineTextBox[10], "Help",              settings->lineXOffset, setLineYPos(10), WHITE);
-    updateLine(settings, mainFont, lineTextBox[11], "Options",           settings->lineXOffset, setLineYPos(11), WHITE);
-    updateLine(settings, mainFont, lineTextBox[12], "Back to Main Menu", settings->lineXOffset, setLineYPos(12), WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "EEPROM Test",            settings->lineXOffset, setLineYPos(9), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[11], "Help",              settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Options",           settings->lineXOffset, setLineYPos(11), WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Back to Main Menu", settings->lineXOffset, setLineYPos(12), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -1243,9 +1244,16 @@ void HardwareMenu(){
                     ResolutionTest();
 
                 break;
-                    
-                //Help
+
+                //EEPROM Read & Write Test (93C46)
                 case 10:
+
+                    EepromTest();
+
+                break;
+
+                //Help
+                case 11:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -1257,16 +1265,16 @@ void HardwareMenu(){
                 break;
                     
                 //Options
-                case 11:
+                case 12:
 
                     OptionsMenu();
 
                 break;
-                    
-                case 12:
-                    
+
+                case 13:
+
                     done = 1;
-                    
+
                 break;
                 
                 default:
@@ -1328,7 +1336,7 @@ void drawCredits(){
                     updateLine(settings, mainFont, lineTextBox[16], "Advisor:", settings->lineXOffset, setLineYPos(15), GREEN);
                     updateLine(settings, mainFont, lineTextBox[17], "  ()  ", settings->lineXOffset, setLineYPos(16), WHITE);
 
-                    updateLine(settings, mainFont, lineTextBox[18], "                   Ver. 0.7.1 - 04/21/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
+                    updateLine(settings, mainFont, lineTextBox[18], "                   Ver. 0.7.2 - 04/21/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
 
                     updateLine(settings, mainFont, lineTextBox[19], "Option - Return To Main Menu", settings->lineXOffset, setLineYPos(18) + 4, WHITE);
                 break;

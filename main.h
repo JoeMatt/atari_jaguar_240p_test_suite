@@ -21,6 +21,7 @@
 #include "tests.h"
 #include "extra_tests.h"
 #include "controller_test.h"
+#include "eeprom_test.h"
 
 extern uint8_t back;
 phrase *backData;
