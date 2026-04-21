@@ -949,34 +949,62 @@ void ProControllerTest(void){
     textBox *helpTb  = newTextBox("Hold buttons to light up   LEFT+OPTION: exit", 256, 9, mainFont, 0, settings->d, 8, 200, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
+    /// One-time render of static content: black background + every pad's
+    /// border. Inside the per-frame loop we ONLY rewrite each pad's filled
+    /// interior, which is what changes when buttons are pressed/released.
+    /// Avoids the full 320*144 = 92 KB per-frame clear that exceeds NTSC's
+    /// ~1.4 ms vblank window and causes visible tearing of the pad borders.
+    fillPACK_RGB16(fb, fbW*fbH, COLOR_BLACK);
+    for(i = 0; i < padCount; i++){
+        int rx = pads[i].x - fbX;
+        int ry = pads[i].y - fbY;
+        rectPACK_RGB16(fb, fbW, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx, ry,             1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, COLOR_GRAY25);
+    }
+
     hide_or_show_display_layer_range(settings->d, 1, 12, 13);
+
+    /// Per-pad cached "currently lit?" state. Initialised to "unknown" (-1)
+    /// so every pad gets one explicit interior-fill on the first frame
+    /// regardless of whether the user is holding it.
+    int padLit[16];
+    for(i = 0; i < padCount && i < 16; i++){ padLit[i] = -1; }
+
+    uint32_t prevJoy = ~settings->joy1;
 
     while(!exit){
         read_joypad_state(settings->j_state);
         settings->joy1 = settings->j_state->j1;
         vsync();
 
-        fillPACK_RGB16(fb, fbW*fbH, COLOR_BLACK);
-        for(i = 0; i < padCount; i++){
-            int held = (settings->joy1 & pads[i].mask) ? 1 : 0;
-            uint16_t bg = held ? COLOR_GREEN : COLOR_GRAY25;
-            int rx = pads[i].x - fbX;
-            int ry = pads[i].y - fbY;
-            rectPACK_RGB16(fb, fbW, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
-            rectPACK_RGB16(fb, fbW, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
-            rectPACK_RGB16(fb, fbW, rx, ry,             1,         pads[i].h, COLOR_WHITE);
-            rectPACK_RGB16(fb, fbW, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
-            rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
-        }
+        /// Skip the whole render path on frames with no input change.
+        /// Reduces the steady-state cost (held/idle button) to ~zero so
+        /// the OP never sees a partial fb during scanout.
+        if(settings->joy1 != prevJoy){
+            for(i = 0; i < padCount; i++){
+                int held = (settings->joy1 & pads[i].mask) ? 1 : 0;
+                if(held == padLit[i]){ continue; }
+                padLit[i] = held;
+                int rx = pads[i].x - fbX;
+                int ry = pads[i].y - fbY;
+                uint16_t bg = held ? COLOR_GREEN : COLOR_GRAY25;
+                rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
+            }
 
-        char buf[12] = "00000000";
-        itostring(buf, (int)(settings->joy1 & 0xFFFFFFu), 16);
-        int n = 0; while(buf[n] != '\0' && n < 8) n++;
-        int p;
-        for(p = 0; p < 8; p++){ rawTb->text[10 + p] = '0'; }
-        int k;
-        for(k = 0; k < n; k++){ rawTb->text[10 + (8 - n) + k] = buf[k]; }
-        updateLine(settings, mainFont, rawTb, NULL, 999999, 999999, settings->joy1 ? GREEN : WHITE);
+            char buf[12] = "00000000";
+            itostring(buf, (int)(settings->joy1 & 0xFFFFFFu), 16);
+            int n = 0; while(buf[n] != '\0' && n < 8) n++;
+            int p;
+            for(p = 0; p < 8; p++){ rawTb->text[10 + p] = '0'; }
+            int k;
+            for(k = 0; k < n; k++){ rawTb->text[10 + (8 - n) + k] = buf[k]; }
+            updateLine(settings, mainFont, rawTb, NULL, 999999, 999999, settings->joy1 ? GREEN : WHITE);
+
+            prevJoy = settings->joy1;
+        }
 
         if((settings->joy1 & 0xFFFFFF) == 0){
             settings->controllerLock = 0;
@@ -1094,7 +1122,30 @@ void RotaryControllerTest(void){
     textBox *helpTb  = newTextBox("Spin or press LEFT/RIGHT. A: reset  LEFT+OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 200, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
+    /// One-time render of the static bar chrome: black background, white
+    /// 1-px border, red centre tick. Per-frame work in the loop is then
+    /// just "erase the old indicator column, draw the new one" -- ~16
+    /// short writes per direction change instead of a 5120-short rebuild.
+    fillPACK_RGB16(barBuf, barW*barH, COLOR_BLACK);
+    rectPACK_RGB16(barBuf, barW, 0, 0,      barW, 1,    COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, 0, barH-1, barW, 1,    COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, 0, 0,      1,    barH, COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, barW-1, 0, 1,    barH, COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, barW/2, 1, 1, barH-2, COLOR_RED);
+
+    /// Indicator squares: render initial "off" state once.
+    fillPACK_RGB16(indL, indSize*indSize, COLOR_GRAY25);
+    fillPACK_RGB16(indR, indSize*indSize, COLOR_GRAY25);
+
     hide_or_show_display_layer_range(settings->d, 1, 12, 13);
+
+    /// Tracking state for incremental updates:
+    /// - prevPos: where the moving column was last frame (-1 = "no previous,
+    ///   skip erase on first frame").
+    /// - prevIndL/R: cached indicator state so we only refill on a flip.
+    int prevPos    = -1;
+    int prevIndL   = 0;
+    int prevIndR   = 0;
 
     while(!exit){
         read_joypad_state(settings->j_state);
@@ -1120,32 +1171,45 @@ void RotaryControllerTest(void){
         int rate = 0;
         for(i = 0; i < rateFrames; i++){ rate += rateRing[i]; }
 
-        /// Indicator squares: green when bit held, dim otherwise.
-        fillPACK_RGB16(indL, indSize*indSize, curLeft  ? COLOR_GREEN : COLOR_GRAY25);
-        fillPACK_RGB16(indR, indSize*indSize, curRight ? COLOR_GREEN : COLOR_GRAY25);
+        /// Indicator squares: only refill on a state flip.
+        if(curLeft != prevIndL){
+            fillPACK_RGB16(indL, indSize*indSize, curLeft  ? COLOR_GREEN : COLOR_GRAY25);
+            prevIndL = curLeft;
+        }
+        if(curRight != prevIndR){
+            fillPACK_RGB16(indR, indSize*indSize, curRight ? COLOR_GREEN : COLOR_GRAY25);
+            prevIndR = curRight;
+        }
 
-        /// Position bar: black background, white frame, green fill column
-        /// whose horizontal position = signedVal mod barW. Wraps cleanly
-        /// for unbounded spin in either direction.
-        fillPACK_RGB16(barBuf, barW*barH, COLOR_BLACK);
-        rectPACK_RGB16(barBuf, barW, 0, 0,         barW, 1,    COLOR_WHITE);
-        rectPACK_RGB16(barBuf, barW, 0, barH-1,    barW, 1,    COLOR_WHITE);
-        rectPACK_RGB16(barBuf, barW, 0, 0,         1,    barH, COLOR_WHITE);
-        rectPACK_RGB16(barBuf, barW, barW-1, 0,    1,    barH, COLOR_WHITE);
-        /// Wrap signedVal into [0, barW) for the indicator column.
+        /// Wrap signedVal into [0, barW) for the indicator column position.
         int pos = signedVal % barW;
         if(pos < 0){ pos += barW; }
-        /// Fill column: 4px wide indicator centred on `pos` so it's visible
-        /// even when at the wrap boundary.
-        int col;
-        for(col = -2; col < 2; col++){
-            int x = pos + col;
-            if(x < 0)     x += barW;
-            if(x >= barW) x -= barW;
-            rectPACK_RGB16(barBuf, barW, x, 1, 1, barH-2, COLOR_GREEN);
+
+        /// Incremental column update: only touch pixels when the position
+        /// actually changes. Erase the previous 4-px column to black (with
+        /// a centre-tick re-stamp if it overlapped), then paint the new
+        /// 4-px green column. Total: ~32 short writes per move.
+        if(pos != prevPos){
+            int col;
+            if(prevPos >= 0){
+                for(col = -2; col < 2; col++){
+                    int x = prevPos + col;
+                    if(x < 0)     x += barW;
+                    if(x >= barW) x -= barW;
+                    rectPACK_RGB16(barBuf, barW, x, 1, 1, barH-2, COLOR_BLACK);
+                    if(x == barW/2){
+                        rectPACK_RGB16(barBuf, barW, x, 1, 1, barH-2, COLOR_RED);
+                    }
+                }
+            }
+            for(col = -2; col < 2; col++){
+                int x = pos + col;
+                if(x < 0)     x += barW;
+                if(x >= barW) x -= barW;
+                rectPACK_RGB16(barBuf, barW, x, 1, 1, barH-2, COLOR_GREEN);
+            }
+            prevPos = pos;
         }
-        /// Centre tick mark so the user can see the "zero" reference.
-        rectPACK_RGB16(barBuf, barW, barW/2, 1, 1, barH-2, COLOR_RED);
 
         /// Refresh number text only when totals actually change -- no need
         /// to repaint every frame.
