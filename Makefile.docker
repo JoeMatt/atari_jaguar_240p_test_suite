@@ -113,6 +113,7 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
         docker-up colima-start colima-stop colima-status \
         ensure-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
+        screenshots screenshots-readme screenshots-check \
         verify-sig test test-core test-deps \
         unquarantine-core resign-core
 
@@ -528,6 +529,53 @@ libretro-frames: ensure-j64 libretro-venv
 		--summary \
 		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
 
+# ---------------------------------------------------------------------------
+# Screenshot gallery targets.
+#
+# `make screenshots` drives the libretro core through every top-level
+# menu via scripts/screenshot-tour.py, dumping one PNG per screen plus
+# a manifest.json under SCREENSHOT_DIR/. `make screenshots-readme`
+# rewrites the marker block in README.md to embed the gallery as a
+# collapsed <details> tree.
+#
+# Local-only: requires the libretro core .dylib (same dependency as
+# `make test`/`libretro-test`); intentionally no CI counterpart since
+# we don't ship a core in CI.
+#
+# Tunables:
+#   SCREENSHOT_DIR -- output directory (default: ./screenshots)
+#   SCREENSHOT_GROUPS -- whitespace-separated tour group slugs to limit
+#                        the run (default: all). E.g.
+#                          make screenshots SCREENSHOT_GROUPS="main patterns"
+# ---------------------------------------------------------------------------
+SCREENSHOT_DIR ?= screenshots
+SCREENSHOT_GROUPS ?=
+
+screenshots: ensure-j64 libretro-venv unquarantine-core
+	@if [ -z "$(LIBRETRO_CORE)" ]; then \
+		printf '!! No libretro core found in CWD (see libretro-test).\n' >&2; \
+		exit 1; \
+	fi
+	rm -rf $(SCREENSHOT_DIR)
+	"$(LIBRETRO_PYTHON)" scripts/screenshot-tour.py \
+		--out $(SCREENSHOT_DIR) \
+		$(foreach g,$(SCREENSHOT_GROUPS),--group $(g)) \
+		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
+	@printf '>> next: regenerate the README gallery with `make screenshots-readme`.\n'
+
+screenshots-readme: libretro-venv
+	"$(LIBRETRO_PYTHON)" scripts/screenshot-readme.py \
+		--manifest $(SCREENSHOT_DIR)/manifest.json
+
+# CI/PR-friendly check: exit 1 if the gallery in README.md drifts from
+# what the current manifest would render. Skipped silently if no
+# manifest exists (e.g. fresh checkout that hasn't run `make
+# screenshots` yet) -- the goal is to catch *regressions* in
+# already-tracked galleries, not to require regen on every clone.
+screenshots-check: libretro-venv
+	"$(LIBRETRO_PYTHON)" scripts/screenshot-readme.py --check \
+		--manifest $(SCREENSHOT_DIR)/manifest.json
+
 # Verify scripts/make-rom.py FASTBOOT_SIGNATURE is byte-identical to upstream
 # (tursilion/makefastboot). One-byte typos here brick carts on real hardware
 # but are invisible to most libretro / standalone emulators -- this guard
@@ -875,6 +923,9 @@ help:
 	@printf '  %-22s %s\n' 'libretro-test'    'load .jag (RAM-loaded COFF) into the libretro core (drop the .dylib in CWD)'
 	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 0 frames (load-only smoke-test, see comment in target)'
 	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
+	@printf '  %-22s %s\n' 'screenshots'      'walk every menu in libretro core and dump PNGs to ./screenshots/ (local-only)'
+	@printf '  %-22s %s\n' 'screenshots-readme' 'rewrite the gallery block in README.md from screenshots/manifest.json'
+	@printf '  %-22s %s\n' 'screenshots-check'  'CI-friendly: exit 1 if README gallery is stale relative to manifest.json'
 	@printf '  %-22s %s\n' 'verify-sig'       'check fastboot signature matches tursilion/makefastboot'
 	@printf '  %-22s %s\n' 'resign-core'      'macOS: ad-hoc re-sign a libretro core (CORE=path; auto-runs as test prereq)'
 	@printf '  %-22s %s\n' 'unquarantine-core' 'macOS: strip com.apple.quarantine + delegate to resign-core'
