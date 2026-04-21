@@ -1095,7 +1095,7 @@ void AudioTestsMenu(){
 void HardwareMenu(){
     
     int done = 0;
-    int lastMenuLine = 10; //counting from zero
+    int lastMenuLine = 12; //counting from zero
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
@@ -1106,17 +1106,19 @@ void HardwareMenu(){
     
     resetAllLines();
         
-    updateLine(settings, mainFont, lineTextBox[1], "Controller Test", settings->lineXOffset, setLineYPos(0), RED);
-    updateLine(settings, mainFont, lineTextBox[2], "GPU Memory Viewer", settings->lineXOffset, setLineYPos(1), WHITE);
-    updateLine(settings, mainFont, lineTextBox[3], "DSP Memory Viewer", settings->lineXOffset, setLineYPos(2), WHITE);
-    updateLine(settings, mainFont, lineTextBox[4], "DRAM Memory Viewer", settings->lineXOffset, setLineYPos(3), WHITE);
-    updateLine(settings, mainFont, lineTextBox[5], "System Info", settings->lineXOffset, setLineYPos(4), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Jaguar CD Probe", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Video Mode Test", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[1],  "Controller Test",        settings->lineXOffset, setLineYPos(0), RED);
+    updateLine(settings, mainFont, lineTextBox[2],  "Pro Controller Test",    settings->lineXOffset, setLineYPos(1), WHITE);
+    updateLine(settings, mainFont, lineTextBox[3],  "Rotary Controller Test", settings->lineXOffset, setLineYPos(2), WHITE);
+    updateLine(settings, mainFont, lineTextBox[4],  "GPU Memory Viewer",      settings->lineXOffset, setLineYPos(3), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5],  "DSP Memory Viewer",      settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6],  "DRAM Memory Viewer",     settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7],  "System Info",            settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8],  "Jaguar CD Probe",        settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9],  "Video Mode Test",        settings->lineXOffset, setLineYPos(8), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[8], "Help", settings->lineXOffset, setLineYPos(8), WHITE);
-    updateLine(settings, mainFont, lineTextBox[9], "Options", settings->lineXOffset, setLineYPos(9), WHITE);
-    updateLine(settings, mainFont, lineTextBox[10], "Back to Main Menu", settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "Help",              settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "Options",           settings->lineXOffset, setLineYPos(11), WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Back to Main Menu", settings->lineXOffset, setLineYPos(12), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -1187,49 +1189,63 @@ void HardwareMenu(){
                     
                 break;
                     
-                //GPU test
+                //Pro Controller Test (CatBox L/R/X/Y/Z)
                 case 2:
+                    
+                    ProControllerTest();
+                    
+                break;
+                    
+                //Rotary Controller Test (Tempest 2000 spinner)
+                case 3:
+                    
+                    RotaryControllerTest();
+                    
+                break;
+                    
+                //GPU test
+                case 4:
                     
                     GPURAMTest();
                     
                 break;
                     
                 //DSP test
-                case 3:
+                case 5:
                     
                     DSPRAMTest();
                     
                 break;
                     
-                case 4:
+                case 6:
                     
                     DRAMTest();
                     
                 break;
                     
                 //System Info
-                case 5:
+                case 7:
 
                     HardwareInfo();
 
                 break;
                     
                 //Jaguar CD Tests
-                case 6:
+                case 8:
                     
                     JaguarCDTest();
                     
                 break;
                     
                 //Video Mode / Resolution Test
-                case 7:
+                case 9:
 
                     ResolutionTest();
 
                 break;
                     
                 //Help
-                case 8:
+                case 10:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -1241,13 +1257,13 @@ void HardwareMenu(){
                 break;
                     
                 //Options
-                case 9:
+                case 11:
 
                     OptionsMenu();
 
                 break;
                     
-                case 10:
+                case 12:
                     
                     done = 1;
                     

@@ -857,6 +857,438 @@ void HardwareInfo(void){
 }
 
 /* ---------------------------------------------------------------------------
+ * Hardware tools: Pro Controller (CatBox / 6-button) test
+ *
+ * Addresses upstream BitJag #12 ("Analog controller test") in the part of
+ * its scope that is widely owned and emulator-testable: the **Pro
+ * Controller** -- the 6-button digital pad with X/Y/Z and L/R shoulders
+ * (CatBox layout, also known as Atari's planned-but-mostly-cancelled "6
+ * button controller"; aftermarket clones are common, and homebrew like
+ * Battlesphere Gold and Painter use the layout).
+ *
+ * The true early-K-series ADC0844 analog circuit (the *other* meaning of
+ * "analog controller test" in #12, per http://www.mdgames.de/janalog.html)
+ * is intentionally deferred -- almost no Jaguars have the chip
+ * populated, no emulator simulates it, and the test would be unverifiable
+ * for >99% of users. It's tracked for a future PR.
+ *
+ * Removers' Library already aliases the Pro Controller buttons in
+ * <joypad.h>:
+ *   JOYPAD_L = JOYPAD_4   JOYPAD_R = JOYPAD_6
+ *   JOYPAD_X = JOYPAD_9   JOYPAD_Y = JOYPAD_8   JOYPAD_Z = JOYPAD_7
+ * so reading them is just standard `read_joypad_state` + bit masking.
+ *
+ * Layout: large coloured pads light up green when their button is held,
+ * arranged in roughly the physical CatBox shape, plus a live raw `joy1`
+ * hex dump at the bottom so the user can correlate any unmapped key.
+ *
+ * Controls: hold any button to light it up. LEFT + OPTION exits.
+ *           (The standard A/B/C buttons are also shown so users can spot
+ *           which ports their controller is plugged into; the Pro
+ *           controller's L/R/X/Y/Z **physically alias** to keypad
+ *           4/6/9/8/7 on a stock pad, so you can also test this with a
+ *           regular controller by pressing those number keys -- a useful
+ *           sanity check that doesn't require buying a CatBox.)
+ * --------------------------------------------------------------------------- */
+
+/// Local pad descriptor for the on-screen Pro Controller layout. Keeping it
+/// here (file-scope static, not in extra_tests.h) avoids polluting the
+/// header with a struct used by exactly one test.
+typedef struct {
+    uint32_t    mask;       /// JOYPAD_* bit to query against settings->joy1
+    int         x, y;       /// top-left of the pad on screen
+    int         w, h;       /// pad dimensions
+} proPad;
+
+void ProControllerTest(void){
+    int exit = 0;
+    int i;
+
+    /// Physical layout (approx. CatBox / 6-button): A B C bottom-row,
+    /// X Y Z top-row, L on left side, R on right side, Pause + Option
+    /// in the centre. Coordinates picked to fit comfortably in 320x240
+    /// (NTSC) with the title/help strings.
+    static proPad pads[] = {
+        /// Top row: Z Y X (read right-to-left because L/R are on outer edges)
+        { JOYPAD_Z,      152, 80,  32, 24 },
+        { JOYPAD_Y,      192, 80,  32, 24 },
+        { JOYPAD_X,      232, 80,  32, 24 },
+        /// Bottom row (red action buttons): C B A
+        { JOYPAD_C,      152, 112, 32, 24 },
+        { JOYPAD_B,      192, 112, 32, 24 },
+        { JOYPAD_A,      232, 112, 32, 24 },
+        /// Shoulders: L on far left, R on far right
+        { JOYPAD_L,      56,  64,  40, 16 },
+        { JOYPAD_R,      264, 64,  40, 16 },
+        /// Centre: PAUSE and OPTION
+        { JOYPAD_PAUSE,  56, 112, 40, 24 },
+        { JOYPAD_OPTION, 56, 144, 40, 24 },
+    };
+    const int padCount = (int)(sizeof(pads)/sizeof(pads[0]));
+
+    /// Full-width DEPTH16 framebuffer so every pad in `pads[]` (including
+    /// the R shoulder at x=264..303) fits without OOB writes -- rectPACK_RGB16
+    /// does no clipping, and a previous 256-wide / fbX=32 layout corrupted
+    /// the heap when R was redrawn each frame.
+    const int fbW = 320;
+    const int fbH = 144;
+    const int fbX = 0;
+    const int fbY = 64;
+    uint16_t *fb = malloc(sizeof(uint16_t)*fbW*fbH);
+
+    sprite *fbS = new_sprite(fbW, fbH, fbX, fbY, DEPTH16, (uint8_t*)fb);
+    fbS->trans = 0;
+    attach_sprite_to_display_at_layer(fbS, settings->d, 12);
+
+    textBox *titleTb = newTextBox("PRO CONTROLLER TEST", 224, 9, mainFont, 0, settings->d, 64, 40, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    textBox *rawTb   = newTextBox("RAW JOY1: 00000000", 224, 9, mainFont, 0, settings->d, 80, 184, 13, 1);
+    updateLine(settings, mainFont, rawTb, NULL, 999999, 999999, WHITE);
+
+    textBox *helpTb  = newTextBox("Hold buttons to light up   LEFT+OPTION: exit", 256, 9, mainFont, 0, settings->d, 8, 200, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+
+    /// One-time render of static content: black background + every pad's
+    /// border. Inside the per-frame loop we ONLY rewrite each pad's filled
+    /// interior, which is what changes when buttons are pressed/released.
+    /// Avoids the full 320*144 = 92 KB per-frame clear that exceeds NTSC's
+    /// ~1.4 ms vblank window and causes visible tearing of the pad borders.
+    fillPACK_RGB16(fb, fbW*fbH, COLOR_BLACK);
+    for(i = 0; i < padCount; i++){
+        int rx = pads[i].x - fbX;
+        int ry = pads[i].y - fbY;
+        rectPACK_RGB16(fb, fbW, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx, ry,             1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, COLOR_GRAY25);
+    }
+
+    hide_or_show_display_layer_range(settings->d, 1, 12, 13);
+
+    /// Per-pad cached "currently lit?" state. Initialised to "unknown" (-1)
+    /// so every pad gets one explicit interior-fill on the first frame
+    /// regardless of whether the user is holding it.
+    int padLit[16];
+    for(i = 0; i < padCount && i < 16; i++){ padLit[i] = -1; }
+
+    uint32_t prevJoy = ~settings->joy1;
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        /// Skip the whole render path on frames with no input change.
+        /// Reduces the steady-state cost (held/idle button) to ~zero so
+        /// the OP never sees a partial fb during scanout.
+        if(settings->joy1 != prevJoy){
+            for(i = 0; i < padCount; i++){
+                int held = (settings->joy1 & pads[i].mask) ? 1 : 0;
+                if(held == padLit[i]){ continue; }
+                padLit[i] = held;
+                int rx = pads[i].x - fbX;
+                int ry = pads[i].y - fbY;
+                uint16_t bg = held ? COLOR_GREEN : COLOR_GRAY25;
+                rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
+            }
+
+            char buf[12] = "00000000";
+            itostring(buf, (int)(settings->joy1 & 0xFFFFFFu), 16);
+            int n = 0; while(buf[n] != '\0' && n < 8) n++;
+            int p;
+            for(p = 0; p < 8; p++){ rawTb->text[10 + p] = '0'; }
+            int k;
+            for(k = 0; k < n; k++){ rawTb->text[10 + (8 - n) + k] = buf[k]; }
+            updateLine(settings, mainFont, rawTb, NULL, 999999, 999999, settings->joy1 ? GREEN : WHITE);
+
+            prevJoy = settings->joy1;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        /// LEFT + OPTION exit pattern (matches the existing ControllerTest)
+        /// so users don't accidentally exit by tapping a tested button.
+        if((settings->joy1 & JOYPAD_LEFT) && (settings->joy1 & JOYPAD_OPTION) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 12, 13);
+    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+
+    helpTb  = freeTextBox(helpTb);
+    rawTb   = freeTextBox(rawTb);
+    titleTb = freeTextBox(titleTb);
+    teardownFullscreenSprite(fbS, fb);
+}
+
+/* ---------------------------------------------------------------------------
+ * Hardware tools: Rotary Controller (Tempest 2000 spinner) test
+ *
+ * Addresses upstream BitJag #7 ("Rotary Controller Test"). The Tempest
+ * 2000 rotary controller is an aftermarket / homebrew accessory that
+ * connects a quadrature encoder to the joypad's LEFT/RIGHT column pins
+ * (Padport 4 column, Padport 11/12 rows). The encoder generates pairs of
+ * out-of-phase pulses as the user spins the wheel; the game (and this
+ * test) reads them as rapid alternating LEFT/RIGHT presses on a single
+ * joypad and decodes direction from the pulse pattern.
+ *
+ * Reference: AtariAge Topic 202166 "Tempest 2000 and Rotary Encoders"
+ *            ConsoleMods Wiki: Jaguar:Rotary_Controller
+ *            RetroRGB: jaguartempest.html
+ *
+ * Visualisation (per upstream issue, "something spinning while printing
+ * applicable values"):
+ *   - Rising-edge counter for LEFT and RIGHT pulses (independent totals)
+ *   - Signed cumulative value (right pulses positive, left pulses negative)
+ *   - Pulses-per-second rolling rate
+ *   - Live LEFT / RIGHT bit indicator squares (lit while bit is held)
+ *   - Position bar that wraps: bar fills based on (signed value) mod 256,
+ *     so the user gets visual feedback of spin direction and speed without
+ *     any sin/cos / dial-rotation gymnastics.
+ *
+ * Without a rotary controller plugged in this test still works -- it just
+ * shows whatever the D-pad LEFT / RIGHT do (one pulse per press), which is
+ * a useful sanity check that the read path is correct on its own.
+ *
+ * Controls: spin the wheel (or press LEFT/RIGHT). A resets all counters.
+ *           LEFT + OPTION exits.
+ * --------------------------------------------------------------------------- */
+void RotaryControllerTest(void){
+    int exit = 0;
+    int redraw = 1;
+
+    /// Edge-detection state: previous-frame raw bits, so we count *rising*
+    /// transitions, not held-down frames. A held LEFT counts as one pulse,
+    /// not 60/sec.
+    int prevLeft  = 0;
+    int prevRight = 0;
+    int leftCnt   = 0;
+    int rightCnt  = 0;
+    int signedVal = 0;
+
+    /// Rate measurement: total edges in the last 1 second.
+    /// NTSC = 60 fps, PAL = 50 fps; PALNTSC > 0 selects NTSC. The ring is
+    /// sized for the larger window and we only walk `rateFrames` slots so
+    /// the displayed "p/s" is honest on both regions.
+    const int rateFrames = (settings->PALNTSC > 0) ? 60 : 50;
+    int rateRing[60];
+    int rateIdx = 0;
+    int i;
+    for(i = 0; i < rateFrames; i++){ rateRing[i] = 0; }
+
+    /// --- Reference frame + position-bar fb -----------------------------
+    /// Reuse the screen-saver sprite recipe: 320 x 80 DEPTH16 strip across
+    /// the bottom half of the screen for the position bar visualisation.
+    const int barW = 320;
+    const int barH = 16;
+    const int barX = 0;
+    const int barY = 152;
+    uint16_t *barBuf = malloc(sizeof(uint16_t)*barW*barH);
+    sprite *barS = new_sprite(barW, barH, barX, barY, DEPTH16, (uint8_t*)barBuf);
+    barS->trans = 0;
+    attach_sprite_to_display_at_layer(barS, settings->d, 12);
+
+    /// LEFT / RIGHT bit indicator squares -- 16x16 each, side by side near
+    /// the title so the user can see the raw pulse signal in real time.
+    const int indSize = 16;
+    uint16_t *indL = malloc(sizeof(uint16_t)*indSize*indSize);
+    uint16_t *indR = malloc(sizeof(uint16_t)*indSize*indSize);
+    sprite *indLs = new_sprite(indSize, indSize, 80,  56, DEPTH16, (uint8_t*)indL);
+    sprite *indRs = new_sprite(indSize, indSize, 224, 56, DEPTH16, (uint8_t*)indR);
+    indLs->trans = 0;
+    indRs->trans = 0;
+    attach_sprite_to_display_at_layer(indLs, settings->d, 12);
+    attach_sprite_to_display_at_layer(indRs, settings->d, 12);
+
+    textBox *titleTb = newTextBox("ROTARY CONTROLLER TEST", 256, 9, mainFont, 0, settings->d, 48, 32, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    textBox *lLabelTb  = newTextBox("LEFT",  64, 9, mainFont, 0, settings->d, 100, 60,  13, 1);
+    textBox *rLabelTb  = newTextBox("RIGHT", 64, 9, mainFont, 0, settings->d, 244, 60,  13, 1);
+    updateLine(settings, mainFont, lLabelTb, NULL, 999999, 999999, GREY);
+    updateLine(settings, mainFont, rLabelTb, NULL, 999999, 999999, GREY);
+
+    textBox *leftTb  = newTextBox("LEFT  PULSES: 00000", 192, 9, mainFont, 0, settings->d, 32, 88,  13, 1);
+    textBox *rightTb = newTextBox("RIGHT PULSES: 00000", 192, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
+    textBox *signTb  = newTextBox("SIGNED VALUE: +00000", 192, 9, mainFont, 0, settings->d, 32, 120, 13, 1);
+    textBox *rateTb  = newTextBox("RATE (1s)   : 000 p/s", 192, 9, mainFont, 0, settings->d, 32, 136, 13, 1);
+
+    textBox *helpTb  = newTextBox("Spin or press LEFT/RIGHT. A: reset  LEFT+OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 200, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+
+    /// One-time render of the static bar chrome: black background, white
+    /// 1-px border, red centre tick. Per-frame work in the loop is then
+    /// just "erase the old indicator column, draw the new one" -- ~16
+    /// short writes per direction change instead of a 5120-short rebuild.
+    fillPACK_RGB16(barBuf, barW*barH, COLOR_BLACK);
+    rectPACK_RGB16(barBuf, barW, 0, 0,      barW, 1,    COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, 0, barH-1, barW, 1,    COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, 0, 0,      1,    barH, COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, barW-1, 0, 1,    barH, COLOR_WHITE);
+    rectPACK_RGB16(barBuf, barW, barW/2, 1, 1, barH-2, COLOR_RED);
+
+    /// Indicator squares: render initial "off" state once.
+    fillPACK_RGB16(indL, indSize*indSize, COLOR_GRAY25);
+    fillPACK_RGB16(indR, indSize*indSize, COLOR_GRAY25);
+
+    hide_or_show_display_layer_range(settings->d, 1, 12, 13);
+
+    /// Tracking state for incremental updates:
+    /// - prevPos: where the moving column was last frame (-1 = "no previous,
+    ///   skip erase on first frame").
+    /// - prevIndL/R: cached indicator state so we only refill on a flip.
+    int prevPos    = -1;
+    int prevIndL   = 0;
+    int prevIndR   = 0;
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        /// Edge detect: rising transition only (0 -> 1). Counts each
+        /// physical pulse exactly once, regardless of how many vsyncs
+        /// the user holds the button.
+        int curLeft  = (settings->joy1 & JOYPAD_LEFT)  ? 1 : 0;
+        int curRight = (settings->joy1 & JOYPAD_RIGHT) ? 1 : 0;
+        int edgeL = (curLeft  && !prevLeft)  ? 1 : 0;
+        int edgeR = (curRight && !prevRight) ? 1 : 0;
+        prevLeft  = curLeft;
+        prevRight = curRight;
+
+        if(edgeL){ leftCnt++;  signedVal--; redraw = 1; }
+        if(edgeR){ rightCnt++; signedVal++; redraw = 1; }
+
+        /// Rolling rate ring: store this frame's edge total; rate = sum.
+        rateRing[rateIdx] = edgeL + edgeR;
+        rateIdx = (rateIdx + 1) % rateFrames;
+        int rate = 0;
+        for(i = 0; i < rateFrames; i++){ rate += rateRing[i]; }
+
+        /// Indicator squares: only refill on a state flip.
+        if(curLeft != prevIndL){
+            fillPACK_RGB16(indL, indSize*indSize, curLeft  ? COLOR_GREEN : COLOR_GRAY25);
+            prevIndL = curLeft;
+        }
+        if(curRight != prevIndR){
+            fillPACK_RGB16(indR, indSize*indSize, curRight ? COLOR_GREEN : COLOR_GRAY25);
+            prevIndR = curRight;
+        }
+
+        /// Wrap signedVal into [0, barW) for the indicator column position.
+        int pos = signedVal % barW;
+        if(pos < 0){ pos += barW; }
+
+        /// Incremental column update: only touch pixels when the position
+        /// actually changes. Erase the previous 4-px column to black (with
+        /// a centre-tick re-stamp if it overlapped), then paint the new
+        /// 4-px green column. Total: ~32 short writes per move.
+        if(pos != prevPos){
+            int col;
+            if(prevPos >= 0){
+                for(col = -2; col < 2; col++){
+                    int x = prevPos + col;
+                    if(x < 0)     x += barW;
+                    if(x >= barW) x -= barW;
+                    rectPACK_RGB16(barBuf, barW, x, 1, 1, barH-2, COLOR_BLACK);
+                    if(x == barW/2){
+                        rectPACK_RGB16(barBuf, barW, x, 1, 1, barH-2, COLOR_RED);
+                    }
+                }
+            }
+            for(col = -2; col < 2; col++){
+                int x = pos + col;
+                if(x < 0)     x += barW;
+                if(x >= barW) x -= barW;
+                rectPACK_RGB16(barBuf, barW, x, 1, 1, barH-2, COLOR_GREEN);
+            }
+            prevPos = pos;
+        }
+
+        /// Refresh number text only when totals actually change -- no need
+        /// to repaint every frame.
+        if(redraw){
+            char buf[16];
+            int p, k, n;
+
+            buf[0] = '\0'; itostring(buf, leftCnt, 10);
+            n = 0; while(buf[n] != '\0' && n < 5) n++;
+            for(p = 0; p < 5; p++){ leftTb->text[14 + p] = '0'; }
+            for(k = 0; k < n; k++){ leftTb->text[14 + (5 - n) + k] = buf[k]; }
+            updateLine(settings, mainFont, leftTb, NULL, 999999, 999999, WHITE);
+
+            buf[0] = '\0'; itostring(buf, rightCnt, 10);
+            n = 0; while(buf[n] != '\0' && n < 5) n++;
+            for(p = 0; p < 5; p++){ rightTb->text[14 + p] = '0'; }
+            for(k = 0; k < n; k++){ rightTb->text[14 + (5 - n) + k] = buf[k]; }
+            updateLine(settings, mainFont, rightTb, NULL, 999999, 999999, WHITE);
+
+            int absV = signedVal < 0 ? -signedVal : signedVal;
+            buf[0] = '\0'; itostring(buf, absV, 10);
+            n = 0; while(buf[n] != '\0' && n < 5) n++;
+            signTb->text[14] = (signedVal < 0) ? '-' : '+';
+            for(p = 0; p < 5; p++){ signTb->text[15 + p] = '0'; }
+            for(k = 0; k < n; k++){ signTb->text[15 + (5 - n) + k] = buf[k]; }
+            updateLine(settings, mainFont, signTb, NULL, 999999, 999999,
+                       signedVal == 0 ? WHITE : (signedVal > 0 ? GREEN : RED));
+
+            redraw = 0;
+        }
+
+        /// Rate row updates every frame because it's a moving window.
+        char buf2[16];
+        int p, k, n;
+        buf2[0] = '\0'; itostring(buf2, rate, 10);
+        n = 0; while(buf2[n] != '\0' && n < 3) n++;
+        for(p = 0; p < 3; p++){ rateTb->text[14 + p] = '0'; }
+        for(k = 0; k < n; k++){ rateTb->text[14 + (3 - n) + k] = buf2[k]; }
+        updateLine(settings, mainFont, rateTb, NULL, 999999, 999999,
+                   rate == 0 ? GREY : (rate > 30 ? GREEN : WHITE));
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        /// A resets the counters so the user can start a fresh spin from zero.
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            leftCnt = 0; rightCnt = 0; signedVal = 0;
+            for(i = 0; i < rateFrames; i++){ rateRing[i] = 0; }
+            redraw = 1;
+        }
+
+        /// LEFT + OPTION exit -- rotary protocol uses LEFT/RIGHT alone, so
+        /// this combo can't fire as a side effect of normal spinning.
+        if((settings->joy1 & JOYPAD_LEFT) && (settings->joy1 & JOYPAD_OPTION) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 12, 13);
+    hide_or_show_display_layer_range(settings->d, 1, 0, 15);
+
+    helpTb    = freeTextBox(helpTb);
+    rateTb    = freeTextBox(rateTb);
+    signTb    = freeTextBox(signTb);
+    rightTb   = freeTextBox(rightTb);
+    leftTb    = freeTextBox(leftTb);
+    rLabelTb  = freeTextBox(rLabelTb);
+    lLabelTb  = freeTextBox(lLabelTb);
+    titleTb   = freeTextBox(titleTb);
+
+    teardownFullscreenSprite(indRs, indR);
+    teardownFullscreenSprite(indLs, indL);
+    teardownFullscreenSprite(barS,  barBuf);
+}
+
+/* ---------------------------------------------------------------------------
  * Hardware tools: Video Mode / Resolution test
  *
  * Addresses upstream BitJag #2 ("Resolution Switching") within the bounds of
@@ -1010,15 +1442,17 @@ void ResolutionTest(void){
                               | ((uint16_t)(fmt    & 0x3) << 1);
             TOMREGS->vmode = newVmode;
 
-            /// Auto-recenter: scale display->x by the PWIDTH ratio. boot
-            /// is PWIDTH4 (divisor 4); at PWIDTH8 (divisor 8) pixels are
-            /// 2x as wide so the centering offset (in pixel-clock units)
-            /// halves; conversely PWIDTH2 doubles it. Integer math, +divisor/2
-            /// for round-to-nearest.
+            /// Auto-recenter: scale display->x by the PWIDTH ratio. The
+            /// boot divisor comes from vmodeBoot's PWIDTH bits (not a hard
+            /// 4) so this stays correct if main.c ever changes its boot
+            /// vmode. Wider pixels (larger divisor) shrink the centering
+            /// offset proportionally; narrower pixels grow it. Integer
+            /// math, +divisor/2 for round-to-nearest.
             int newDispX = bootDisplayX;
             if(autoCenter){
                 int divisor = pwidth + 1;
-                newDispX = (bootDisplayX * 4 + divisor/2) / divisor;
+                int bootDivisor = ((vmodeBoot >> 9) & 0x7) + 1;
+                newDispX = (bootDisplayX * bootDivisor + divisor/2) / divisor;
             }
             settings->d->x = (short int)newDispX;
 
