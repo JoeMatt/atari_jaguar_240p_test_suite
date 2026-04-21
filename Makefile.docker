@@ -569,7 +569,7 @@ test-deps:
 	@printf 'LIBRETRO_CORE    = %s\n'   "$(LIBRETRO_CORE)"
 	@printf 'LIBRETRO_CONTENT = %s\n'   "$(LIBRETRO_CONTENT)"
 	@printf 'LIBRETRO_PYTHON  = %s\n'   "$(LIBRETRO_PYTHON)"
-	@printf 'MAME             = %s (%s)\n' "$(MAME)" "$$(command -v $(MAME) >/dev/null 2>&1 && echo found || echo missing)"
+	@printf 'MAME             = %s (%s)\n' "$(MAME)" "$$(command -v "$(MAME)" >/dev/null 2>&1 && echo found || echo missing)"
 	@printf 'MAME_ROMPATH     = %s\n'   "$(if $(MAME_ROMPATH),$(MAME_ROMPATH),(auto-detected))"
 	@printf 'MAME_SECONDS     = %s\n'   "$(MAME_SECONDS)"
 
@@ -604,12 +604,14 @@ test-deps:
 # full duration without an emulation-fatal error.
 # ---------------------------------------------------------------------------
 test-mame: ensure-j64
-	@if ! command -v $(MAME) >/dev/null 2>&1; then \
+	@if ! command -v "$(MAME)" >/dev/null 2>&1; then \
 		printf '!! %s not found on PATH.\n' "$(MAME)" >&2; \
 		printf '   Install:\n' >&2; \
 		printf '     macOS:  brew install mame\n' >&2; \
 		printf '     Ubuntu: sudo apt install mame\n' >&2; \
 		printf '   Or override:  make test-mame MAME=/path/to/mame\n' >&2; \
+		printf '   (MAME must be a single command/path -- if you need\n' >&2; \
+		printf '   to pass extra flags, wrap it in a shell script.)\n' >&2; \
 		exit 1; \
 	fi
 	@_rompath="$(MAME_ROMPATH)"; \
@@ -635,8 +637,8 @@ test-mame: ensure-j64
 	fi; \
 	printf '>> Booting %s.j64 in MAME jaguar driver for %s seconds (rompath: %s)...\n' \
 		"$(OUT_PROJECT)" "$(MAME_SECONDS)" "$$_rompath"; \
-	_log=$$($(MAME) jaguar -rompath "$$_rompath" -cart "$(OUT_PROJECT).j64" \
-	                       -bench $(MAME_SECONDS) -nodebug -skip_gameinfo 2>&1); _rc=$$?; \
+	_log=$$("$(MAME)" jaguar -rompath "$$_rompath" -cart "$(OUT_PROJECT).j64" \
+	                         -bench $(MAME_SECONDS) -nodebug -skip_gameinfo 2>&1); _rc=$$?; \
 	printf '%s\n' "$$_log"; \
 	if printf '%s' "$$_log" | grep -Eq 'jagboot\.rom NOT FOUND|jagwave\.rom NOT FOUND'; then \
 		printf '\n!! MAME still cannot find the Jaguar BIOS at %s/jaguar/.\n' "$$_rompath" >&2; \
@@ -686,9 +688,8 @@ doctor:
 		probe=$$(printf '%s\n' "$$entry" | cut -d: -f2); \
 		desc=$$(printf '%s\n'  "$$entry" | cut -d: -f3-); \
 		case "$$probe" in \
-			/*) [ -e "$$probe" ] && status='OK'  || status='MISSING' ;; \
-			./*) [ -e "$$probe" ] && status='OK' || status='MISSING' ;; \
-			*) command -v "$$probe" >/dev/null 2>&1 && status='OK' || status='MISSING' ;; \
+			*/*) [ -e "$$probe" ] && status='OK' || status='MISSING' ;; \
+			*)   command -v "$$probe" >/dev/null 2>&1 && status='OK' || status='MISSING' ;; \
 		esac; \
 		case "$$status" in \
 			OK)      mark='[ OK ]' ;; \
