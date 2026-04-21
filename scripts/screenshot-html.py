@@ -122,13 +122,20 @@ def _render(manifest: dict) -> str:
         if shot["group"] not in ordered:
             ordered.append(shot["group"])
 
-    core = escape(str(manifest.get("core", "?")))
-    content = escape(str(manifest.get("content", "?")))
+    ## ``quote=True`` everywhere -- every interpolation below either
+    ## lands inside an HTML attribute (href, src, alt, id) or inside
+    ## a <code> body where a stray quote could still break adjacent
+    ## attributes. Cheap to apply uniformly, and it means a hostile or
+    ## sloppy edit to manifest.json can't smuggle markup through the
+    ## viewer.
+    core = escape(str(manifest.get("core", "?")), quote=True)
+    content = escape(str(manifest.get("content", "?")), quote=True)
     total = len(shots)
     n_groups = len(ordered)
 
     nav_html = "\n      ".join(
-        f'<a href="#{escape(g)}">{escape(titles[g])}</a>' for g in ordered
+        f'<a href="#{escape(g, quote=True)}">{escape(titles[g], quote=True)}</a>'
+        for g in ordered
     )
 
     sections: list[str] = []
@@ -136,9 +143,10 @@ def _render(manifest: dict) -> str:
         group_shots = by_group[group]
         cards: list[str] = []
         for shot in group_shots:
-            note = escape(shot.get("note") or shot["label"].replace("-", " ").title())
-            path = escape(shot["path"])
-            label = escape(shot["label"])
+            note = escape(shot.get("note") or shot["label"].replace("-", " ").title(),
+                          quote=True)
+            path = escape(shot["path"], quote=True)
+            label = escape(shot["label"], quote=True)
             cards.append(
                 f'<figure>\n'
                 f'  <a href="{path}" target="_blank" rel="noopener">'
@@ -151,8 +159,8 @@ def _render(manifest: dict) -> str:
             )
         plural = "s" if len(group_shots) != 1 else ""
         sections.append(
-            f'<section id="{escape(group)}">\n'
-            f'  <h2>{escape(titles[group])}</h2>\n'
+            f'<section id="{escape(group, quote=True)}">\n'
+            f'  <h2>{escape(titles[group], quote=True)}</h2>\n'
             f'  <div class="count">{len(group_shots)} capture{plural}</div>\n'
             f'  <div class="grid">\n    '
             + "\n    ".join(cards) + "\n  </div>\n"

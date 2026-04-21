@@ -45,16 +45,20 @@ class Step:
     button  -- Jaguar button name to PRESS at the start of this step
                (None = idle). Repository-wide search-friendly names:
                a, b, c, option, pause, up, down, left, right, x, y, l, r.
-    frames  -- total frames the step covers. The button is asserted
-               for exactly the first frame (a tap), then released for
-               the remaining frames-1 frames so the test suite sees a
-               clean press+release. Most menus need 5+ idle frames
-               after a press to settle / debounce / animate. Use
-               ``hold=True`` for the rare case you genuinely need a
-               held button (none of the current menus require it).
+    frames  -- total frames the step covers. Unless ``hold=True``, the
+               button is asserted for ``min(TAP_PRESS_FRAMES, frames)``
+               frames (a short tap -- see TAP_PRESS_FRAMES below for
+               why a 1-frame tap was empirically too short to clear
+               the cart's debouncer), then released for the remaining
+               frames so the test suite sees a clean press+release.
+               Most menus need 5+ idle frames after a press to settle
+               / debounce / animate. Use ``hold=True`` for the rare
+               case you genuinely need a held button (none of the
+               current menus require it).
     hold    -- assert the button for ALL ``frames`` instead of just the
-               first. Defaults False because holding A on most test
-               screens registers as repeated taps, immediately exiting.
+               TAP_PRESS_FRAMES tap-width above. Defaults False because
+               holding A on most test screens registers as repeated
+               taps, immediately exiting.
     note    -- optional human caption surfaced in the README gallery.
     """
 

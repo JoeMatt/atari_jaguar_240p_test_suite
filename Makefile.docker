@@ -565,8 +565,13 @@ screenshots: ensure-j64 libretro-venv unquarantine-core
 	@printf '>> next: regenerate the README gallery with `make screenshots-readme`.\n'
 	@printf '>> open $(SCREENSHOT_DIR)/index.html in a browser to preview.\n'
 
-screenshots-readme: libretro-venv
-	"$(LIBRETRO_PYTHON)" scripts/screenshot-readme.py \
+# Pure-stdlib README rewriter. Deliberately uses the host python3
+# rather than $(LIBRETRO_PYTHON), so we don't force a libretro-venv
+# bootstrap (and the pip installs that go with it) for a docs-only
+# regen -- minimal CI runners and locked-down sandboxes can run it
+# without network access.
+screenshots-readme:
+	python3 scripts/screenshot-readme.py \
 		--manifest $(SCREENSHOT_DIR)/manifest.json
 
 # Standalone HTML viewer (single self-contained file). Dep-free --
@@ -584,8 +589,13 @@ screenshots-html:
 # checkout that hasn't run `make screenshots` yet) -- the goal is to
 # catch *regressions* in already-tracked galleries, not to require
 # regen on every clone.
-screenshots-check: libretro-venv
-	"$(LIBRETRO_PYTHON)" scripts/screenshot-readme.py --check \
+#
+# Both checkers are pure stdlib, so we use host python3 -- no
+# libretro-venv bootstrap, which means this target works on minimal
+# CI runners and air-gapped environments where pip can't reach a
+# package index.
+screenshots-check:
+	python3 scripts/screenshot-readme.py --check \
 		--manifest $(SCREENSHOT_DIR)/manifest.json
 	python3 scripts/screenshot-html.py --check \
 		--manifest $(SCREENSHOT_DIR)/manifest.json \
