@@ -1,12 +1,40 @@
-# atari_jaguar_240p_test_suite
+# Atari Jaguar 240p Test Suite
 
-## NOTE
-This software is a work in progress. When compared with other ports of the 240p Test Suite, some functionality is missing. There are also Jaguar specific functions that still need to be implemented. Please see the issues section for more details.
+[![Build ROM](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/actions/workflows/build.yml)
+[![Release](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/actions/workflows/release.yml/badge.svg)](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/actions/workflows/release.yml)
+[![SDK image](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/actions/workflows/sdk-image.yml/badge.svg)](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/actions/workflows/sdk-image.yml)
+[![Latest release](https://img.shields.io/github/v/release/JoeMatt/atari_jaguar_240p_test_suite?sort=semver&label=release)](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/releases/latest)
+[![License: GPL v2+](https://img.shields.io/badge/license-GPL%20v2%2B-blue.svg)](#license)
+[![SDK image: GHCR](https://img.shields.io/badge/ghcr.io-jaguar--sdk-2496ED?logo=docker&logoColor=white)](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/pkgs/container/jaguar-sdk)
+[![Platform: Atari Jaguar](https://img.shields.io/badge/platform-Atari%20Jaguar-c81e2c.svg)](https://en.wikipedia.org/wiki/Atari_Jaguar)
+
+A bare-metal port of [Artemio Urbina's 240p Test Suite](https://github.com/ArtemioUrbina/240pTestSuite) to the Atari Jaguar — calibration patterns, lag tests, scroll tests, audio sweeps, and hardware probes for CRT/HDTV/upscaler evaluation, all running in ~1 MiB of cart ROM with no external dependencies.
+
+> **Status**: Active fork of [BitJag/atari_jaguar_240p_test_suite](https://github.com/BitJag/atari_jaguar_240p_test_suite). Most BitJag open issues are now shipped (#1 MDFourier, #2 Resolution Switching, #3 IRE docs, #7 Rotary Controller, #8 Jaguar CD probe, #13 typos). The suite is feature-complete enough for everyday calibration use; we tag `v0.x` releases until full parity with the Genesis/SNES/Wii ports is reached.
 
 ## Download
-A current build for those who just want to try it out is available at https://jagcorner.com/240p-test-suite/ Once we reach a version 1.0, we will do an official release here.
+
+Pre-built ROMs (`.cof`, `.bin`, `.rom`, `.j64` — release + debug flavours) are attached to every [GitHub release](https://github.com/JoeMatt/atari_jaguar_240p_test_suite/releases). Verify against `SHA256SUMS.txt` in the same release.
+
+A community build is also hosted at [jagcorner.com/240p-test-suite](https://jagcorner.com/240p-test-suite/).
+
+## Table of contents
+
+- [What's included](#whats-included)
+- [Controls](#controls)
+- [Compiling & running](#compiling--running)
+  - [Quick start (Docker)](#quick-start-container-recommended)
+  - [Native install](#native-install)
+  - [Build flavours](#build-flavours)
+  - [Running the ROM](#running-the-rom)
+  - [Smoke-testing against a libretro core](#smoke-testing-against-a-libretro-core)
+  - [Discoverability & shell completion](#discoverability--shell-completion)
+  - [Continuous integration & releases](#continuous-integration--releases)
+- [Contributors](#contributors)
+- [License](#license)
 
 ## Introduction
+
 _As described on https://github.com/ArtemioUrbina/240pTestSuite_
 
 The 240p test suite is a homebrew software suite for video game consoles developed to help in the evaluation of upscalers, upscan converters and line doublers.
@@ -17,7 +45,39 @@ As a secondary target, the suite aims to provide tools for calibrating colors, b
 
 This is free software, with full source code available under the GPL.
 
-Learn more about the 240p Test Suite by Artemino at http://junkerhq.net/240p/
+Learn more about the 240p Test Suite by Artemio at http://junkerhq.net/240p/
+
+## What's included
+
+Tests are grouped into five top-level menus. Items in **bold** were added or substantially rewritten in this fork.
+
+| Menu | Tests |
+| --- | --- |
+| **Test Patterns** | Pluge · Color Bars · EBU Color Bars · SMPTE Color Bars · Referenced Color Bars · Color Bleed Check · Monoscope · Grid · Gray Ramp · White & RGB Screens · 100 IRE · Sharpness · Overscan · Convergence · **More Patterns →** (**Color Bars w/ Gray** · **Linearity** · **Phase** · **Brightness** · **Contrast**) |
+| **Video Tests** | Drop Shadow · **Striped Sprite** · Lag Test · **Manual Lag Test** · Timing & Reflex · Scroll · Grid Scroll · Horiz/Vert Stripes · Checkerboard · Backlit Zone · **Alternate 240p/480i** |
+| **Audio Tests** | Sound Test · Audio Sync · **L/R Balance + 1 kHz Tone** · **MDFourier Sweep** |
+| **Hardware Tools** | Controller Test · **Pro Controller Test** · **Rotary Controller Test** · GPU Memory Viewer · DSP Memory Viewer · DRAM Memory Viewer · **System Info** · **Jaguar CD Probe** · **Video Mode Test** (Resolution Switching) |
+| **Screen Savers** | **Color Cycle** · **Bouncing Square** · **Scrolling Bars** |
+
+In-app **Help** screens (per menu and per test) document the purpose, expected output, and any test-specific button bindings.
+
+## Controls
+
+Standard Jaguar pad bindings throughout the suite:
+
+| Button | In menus | In tests (general) |
+| --- | --- | --- |
+| **D-Pad** | Move highlight | Test-specific (cycle pattern, move sprite, etc.) |
+| **A** | Select / confirm | Test-specific (toggle, reset counter, etc.) |
+| **B** | Back to previous menu | Test-specific |
+| **C** | — | Test-specific |
+| **Option** | Open Options menu | **Exit** test → previous menu |
+| **Pause** | — | Pause/resume animation where supported |
+| **\*** / **#** | — | Numeric keypad — used by some tests for fine adjustments |
+
+**Exit pattern**: most tests exit with **Option**. The Controller / Pro Controller / Rotary tests use **LEFT + Option** so the exit chord can't collide with whatever button is being tested.
+
+For test-specific bindings, open the in-app **Help** screen on each menu — they're authoritative and stay in sync with the code.
 
 ## Compiling & Running
 
@@ -212,18 +272,26 @@ git push origin v1.2.3
 ```
 
 ## Contributors
-```
-* Code: Artemio Urbina
-* Code: William Thorup
-* Main menu graphics: Asher
-* Extra patterns and collaboration: Konsolkongen & shmups regulars
-```
-=============================================================================== Copyright 2011-2022 Artemio Urbina
 
-Atari Jaguar Version Copyright 2022 William Thorup (BitJag)
+| Role | Credit |
+| --- | --- |
+| Original code | [Artemio Urbina](https://github.com/ArtemioUrbina) ([@Artemio](https://twitter.com/Artemio)) |
+| Atari Jaguar port (original) | William Thorup ([@BitJag](https://github.com/BitJag)) |
+| Atari Jaguar port (active fork) | Joe Mattiello ([@JoeMatt](https://github.com/JoeMatt)) |
+| Patterns | Artemio Urbina |
+| Monoscope pattern | Keith Raney |
+| Donna art | Jose Salot ([@pepe_salot](https://twitter.com/pepe_salot)) |
+| Main menu art | Asher |
+| Extra patterns & collaboration | Konsolkongen & shmups regulars |
+| SDK (rmvlib + jlibc) | [theRemovers](https://github.com/theRemovers/rmvlib) |
+| Cart-header tooling | Adapted from Tursilion's [makefastboot](https://github.com/tursilion/makefastboot/) and [Jiffi](https://reboot.untergrund.net/new-reboot/jiffi.html) |
 
-This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+## License
 
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Copyright © 2011–2022 Artemio Urbina  
+Atari Jaguar port © 2022 William Thorup (BitJag)  
+Atari Jaguar fork updates © 2024–2026 Joe Mattiello
 
-You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+This program is free software; you can redistribute it and/or modify it under the terms of the **GNU General Public License v2 or later** as published by the Free Software Foundation. See [`LICENSE`](LICENSE) for the full text.
+
+This program is distributed in the hope that it will be useful, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
