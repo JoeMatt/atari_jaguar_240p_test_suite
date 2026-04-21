@@ -520,18 +520,22 @@ test: verify-sig
 # any non-interactive context we fall through to the explicit error so
 # automation never silently grows a clone of the wrong fork.
 #
-# Override VJ_CORE_REMOTE to clone a different fork (Provenance-Emu's
-# rebased core, a feature branch, etc); override VJ_CORE_SRC to point
-# at a checkout that already exists somewhere else.
-VJ_CORE_REMOTE	?= https://github.com/libretro/virtualjaguar-libretro
+# VJ_CORE_REMOTE / VJ_CORE_SRC live in Makefile.config -- override
+# VJ_CORE_REMOTE to clone a different fork (Provenance-Emu's rebased
+# core, a feature branch, etc), and VJ_CORE_SRC to point at a checkout
+# that already exists somewhere else.
 test-core:
 	@if [ ! -d "$(VJ_CORE_SRC)" ]; then \
 		if [ -t 0 ] && [ -t 1 ] && [ -z "$$CI" ]; then \
 			printf '?? virtualjaguar-libretro source not found at %s\n' "$(VJ_CORE_SRC)"; \
 			printf '   Clone %s -> %s ? [Y/n] ' "$(VJ_CORE_REMOTE)" "$(VJ_CORE_SRC)"; \
-			read _reply; \
+			if ! IFS= read -r _reply; then \
+				printf '\n   Aborted (EOF / Ctrl-D).\n' >&2; exit 1; \
+			fi; \
 			case "$$_reply" in \
+				''|y|Y|yes|YES|Yes) ;; \
 				n|N|no|NO|No) printf '   Aborted. Override VJ_CORE_SRC=/path or set VJ_CORE_REMOTE=...\n' >&2; exit 1 ;; \
+				*) printf '   Unrecognised response %s -- aborting (use Y/n).\n' "$$_reply" >&2; exit 1 ;; \
 			esac; \
 			git clone --depth 1 "$(VJ_CORE_REMOTE)" "$(VJ_CORE_SRC)" || { \
 				printf '!! git clone failed -- check network / remote URL.\n' >&2; exit 1; }; \
@@ -606,7 +610,7 @@ test-mame: ensure-j64
 	@printf '>> Booting %s.j64 in MAME jaguar driver for %s seconds...\n' "$(OUT_PROJECT)" "$(MAME_SECONDS)"
 	@_log=$$($(MAME) jaguar -cart "$(OUT_PROJECT).j64" -bench $(MAME_SECONDS) -nodebug -skip_gameinfo 2>&1); _rc=$$?; \
 	printf '%s\n' "$$_log"; \
-	if printf '%s' "$$_log" | grep -q 'jagboot.rom NOT FOUND\|jagwave.rom NOT FOUND'; then \
+	if printf '%s' "$$_log" | grep -Eq 'jagboot\.rom NOT FOUND|jagwave\.rom NOT FOUND'; then \
 		printf '\n!! MAME requires the Jaguar BIOS roms (copyrighted, not redistributable).\n' >&2; \
 		printf '   Place jagboot.rom + jagwave.rom under your MAME hash dir, e.g.:\n' >&2; \
 		printf '     ~/.mame/roms/jaguar/{jagboot,jagwave}.rom    (Linux)\n' >&2; \
@@ -625,20 +629,26 @@ test-mame: ensure-j64
 # diagnostic, not gating); the individual targets still fail loudly when
 # their specific deps are missing.
 # ---------------------------------------------------------------------------
+# Each entry is a single shell word (wrapped in single quotes so the
+# spaces inside the description don't break for-loop word-splitting).
+# Format: name:probe:description -- where `probe` is either an absolute
+# path / `./relative` path (existence-checked with `[ -e ]`) or a bare
+# binary name (resolved via `command -v`). Keep the colon-form simple:
+# no inner quoting, no embedded colons in any field.
 DOCTOR_CHECKS	:= \
-	native_cc:m68k-atari-mint-gcc:'native Jaguar build (make all)' \
-	rmac:'$(JAGPATH)/bin/mac':'RMAC assembler' \
-	aln:'$(JAGPATH)/bin/aln':'RLN linker' \
-	rmvlib:'$(JAGPATH)/lib/lib/rmvlib.a':'rmvlib SDK' \
-	docker:'$(DOCKER)':'Docker (make docker-build / make sdk-pull)' \
-	colima:colima:'Colima (Docker Desktop alt; macOS/Linux)' \
-	python3:python3:'libretro.py harness + scripts/make-rom.py' \
-	mame:'$(MAME)':'MAME smoke test (make test-mame)' \
-	vj_core:'$(VJ_CORE_SRC)':'virtualjaguar-libretro source (make test-core)' \
-	libretro_so:'./virtualjaguar_libretro.so':'libretro core .so (linux)' \
-	libretro_dylib:'./virtualjaguar_libretro.dylib':'libretro core .dylib (macOS)' \
-	gh:gh:'GitHub CLI (release / PR helpers)' \
-	git:git:'git'
+	'native_cc:m68k-atari-mint-gcc:native Jaguar build (make all)' \
+	'rmac:$(JAGPATH)/bin/mac:RMAC assembler' \
+	'aln:$(JAGPATH)/bin/aln:RLN linker' \
+	'rmvlib:$(JAGPATH)/lib/lib/rmvlib.a:rmvlib SDK' \
+	'docker:$(DOCKER):Docker (make docker-build / make sdk-pull)' \
+	'colima:colima:Colima (Docker Desktop alt; macOS/Linux)' \
+	'python3:python3:libretro.py harness + scripts/make-rom.py' \
+	'mame:$(MAME):MAME smoke test (make test-mame)' \
+	'vj_core:$(VJ_CORE_SRC):virtualjaguar-libretro source (make test-core)' \
+	'libretro_so:./virtualjaguar_libretro.so:libretro core .so (linux)' \
+	'libretro_dylib:./virtualjaguar_libretro.dylib:libretro core .dylib (macOS)' \
+	'gh:gh:GitHub CLI (release / PR helpers)' \
+	'git:git:git'
 
 .PHONY: doctor
 doctor:
