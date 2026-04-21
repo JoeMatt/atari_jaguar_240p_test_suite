@@ -92,37 +92,24 @@ def main(argv: list[str]) -> int:
         if save_png is None:
             return 1
 
-    # Note on flushing: every status print on the hot path (everything
-    # around session creation and the per-frame loop) uses flush=True.
-    # The Virtual Jaguar libretro core on macOS calls raw _exit(0) from
-    # inside the first retro_run() invocation (upstream bug -- reproduces
-    # with any non-RetroArch harness), which bypasses Python's stdio
-    # buffering and atexit hooks. Without flush=True the user would see
-    # zero output and think the script silently did nothing. Pre-session
-    # error/help prints (missing core, install hints) deliberately do
-    # NOT flush -- they only run on synchronous errors and Python exits
-    # cleanly after them. Anything printed AFTER session.run() may not
-    # appear if the core takes that exit path even with flush=True.
-    ## The Virtual Jaguar libretro core calls raw _exit(0) from inside the
-    ## first retro_run() invocation on macOS only -- gate the warning so it
-    ## doesn't pollute Linux/Windows CI logs (where the core runs cleanly).
-    if args.frames > 0 and sys.platform == "darwin":
-        print(
-            ">> NOTE: requesting >0 frames against virtualjaguar on macOS will\n"
-            "         likely cause the core to call _exit(0) from inside\n"
-            "         retro_run() -- this is an upstream core bug, not a\n"
-            "         harness issue. The ROM is valid if 'load_game returned\n"
-            "         True' prints above.",
-            flush=True,
-        )
+    # Note on flushing: every status print on the hot path uses flush=True
+    # so partial logs survive even if the core exits abnormally. Historic
+    # context: older virtualjaguar-libretro builds called raw `_exit(0)`
+    # from inside the first retro_run() on macOS, bypassing Python stdio
+    # buffering -- that bug is gone in libretro/virtualjaguar-libretro
+    # master, so the warning that used to print here has been removed.
+    # If you see a SIGKILL during dlopen with no Python traceback, run
+    # `make unquarantine-core` (auto-runs as a libretro-test prereq) to
+    # strip quarantine and re-sign the dylib ad-hoc -- macOS hardened-
+    # runtime processes refuse to dlopen dylibs whose embedded signature
+    # doesn't cover the entire file (which can happen if a post-link
+    # strip / install_name_tool step modifies the dylib without
+    # re-signing).
 
     ## Print the "about to load" marker BEFORE entering the with-block so a
-    ## SIGKILL during retro_init / load_game (Virtual Jaguar libretro core
-    ## has a known upstream bug where init can SIGKILL the host process on
-    ## macOS) is distinguishable from a clean rejection. `make verify`
-    ## treats "about to call load_game" + clean exit as failure, but
-    ## "load_game returned True" anywhere in the log as success regardless
-    ## of subsequent crashes.
+    ## SIGKILL during retro_init / load_game is distinguishable from a clean
+    ## rejection. `make verify` treats "about to call load_game" + clean exit
+    ## as failure; "load_game returned True" anywhere in the log is success.
     print(">> about to call load_game...", flush=True)
     try:
         with builder.build() as session:

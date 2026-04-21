@@ -113,7 +113,8 @@ DOCKER_RUN_TTY	= $(DOCKER) run --rm -it --init \
         docker-up colima-start colima-stop colima-status \
         ensure-j64 run run-ui run-headless \
         libretro-venv libretro-test libretro-run libretro-frames \
-        verify-sig test test-core test-deps
+        verify-sig test test-core test-deps \
+        unquarantine-core resign-core
 
 # ---------------------------------------------------------------------------
 # docker-up: order-only prereq for every target that touches the docker CLI.
@@ -265,7 +266,7 @@ libretro-venv: $(LIBRETRO_VENV)/bin/python
 ## (where the .jag rule lives), so the rule isn't visible yet at parse time.
 ## Instead, ensure-build is followed by a runtime check: if the content file
 ## is missing, recurse into make to build it via Makefile.example's pattern rule.
-libretro-test: libretro-venv ensure-build
+libretro-test: libretro-venv ensure-build unquarantine-core
 	@if [ -z "$(LIBRETRO_CORE)" ]; then \
 		printf '!! No libretro core found in CWD.\n'; \
 		printf '   Drop virtualjaguar_libretro.{dylib,so,dll} next to the Makefile,\n'; \
@@ -404,12 +405,65 @@ sys.exit(0 if ok else 1)
 endef
 export _VERIFY_HEADER_PY
 
-# Strip macOS quarantine xattr from the libretro core if present.
+# Re-sign the libretro core ad-hoc if its embedded code signature doesn't
+# cover the entire file. macOS-only no-op elsewhere.
+#
+# Why: when a libretro core is built on macOS the linker auto-applies an
+# ad-hoc signature at link time. Some build steps (strip, install_name_tool,
+# post-link patching) then modify the dylib WITHOUT re-signing, so the
+# embedded signature only covers part of the file. macOS hardened-runtime
+# processes (brew Python, anything built with default clang on macOS
+# 10.15+) refuse to dlopen such dylibs and SIGKILL the host before dyld
+# can return a useful errno -- the only diagnostic is lldb showing
+# `code signature does not cover entire file up to signature in ...`.
+#
+# RetroArch is unhardened so it loads broken-sig dylibs without complaint
+# (which is why this is invisible during normal play), but our libretro.py
+# smoke harness trips on it. `codesign --force --sign -` regenerates a
+# signature covering the entire current file, sufficient for dlopen by
+# hardened processes (no actual identity or notarization required).
+#
+# Override CORE=path/to/foo.dylib to re-sign a specific file, e.g.
+#   make resign-core CORE=~/Downloads/virtualjaguar_libretro.dylib
+CORE ?= $(LIBRETRO_CORE)
+resign-core:
+	@if [ -z "$(CORE)" ] || [ ! -f "$(CORE)" ]; then \
+		printf '!! resign-core: CORE=%s not found.\n' "$(CORE)" >&2; \
+		printf '   Usage: make resign-core CORE=/path/to/libretro_core.dylib\n' >&2; \
+		exit 1; \
+	fi
+	@if [ "$$(uname -s)" != "Darwin" ]; then \
+		printf '>> resign-core: skipped (non-Darwin host, codesign not applicable).\n'; \
+		exit 0; \
+	fi
+	@if ! command -v codesign >/dev/null 2>&1; then \
+		printf '!! resign-core: codesign not on PATH (install Xcode CLT: xcode-select --install)\n' >&2; \
+		exit 1; \
+	fi
+	@if codesign --verify --strict "$(CORE)" >/dev/null 2>&1; then \
+		printf '>> %s already has a valid signature -- nothing to do.\n' "$(CORE)"; \
+	else \
+		printf '>> Re-signing %s ad-hoc (existing signature is invalid or stale)\n' "$(CORE)"; \
+		if ! codesign --force --sign - --timestamp=none "$(CORE)" >/dev/null 2>&1; then \
+			printf '!! re-sign failed (try manually: codesign --force --sign - %s)\n' "$(CORE)" >&2; \
+			exit 1; \
+		fi; \
+		printf '>> OK: %s now signed ad-hoc.\n' "$(CORE)"; \
+	fi
+
+# Strip macOS quarantine xattr from the libretro core, and delegate to
+# resign-core to fix any stale embedded signature. Composed prereq for
+# every smoke-test / RetroArch-launch target.
 unquarantine-core:
 	@if [ -n "$(LIBRETRO_CORE)" ] && [ -f "$(LIBRETRO_CORE)" ]; then \
 		if xattr -l "$(LIBRETRO_CORE)" 2>/dev/null | grep -q 'com.apple.quarantine'; then \
 			printf '>> Stripping com.apple.quarantine from %s\n' "$(LIBRETRO_CORE)"; \
 			xattr -d com.apple.quarantine "$(LIBRETRO_CORE)"; \
+		fi; \
+		if [ "$$(uname -s)" = "Darwin" ] && command -v codesign >/dev/null 2>&1; then \
+			if ! codesign --verify --strict "$(LIBRETRO_CORE)" >/dev/null 2>&1; then \
+				$(MAKE) --no-print-directory CORE="$(LIBRETRO_CORE)" resign-core; \
+			fi; \
 		fi; \
 	fi
 
@@ -514,18 +568,39 @@ test: verify-sig
 	@printf '>> Booting ROM in libretro core for %s frame(s)...\n' "$(TEST_FRAMES)"
 	@$(MAKE) --no-print-directory LIBRETRO_FRAMES=$(TEST_FRAMES) libretro-test
 
-# Build the Linux/macOS libretro core from a sibling checkout. We
-# deliberately do NOT auto-clone -- if the user wants a specific fork or
-# branch (Provenance-Emu/virtualjaguar-libretro, a feature branch, a
-# pinned rev), they should set that up manually.
+# Build the Linux/macOS libretro core from a sibling checkout. When the
+# checkout is missing AND we're attached to an interactive tty, prompt
+# to clone the canonical libretro/virtualjaguar-libretro repo. In CI or
+# any non-interactive context we fall through to the explicit error so
+# automation never silently grows a clone of the wrong fork.
+#
+# VJ_CORE_REMOTE / VJ_CORE_SRC live in Makefile.config -- override
+# VJ_CORE_REMOTE to clone a different fork (Provenance-Emu's rebased
+# core, a feature branch, etc), and VJ_CORE_SRC to point at a checkout
+# that already exists somewhere else.
 test-core:
 	@if [ ! -d "$(VJ_CORE_SRC)" ]; then \
-		printf '!! virtualjaguar-libretro source not found at %s\n' "$(VJ_CORE_SRC)" >&2; \
-		printf '   Clone it as a sibling of this repo:\n' >&2; \
-		printf '     git clone https://github.com/libretro/virtualjaguar-libretro %s\n' "$(VJ_CORE_SRC)" >&2; \
-		printf '   Or point at an existing checkout:\n' >&2; \
-		printf '     make test-core VJ_CORE_SRC=/path/to/virtualjaguar-libretro\n' >&2; \
-		exit 1; \
+		if [ -t 0 ] && [ -t 1 ] && [ -z "$$CI" ]; then \
+			printf '?? virtualjaguar-libretro source not found at %s\n' "$(VJ_CORE_SRC)"; \
+			printf '   Clone %s -> %s ? [Y/n] ' "$(VJ_CORE_REMOTE)" "$(VJ_CORE_SRC)"; \
+			if ! IFS= read -r _reply; then \
+				printf '\n   Aborted (EOF / Ctrl-D).\n' >&2; exit 1; \
+			fi; \
+			case "$$_reply" in \
+				''|y|Y|yes|YES|Yes) ;; \
+				n|N|no|NO|No) printf '   Aborted. Override VJ_CORE_SRC=/path or set VJ_CORE_REMOTE=...\n' >&2; exit 1 ;; \
+				*) printf '   Unrecognised response %s -- aborting (use Y/n).\n' "$$_reply" >&2; exit 1 ;; \
+			esac; \
+			git clone --depth 1 "$(VJ_CORE_REMOTE)" "$(VJ_CORE_SRC)" || { \
+				printf '!! git clone failed -- check network / remote URL.\n' >&2; exit 1; }; \
+		else \
+			printf '!! virtualjaguar-libretro source not found at %s\n' "$(VJ_CORE_SRC)" >&2; \
+			printf '   Clone it as a sibling of this repo:\n' >&2; \
+			printf '     git clone %s %s\n' "$(VJ_CORE_REMOTE)" "$(VJ_CORE_SRC)" >&2; \
+			printf '   Or point at an existing checkout:\n' >&2; \
+			printf '     make test-core VJ_CORE_SRC=/path/to/virtualjaguar-libretro\n' >&2; \
+			exit 1; \
+		fi; \
 	fi
 	$(MAKE) -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) -C "$(VJ_CORE_SRC)"
 	@_ext=so; \
@@ -539,14 +614,170 @@ test-core:
 		exit 1; \
 	fi; \
 	cp -f "$(VJ_CORE_SRC)/virtualjaguar_libretro.$$_ext" "./virtualjaguar_libretro.$$_ext"; \
+	$(MAKE) --no-print-directory LIBRETRO_CORE_LOCAL="./virtualjaguar_libretro.$$_ext" unquarantine-core; \
 	printf '>> Core ready: ./virtualjaguar_libretro.%s. Run `make test`.\n' "$$_ext"
 
 test-deps:
 	@printf 'TEST_FRAMES      = %s\n'   "$(TEST_FRAMES)"
 	@printf 'VJ_CORE_SRC      = %s (%s)\n' "$(VJ_CORE_SRC)" "$(if $(wildcard $(VJ_CORE_SRC)),exists,not found)"
+	@printf 'VJ_CORE_REMOTE   = %s\n'   "$(VJ_CORE_REMOTE)"
 	@printf 'LIBRETRO_CORE    = %s\n'   "$(LIBRETRO_CORE)"
 	@printf 'LIBRETRO_CONTENT = %s\n'   "$(LIBRETRO_CONTENT)"
 	@printf 'LIBRETRO_PYTHON  = %s\n'   "$(LIBRETRO_PYTHON)"
+	@printf 'MAME             = %s (%s)\n' "$(MAME)" "$$(command -v "$(MAME)" >/dev/null 2>&1 && echo found || echo missing)"
+	@printf 'MAME_ROMPATH     = %s\n'   "$(if $(MAME_ROMPATH),$(MAME_ROMPATH),(auto-detected))"
+	@printf 'MAME_SECONDS     = %s\n'   "$(MAME_SECONDS)"
+
+# ---------------------------------------------------------------------------
+# Second-emulator smoke test: MAME's `jaguar` driver.
+#
+# MAME's Jaguar driver is older / more conservative than virtualjaguar's
+# libretro core, so a successful `test-mame` boot is independent evidence
+# that the cart header / linker layout / fastboot signature is sane.
+#
+# *** BIOS REQUIREMENT (local-only target, no CI counterpart) ***
+# MAME's driver hard-requires `jagboot.rom` + `jagwave.rom` at config-
+# validation time -- there's no -bios skip flag, unlike some MAME driver
+# families. Both files are copyrighted by Atari and CANNOT be redistributed
+# (we don't ship them, and CI doesn't have them, hence no `mame-smoke`
+# workflow). Drop them under MAME's hash dir for the jaguar set:
+#
+#   $(MAME_ROMPATH)/jaguar/jagboot.rom   (~ 8 KB)
+#   $(MAME_ROMPATH)/jaguar/jagwave.rom   (~ 4 KB)
+#
+# `test-mame` auto-detects the rompath from the standard hash-dir
+# locations (macOS: ~/Documents/MAME/roms; Linux: ~/.mame/roms; brew:
+# $(brew --prefix)/share/mame/roms; system: /usr/local/share/mame/roms,
+# /usr/share/mame/roms) and passes -rompath explicitly to MAME --
+# MAME's own default is just `roms` relative to cwd, which would
+# never find the BIOS otherwise. Override MAME_ROMPATH (in
+# Makefile.config or on the command line) if your install puts roms
+# somewhere unusual.
+#
+# Run mode: `mame -bench N` (deterministic headless run for N seconds,
+# no display, no sound). Exit code 0 = the driver booted and ran for the
+# full duration without an emulation-fatal error.
+# ---------------------------------------------------------------------------
+test-mame: ensure-j64
+	@if ! command -v "$(MAME)" >/dev/null 2>&1; then \
+		printf '!! %s not found on PATH.\n' "$(MAME)" >&2; \
+		printf '   Install:\n' >&2; \
+		printf '     macOS:  brew install mame\n' >&2; \
+		printf '     Ubuntu: sudo apt install mame\n' >&2; \
+		printf '   Or override:  make test-mame MAME=/path/to/mame\n' >&2; \
+		printf '   (MAME must be a single command/path -- if you need\n' >&2; \
+		printf '   to pass extra flags, wrap it in a shell script.)\n' >&2; \
+		exit 1; \
+	fi
+	@_rompath="$(MAME_ROMPATH)"; \
+	if [ -z "$$_rompath" ]; then \
+		for d in "$$HOME/.mame/roms" "$$HOME/Documents/MAME/roms" \
+		         "$$(brew --prefix 2>/dev/null)/share/mame/roms" \
+		         "/usr/local/share/mame/roms" "/usr/share/mame/roms"; do \
+			if [ -f "$$d/jaguar/jagboot.rom" ] && [ -f "$$d/jaguar/jagwave.rom" ]; then \
+				_rompath="$$d"; break; \
+			fi; \
+		done; \
+	fi; \
+	if [ -z "$$_rompath" ]; then \
+		printf '!! Jaguar BIOS not found in any standard MAME hash dir.\n' >&2; \
+		printf '   Place jagboot.rom + jagwave.rom under one of:\n' >&2; \
+		printf '     ~/.mame/roms/jaguar/                (Linux default)\n' >&2; \
+		printf '     ~/Documents/MAME/roms/jaguar/       (macOS default)\n' >&2; \
+		printf '     $$(brew --prefix)/share/mame/roms/jaguar/   (brew)\n' >&2; \
+		printf '   Or point at an existing checkout:\n' >&2; \
+		printf '     make test-mame MAME_ROMPATH=/path/to/mame/roms\n' >&2; \
+		printf '   (the path is the *parent* of the jaguar/ set dir).\n' >&2; \
+		exit 2; \
+	fi; \
+	printf '>> Booting %s.j64 in MAME jaguar driver for %s seconds (rompath: %s)...\n' \
+		"$(OUT_PROJECT)" "$(MAME_SECONDS)" "$$_rompath"; \
+	_log=$$("$(MAME)" jaguar -rompath "$$_rompath" -cart "$(OUT_PROJECT).j64" \
+	                         -bench $(MAME_SECONDS) -nodebug -skip_gameinfo 2>&1); _rc=$$?; \
+	printf '%s\n' "$$_log"; \
+	if printf '%s' "$$_log" | grep -Eq 'jagboot\.rom NOT FOUND|jagwave\.rom NOT FOUND'; then \
+		printf '\n!! MAME still cannot find the Jaguar BIOS at %s/jaguar/.\n' "$$_rompath" >&2; \
+		printf '   Check filenames are exactly jagboot.rom + jagwave.rom (case-sensitive).\n' >&2; \
+		exit 2; \
+	fi; \
+	exit $$_rc
+
+# ---------------------------------------------------------------------------
+# `make doctor` -- one-shot toolchain status report.
+#
+# Probes every external tool the various build / test paths depend on
+# and prints a status table so first-time contributors can see at a
+# glance which paths are usable on their machine. Exits 0 always (it's
+# diagnostic, not gating); the individual targets still fail loudly when
+# their specific deps are missing.
+# ---------------------------------------------------------------------------
+# Each entry is a single shell word (wrapped in single quotes so the
+# spaces inside the description don't break for-loop word-splitting).
+# Format: name:probe:description -- where `probe` is either an absolute
+# path / `./relative` path (existence-checked with `[ -e ]`) or a bare
+# binary name (resolved via `command -v`). Keep the colon-form simple:
+# no inner quoting, no embedded colons in any field.
+DOCTOR_CHECKS	:= \
+	'native_cc:m68k-atari-mint-gcc:native Jaguar build (make all)' \
+	'rmac:$(JAGPATH)/bin/mac:RMAC assembler' \
+	'aln:$(JAGPATH)/bin/aln:RLN linker' \
+	'rmvlib:$(JAGPATH)/lib/lib/rmvlib.a:rmvlib SDK' \
+	'docker:$(DOCKER):Docker (make docker-build / make sdk-pull)' \
+	'colima:colima:Colima (Docker Desktop alt; macOS/Linux)' \
+	'python3:python3:libretro.py harness + scripts/make-rom.py' \
+	'mame:$(MAME):MAME smoke test (make test-mame)' \
+	'vj_core:$(VJ_CORE_SRC):virtualjaguar-libretro source (make test-core)' \
+	'libretro_so:./virtualjaguar_libretro.so:libretro core .so (linux)' \
+	'libretro_dylib:./virtualjaguar_libretro.dylib:libretro core .dylib (macOS)' \
+	'gh:gh:GitHub CLI (release / PR helpers)' \
+	'git:git:git'
+
+.PHONY: doctor
+doctor:
+	@printf '\n  Atari Jaguar 240p Test Suite -- toolchain status\n'
+	@printf '  ================================================\n\n'
+	@printf '  %-22s %-9s  %s\n' 'TOOL' 'STATUS' 'PURPOSE'
+	@printf '  %-22s %-9s  %s\n' '----' '------' '-------'
+	@for entry in $(DOCTOR_CHECKS); do \
+		name=$$(printf '%s\n' "$$entry" | cut -d: -f1); \
+		probe=$$(printf '%s\n' "$$entry" | cut -d: -f2); \
+		desc=$$(printf '%s\n'  "$$entry" | cut -d: -f3-); \
+		case "$$probe" in \
+			*/*) [ -e "$$probe" ] && status='OK' || status='MISSING' ;; \
+			*)   command -v "$$probe" >/dev/null 2>&1 && status='OK' || status='MISSING' ;; \
+		esac; \
+		case "$$status" in \
+			OK)      mark='[ OK ]' ;; \
+			MISSING) mark='[MISS]' ;; \
+		esac; \
+		printf '  %-22s %-9s  %s\n' "$$name" "$$mark" "$$desc"; \
+	done
+	@printf '\n  MAME Jaguar BIOS (required by `make test-mame`, copyrighted):\n'
+	@_found=0; for d in "$$HOME/.mame/roms/jaguar" "$$HOME/Documents/MAME/roms/jaguar" \
+	                    "$$(brew --prefix 2>/dev/null)/share/mame/roms/jaguar" \
+	                    "/usr/local/share/mame/roms/jaguar" \
+	                    "/usr/share/mame/roms/jaguar"; do \
+		if [ -f "$$d/jagboot.rom" ] && [ -f "$$d/jagwave.rom" ]; then \
+			printf '    [ OK ]   %s\n' "$$d"; _found=1; \
+		fi; \
+	done; \
+	if [ "$$_found" = 0 ]; then \
+		printf '    [MISS]   no jagboot.rom + jagwave.rom found in any standard MAME hash dir\n'; \
+	fi
+	@printf '\n  Resolved tunables:\n'
+	@printf '    JAGPATH        = %s\n' '$(JAGPATH)'
+	@printf '    SDK_IMAGE      = %s\n' '$(SDK_IMAGE)'
+	@printf '    VJ_CORE_SRC    = %s\n' '$(VJ_CORE_SRC)'
+	@printf '    VJ_CORE_REMOTE = %s\n' '$(VJ_CORE_REMOTE)'
+	@printf '    MAME           = %s\n' '$(MAME)'
+	@printf '    MAME_ROMPATH   = %s\n' '$(if $(MAME_ROMPATH),$(MAME_ROMPATH),(auto-detected))'
+	@printf '    TEST_FRAMES    = %s\n' '$(TEST_FRAMES)'
+	@printf '    MAME_SECONDS   = %s\n' '$(MAME_SECONDS)'
+	@printf '\n  Next steps:\n'
+	@printf '    Build (any path):       make\n'
+	@printf '    Smoke test (libretro):  make test\n'
+	@printf '    Smoke test (MAME):      make test-mame   (needs Jaguar BIOS, see above)\n'
+	@printf '    Per-target reference:   make help\n\n'
 
 sdk-pull: | docker-up
 	$(DOCKER) pull $(SDK_IMAGE)
@@ -645,12 +876,16 @@ help:
 	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 0 frames (load-only smoke-test, see comment in target)'
 	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
 	@printf '  %-22s %s\n' 'verify-sig'       'check fastboot signature matches tursilion/makefastboot'
+	@printf '  %-22s %s\n' 'resign-core'      'macOS: ad-hoc re-sign a libretro core (CORE=path; auto-runs as test prereq)'
+	@printf '  %-22s %s\n' 'unquarantine-core' 'macOS: strip com.apple.quarantine + delegate to resign-core'
 	@printf '\n'
 	@printf 'Smoke tests (this codebase has no host-runnable unit tests by design;\n'
 	@printf 'the "tests" are visual patterns drawn by the ROM itself):\n'
 	@printf '  %-22s %s\n' 'test'             'verify-sig + boot in libretro core for $$(TEST_FRAMES) frames (default 60)'
-	@printf '  %-22s %s\n' 'test-core'        'build virtualjaguar_libretro.* from $$(VJ_CORE_SRC) (default ../virtualjaguar-libretro)'
+	@printf '  %-22s %s\n' 'test-core'        'build virtualjaguar_libretro.* from $$(VJ_CORE_SRC) (interactive: prompts to clone if missing)'
+	@printf '  %-22s %s\n' 'test-mame'        'boot .j64 in MAME jaguar driver headlessly for $$(MAME_SECONDS) seconds (default 5)'
 	@printf '  %-22s %s\n' 'test-deps'        'print resolved test variables (debug)'
+	@printf '  %-22s %s\n' 'doctor'           'one-shot toolchain status report (cc / SDK / docker / mame / libretro)'
 	@printf '  %-22s %s\n' 'bjl'              'send .bin via BJL (lo -8)'
 	@printf '  %-22s %s\n' 'alpine / debug'   'launch under Alpine debugger / WDB'
 	@printf '\n'
