@@ -351,7 +351,12 @@ def main(argv: list[str]) -> int:
         return 1
 
     args.out.mkdir(parents=True, exist_ok=True)
-    manifest: list[dict[str, str]] = []
+    ## Heterogeneous payload: `width`/`height` are int while everything
+    ## else is str -- ``object`` is the honest annotation. Avoids
+    ## misleading callers (and Copilot reviewers) into thinking the
+    ## manifest is a uniform string map.
+    manifest: list[dict[str, object]] = []
+    missed: list[str] = []
     total_frames = sum(sum(s.frames for s in g.steps) for g in tour)
     total_caps = sum(sum(1 for s in g.steps if s.label) for g in tour)
     print(f">> tour: {len(tour)} group(s), {total_frames} frame(s), "
@@ -364,6 +369,7 @@ def main(argv: list[str]) -> int:
             content=args.content,
             out=args.out,
             manifest=manifest,
+            missed=missed,
             save_png=save_png,
             verbose=args.verbose,
             session_builder_cls=SessionBuilder,
@@ -385,6 +391,17 @@ def main(argv: list[str]) -> int:
         )
     )
     print(f">> wrote manifest: {manifest_path} ({len(manifest)} shots)", flush=True)
+
+    ## Treat any labeled-step that returned no framebuffer as a hard
+    ## failure: a "successful" make screenshots run with a stale or
+    ## incomplete manifest is worse than a noisy red CI (silent drift
+    ## defeats the whole point of make screenshots-check).
+    if missed:
+        print(f"!! {len(missed)} capture(s) had no framebuffer:",
+              file=sys.stderr)
+        for label in missed:
+            print(f"   - {label}", file=sys.stderr)
+        return 3
     return 0
 
 
@@ -395,14 +412,17 @@ def _run_group(
     content: Path,
     out: Path,
     manifest: list,
+    missed: list[str],
     save_png,
     verbose: bool,
     session_builder_cls,
     iterable_input_driver_cls,
 ) -> int:
     """Boot the core fresh and execute one TourGroup. Captures emit
-    PNGs and append manifest entries in-place. Returns 0 on success
-    or a non-zero exit code on failure."""
+    PNGs and append manifest entries in-place. Labeled steps that
+    return no framebuffer are appended to ``missed`` (qualified as
+    ``<group>/<label>``) so the caller can fail the whole run.
+    Returns 0 on success or a non-zero exit code on failure."""
     actions = _flatten([group])
     captures = sum(1 for _, _, label, _ in actions if label)
     print(f">> [{group.slug}] {len(actions)} frames, "
@@ -426,6 +446,7 @@ def _run_group(
                 if shot is None:
                     print(f"!! [{group.slug}] frame {i}: "
                           f"no framebuffer for {label}", file=sys.stderr)
+                    missed.append(f"{group.slug}/{label}")
                     continue
                 group_dir = out / group.slug
                 group_dir.mkdir(parents=True, exist_ok=True)
