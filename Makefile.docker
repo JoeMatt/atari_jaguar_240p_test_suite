@@ -570,6 +570,7 @@ test-deps:
 	@printf 'LIBRETRO_CONTENT = %s\n'   "$(LIBRETRO_CONTENT)"
 	@printf 'LIBRETRO_PYTHON  = %s\n'   "$(LIBRETRO_PYTHON)"
 	@printf 'MAME             = %s (%s)\n' "$(MAME)" "$$(command -v $(MAME) >/dev/null 2>&1 && echo found || echo missing)"
+	@printf 'MAME_ROMPATH     = %s\n'   "$(if $(MAME_ROMPATH),$(MAME_ROMPATH),(auto-detected))"
 	@printf 'MAME_SECONDS     = %s\n'   "$(MAME_SECONDS)"
 
 # ---------------------------------------------------------------------------
@@ -589,10 +590,14 @@ test-deps:
 #   $(MAME_ROMPATH)/jaguar/jagboot.rom   (~ 8 KB)
 #   $(MAME_ROMPATH)/jaguar/jagwave.rom   (~ 4 KB)
 #
-# Default MAME_ROMPATH on most installs:
-#   macOS (brew):  $$(brew --prefix)/share/mame/roms     (or ~/Documents/MAME/roms)
-#   Ubuntu:        ~/.mame/roms
-#   Windows:       %APPDATA%/mame/roms
+# `test-mame` auto-detects the rompath from the standard hash-dir
+# locations (macOS: ~/Documents/MAME/roms; Linux: ~/.mame/roms; brew:
+# $(brew --prefix)/share/mame/roms; system: /usr/local/share/mame/roms,
+# /usr/share/mame/roms) and passes -rompath explicitly to MAME --
+# MAME's own default is just `roms` relative to cwd, which would
+# never find the BIOS otherwise. Override MAME_ROMPATH (in
+# Makefile.config or on the command line) if your install puts roms
+# somewhere unusual.
 #
 # Run mode: `mame -bench N` (deterministic headless run for N seconds,
 # no display, no sound). Exit code 0 = the driver booted and ran for the
@@ -607,15 +612,35 @@ test-mame: ensure-j64
 		printf '   Or override:  make test-mame MAME=/path/to/mame\n' >&2; \
 		exit 1; \
 	fi
-	@printf '>> Booting %s.j64 in MAME jaguar driver for %s seconds...\n' "$(OUT_PROJECT)" "$(MAME_SECONDS)"
-	@_log=$$($(MAME) jaguar -cart "$(OUT_PROJECT).j64" -bench $(MAME_SECONDS) -nodebug -skip_gameinfo 2>&1); _rc=$$?; \
+	@_rompath="$(MAME_ROMPATH)"; \
+	if [ -z "$$_rompath" ]; then \
+		for d in "$$HOME/.mame/roms" "$$HOME/Documents/MAME/roms" \
+		         "$$(brew --prefix 2>/dev/null)/share/mame/roms" \
+		         "/usr/local/share/mame/roms" "/usr/share/mame/roms"; do \
+			if [ -f "$$d/jaguar/jagboot.rom" ] && [ -f "$$d/jaguar/jagwave.rom" ]; then \
+				_rompath="$$d"; break; \
+			fi; \
+		done; \
+	fi; \
+	if [ -z "$$_rompath" ]; then \
+		printf '!! Jaguar BIOS not found in any standard MAME hash dir.\n' >&2; \
+		printf '   Place jagboot.rom + jagwave.rom under one of:\n' >&2; \
+		printf '     ~/.mame/roms/jaguar/                (Linux default)\n' >&2; \
+		printf '     ~/Documents/MAME/roms/jaguar/       (macOS default)\n' >&2; \
+		printf '     $$(brew --prefix)/share/mame/roms/jaguar/   (brew)\n' >&2; \
+		printf '   Or point at an existing checkout:\n' >&2; \
+		printf '     make test-mame MAME_ROMPATH=/path/to/mame/roms\n' >&2; \
+		printf '   (the path is the *parent* of the jaguar/ set dir).\n' >&2; \
+		exit 2; \
+	fi; \
+	printf '>> Booting %s.j64 in MAME jaguar driver for %s seconds (rompath: %s)...\n' \
+		"$(OUT_PROJECT)" "$(MAME_SECONDS)" "$$_rompath"; \
+	_log=$$($(MAME) jaguar -rompath "$$_rompath" -cart "$(OUT_PROJECT).j64" \
+	                       -bench $(MAME_SECONDS) -nodebug -skip_gameinfo 2>&1); _rc=$$?; \
 	printf '%s\n' "$$_log"; \
 	if printf '%s' "$$_log" | grep -Eq 'jagboot\.rom NOT FOUND|jagwave\.rom NOT FOUND'; then \
-		printf '\n!! MAME requires the Jaguar BIOS roms (copyrighted, not redistributable).\n' >&2; \
-		printf '   Place jagboot.rom + jagwave.rom under your MAME hash dir, e.g.:\n' >&2; \
-		printf '     ~/.mame/roms/jaguar/{jagboot,jagwave}.rom    (Linux)\n' >&2; \
-		printf '     ~/Documents/MAME/roms/jaguar/{jagboot,jagwave}.rom    (macOS)\n' >&2; \
-		printf '   Then re-run: make test-mame\n' >&2; \
+		printf '\n!! MAME still cannot find the Jaguar BIOS at %s/jaguar/.\n' "$$_rompath" >&2; \
+		printf '   Check filenames are exactly jagboot.rom + jagwave.rom (case-sensitive).\n' >&2; \
 		exit 2; \
 	fi; \
 	exit $$_rc
@@ -689,6 +714,7 @@ doctor:
 	@printf '    VJ_CORE_SRC    = %s\n' '$(VJ_CORE_SRC)'
 	@printf '    VJ_CORE_REMOTE = %s\n' '$(VJ_CORE_REMOTE)'
 	@printf '    MAME           = %s\n' '$(MAME)'
+	@printf '    MAME_ROMPATH   = %s\n' '$(if $(MAME_ROMPATH),$(MAME_ROMPATH),(auto-detected))'
 	@printf '    TEST_FRAMES    = %s\n' '$(TEST_FRAMES)'
 	@printf '    MAME_SECONDS   = %s\n' '$(MAME_SECONDS)'
 	@printf '\n  Next steps:\n'
