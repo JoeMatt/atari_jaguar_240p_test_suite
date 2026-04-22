@@ -369,10 +369,13 @@ void SpriteStressTest(void){
         }
     }
 
-    /* Tear down sprites first so the OP isn't walking a half-freed
-     * list when we return to the menu. Layer hide is the belt-and-
-     * braces guarantee that even if a stale OP pointer survived,
-     * nothing on layer STRESS_LAYER is drawn on the next vsync. */
+    /* Hide layers FIRST so the OP stops walking the stress display
+     * list before we mutate it. patterns.c:38-43 and eeprom_test.c:621-629
+     * both follow the same hide-then-detach order -- doing it the other
+     * way around lets the OP race against detach_sprite_from_display()
+     * and can spray garbage on the way out. */
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+
     for(i = 0; i < MAX_SPRITES; i++){
         if(pool[i] != NULL){
             pool[i]->invisible = 1;
@@ -385,7 +388,6 @@ void SpriteStressTest(void){
 
     TOMREGS->clut1[STRESS_CLUT_IDX] = savedClut;
 
-    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb2  = freeTextBox(helpTb2);
     helpTb1  = freeTextBox(helpTb1);
     modeTb   = freeTextBox(modeTb);
