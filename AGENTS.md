@@ -43,7 +43,7 @@ or substantially rewritten by this fork:
 | Test Patterns | More Patterns sub-menu (Color Bars w/ Gray, Linearity, Phase, Brightness, Contrast) |
 | Video Tests | Striped Sprite, Manual Lag Test, Alternate 240p/480i |
 | Audio Tests | L/R Balance + 1 kHz Tone, MDFourier Sweep |
-| Hardware Tools | Pro Controller Test, Rotary Controller Test, System Info, Jaguar CD Probe, Video Mode Test (Resolution Switching) |
+| Hardware Tools | Pro Controller Test, Rotary Controller Test, System Info, Jaguar CD Probe, Video Mode Test (Resolution Switching), EEPROM Read & Write Test (93C46) |
 | Screen Savers | Color Cycle, Bouncing Square, Scrolling Bars |
 
 Procedurally generated wherever possible (see `extra_tests.c`,
@@ -282,6 +282,55 @@ Two non-obvious design choices are load-bearing:
 
 `make screenshots-check` (plumbed into CI for the cleanup PR series)
 fails if regenerating the gallery would change `README.md`.
+
+### Text rendering: textBox sizing rules
+
+The font + textBox engine in `text_engine.c` has a couple of sharp
+edges that bite anyone writing a new on-screen test. Lessons paid for
+in PR #10 (the EEPROM Test render-corruption fix):
+
+1. **`mainFont` is fixed-width.** `main.c` initialises every glyph to
+   `char_width = 5` and `kerning = 1`, so each character advances
+   the cursor exactly 6 px. Use that to size every textBox: a string
+   of *N* visible characters needs at least `N * 6` pixels, plus a
+   safety margin for the trailing pixel (and for whatever you might
+   later write into the same box via `updateLine`).
+2. **Sprite framebuffer is sized at `newTextBox()` time, not at
+   `updateTextBox()` time.** The sprite's pixel buffer is allocated
+   from the *initial* string's `line_count` after word-wrap. If a
+   later `updateTextBox()` writes a string long enough to wrap an
+   extra line, drawing overflows the framebuffer and *corrupts the
+   adjacent sprite's memory*. The visible symptom is a cascade of
+   garbled rows in seemingly unrelated boxes — the kind of thing
+   that looks like a font bug or layer collision but is actually a
+   buffer overflow. Always initialise a textBox with the **worst-
+   case** string it'll ever hold, even if that means a placeholder
+   like `"WARN: restore failed at 0xFF -- check save data"`.
+3. **`box_width` must be a multiple of 8 (one phrase).** The Object
+   Processor expects `DEPTH8` sprite widths to be phrase-aligned.
+   Misaligned widths (300, 268, etc.) render with subtle pixel
+   smearing or stride glitches. Every existing test uses 64, 80,
+   128, 192, 224, 256, 320 — stick to that ladder. 320 is the full
+   NTSC screen width and is a safe default for any box that has to
+   display variable-length text.
+4. **`updateLine(tb, text, ...)` reallocates `tb->text`** (free +
+   malloc + strncpy). That's fine for occasional updates but the
+   per-frame call rate of a redraw loop will fragment the heap.
+   For per-frame text changes prefer the BounceSquareTest pattern:
+   write directly into `tb->text[i]` (which was sized by
+   `newTextBox`) and call `updateTextBox(tb)`. Use `updateLine`
+   only when the displayed string changes infrequently or when the
+   color also needs to change.
+5. **`resetTextScreen()` clears the framebuffer between updates.**
+   You don't need trailing-space padding on shorter strings to
+   "erase" pixels from a previous longer string — the engine
+   already does that. Padding cargo-culted from ancient code just
+   inflates `char_count` and risks pushing you into accidental
+   wrap.
+
+If a screen looks corrupted with a freshly written test, the cause
+is almost always (2) or (3) — check those before suspecting
+`fb2d_copy_straight` or sprite layer ordering.
 
 ### Cart input timing (relevant to any scripted harness)
 
