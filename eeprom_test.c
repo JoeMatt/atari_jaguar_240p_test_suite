@@ -6,7 +6,7 @@
 /* ---------------------------------------------------------------------------
  * 93C46 EEPROM low-level driver.
  *
- * The Jaguar's NM93C14-equivalent serial EEPROM is wired to three
+ * The Jaguar's NM93C46-equivalent serial EEPROM is wired to three
  * memory-mapped Jerry I/O ports (per the Jaguar Technical Reference
  * Manual and Virtual Jaguar's well-tested emulation):
  *

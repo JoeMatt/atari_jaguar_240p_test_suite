@@ -194,10 +194,13 @@ TOUR: list[TourGroup] = [
         title="EEPROM test",
         steps=[
             ## Boot -> Hardware Tools sub-menu, then walk DOWN x9 to
-            ## land on "EEPROM Test" (entry index 9 in HardwareMenu(),
-            ## just after Video Mode Test). Press A to enter and
+            ## land on "EEPROM Test". The Hardware menu cursor starts
+            ## on Controller Test (menuState=1, switch case 1), and
+            ## EepromTest() lives at switch case 10 (just after Video
+            ## Mode Test at case 9), so 9 DOWN presses moves the
+            ## cursor from case 1 -> case 10. Press A to enter and
             ## capture the 8x8 hex grid -- the test snapshots the
-            ## chip on entry and restores on exit, so this is safe to
+            ## chip on entry and verifies-on-exit, so this is safe to
             ## script repeatedly.
             *_boot(),
             *_open_main_item(3),
