@@ -100,6 +100,7 @@ void DrawHelp(int option){
         case HELP_CONVERGENCE:
         case HELP_STRIPED:
         case HELP_SOUND:
+        case HELP_SPRITE_STRESS:
             totalPages = 1;
         break;
 
@@ -525,6 +526,19 @@ void DrawHelp(int option){
                             updateLine(settings, mainFont, helpLineTextBox[0], "SOUND TEST", 999999, 999999, GREEN);
                             
                             updateLine(settings, mainFont, helpTextBox, "You can test the waveforms that are stored in Jerry from here. Use left/right to select the waveform and octave to playback, or to adjust panning. Press A to start/stop playback.^^An additional raw audio sample has been included as an optional test.", 999999, 999999, WHITE); 
+                        break;
+                    }
+
+                break;
+
+                case HELP_SPRITE_STRESS:
+
+                    switch(page){
+
+                        case 0:
+                            updateLine(settings, mainFont, helpLineTextBox[0], "SPRITE STRESS (OP SATURATION)", 999999, 999999, GREEN);
+
+                            updateLine(settings, mainFont, helpTextBox, "Stresses the Object Processor by spawning many DEPTH8 sprites on a single scanline. The OP walks its display list once per line until horizontal time runs out -- once your sprites exceed the ~8 KiB/line pixel-fetch budget, the OP drops or tears the trailing entries.^^L/R: -/+1 sprite. U/D: +/-8 (fast ramp). A: cycle 8x8/16x16/32x32. B: SINGLE-LINE vs TILED. C: reset to 1. OPTION: exit.^^Compare real-hardware drop-out against Virtual Jaguar / BigPEmu.", 999999, 999999, WHITE);
                         break;
                     }
 

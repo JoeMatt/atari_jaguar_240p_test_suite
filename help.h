@@ -44,6 +44,7 @@
 #define HELP_LED 23
 #define HELP_LAG 24
 #define HELP_CONVERGENCE 32
+#define HELP_SPRITE_STRESS 33
 
 extern uint8_t help;
 phrase *helpData;
