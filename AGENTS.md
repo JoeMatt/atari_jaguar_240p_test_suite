@@ -20,11 +20,47 @@ This fork (JoeMatt) keeps the original test-suite source intact and adds:
   drift).
 - A self-routing `Makefile` that picks native vs container automatically.
 - GitHub Actions CI: builds release + debug ROMs on every PR, attaches
-  them as artifacts, and ships GitHub Releases on tag push.
+  them as artifacts, ships GitHub Releases on tag push, and runs a
+  libretro boot smoke test on every push.
 - A pure-Python port of Tursilion's `makefastboot` so we don't depend on
   a Windows-only Visual Studio project for cart header generation.
+- New on-screen tests carried over from the Genesis / Dreamcast / SNES
+  240p suites — see [Test additions](#test-additions-vs-upstream) below.
+- Local smoke-test harnesses: `make test` (libretro), `make test-mame`
+  (independent emulator), `make doctor` (toolchain probe).
+- An automated screenshot gallery embedded in `README.md`
+  (`make screenshots && make screenshots-readme`).
 
 [upstream]: https://github.com/BitJag/atari_jaguar_240p_test_suite
+
+### Test additions vs upstream
+
+Documented in `README.md` under *What's included*; bolded items are new
+or substantially rewritten by this fork:
+
+| Menu | New / rewritten tests |
+|---|---|
+| Test Patterns | More Patterns sub-menu (Color Bars w/ Gray, Linearity, Phase, Brightness, Contrast) |
+| Video Tests | Striped Sprite, Manual Lag Test, Alternate 240p/480i |
+| Audio Tests | L/R Balance + 1 kHz Tone, MDFourier Sweep |
+| Hardware Tools | Pro Controller Test, Rotary Controller Test, System Info, Jaguar CD Probe, Video Mode Test (Resolution Switching) |
+| Screen Savers | Color Cycle, Bouncing Square, Scrolling Bars |
+
+Procedurally generated wherever possible (see `extra_tests.c`,
+`controller_test.c`) so we don't expand the asset pipeline. Every new
+test ships with a Help screen entry in `help.c` — keep that invariant.
+
+### License
+
+GPL-2.0-or-later (verbatim grant from the upstream BitJag README).
+`LICENSE` at the repo root contains the full GPL v2 text and `README.md`
+asserts the "or any later version" clause via
+`SPDX-License-Identifier: GPL-2.0-or-later`. GitHub's `licensee`
+detector currently labels the repo `GPL-2.0` because it ignores prose
+"or later" grants ([licensee/licensee#444][licensee-444]); we keep the
+SPDX line + README clarification as the authoritative declaration.
+
+[licensee-444]: https://github.com/licensee/licensee/issues/444
 
 ---
 
@@ -159,6 +195,114 @@ The standalone script bypasses typer.
 
 [libretro-py]: https://github.com/JesseTG/libretro.py
 
+### macOS dylib code-signing self-heal
+
+The libretro core is a `.dylib` on macOS. Two failure modes are baked
+into the platform that bite any harness using `dlopen` (libretro.py,
+custom `dlopen_test.c`, etc.) but **not** RetroArch (which is unhardened
+and skips signature checks):
+
+1. **`com.apple.quarantine`** — if the dylib was downloaded via a
+   browser, Gatekeeper marks it quarantined and refuses to load it from
+   a hardened-runtime process.
+2. **Stale ad-hoc signature** — when the linker emits a dylib it
+   ad-hoc signs the file. Any subsequent `strip` / `install_name_tool`
+   / post-link patch modifies bytes *after* the signature was taken,
+   so the embedded signature only covers part of the file.
+   Hardened-runtime processes (anything Python-3.12+ from Homebrew,
+   anything you build with default clang on macOS 10.15+) refuse to
+   `dlopen` such a dylib and `SIGKILL` the host before `dyld` can
+   return a useful errno. Symptom: `Killed: 9` (exit code 137) right
+   after `>> about to call load_game...`, no Python traceback, lldb
+   shows `code signature does not cover entire file up to signature
+   in <path>`.
+
+`make resign-core` regenerates an ad-hoc signature covering the whole
+file (`codesign --force --sign -`). `make unquarantine-core` strips
+quarantine xattr **and** delegates to `resign-core` if the embedded
+signature is stale; both `libretro-test` (and therefore `make test`,
+`make run-ui`, etc.) and the screenshot tour declare
+`unquarantine-core` as a prerequisite, so the heal happens
+automatically the first time a freshly downloaded core is touched.
+
+When investigating a SIGKILL in any non-RetroArch host on macOS, try
+`make unquarantine-core` *first* before reaching for lldb — 90 % of
+the time it's the signature, not actual emulator code.
+
+### MAME smoke testing (independent of libretro)
+
+`make test-mame` runs MAME's `jaguar` driver in `-bench` mode with the
+just-built `.j64` for `MAME_SECONDS` (default `5`) seconds. It is
+purely a "boots without crashing on a second emulator" check — MAME's
+output is captured to `mame-test.log`, stdout/stderr is asserted clean
+of `Fatal error`. Notes:
+
+- **BIOS dependency.** Requires `jagboot.rom` + `jagwave.rom` reachable
+  via MAME's standard ROM search (`~/Documents/MAME/roms/jaguar/` or
+  `~/.mame/roms/jaguar/`). The Makefile auto-detects the first existing
+  hash dir and exports `-rompath` accordingly; override with
+  `MAME_ROMPATH=...` if you keep BIOS files elsewhere. We deliberately
+  do **not** pull BIOS files in CI (license).
+- **Local-only.** MAME isn't on the GitHub Actions runners by default
+  and the BIOS issue above means no CI smoke job exists for it. Run
+  manually before tagging a release.
+- **Use as a tie-breaker** when the libretro smoke job goes green but a
+  user reports a black screen. MAME validates BIOS-side cart-header
+  checks that Virtual Jaguar libretro skips.
+
+### Screenshot tour for the README gallery
+
+`scripts/screenshot-tour.py` drives the libretro core through a scripted
+joypad sequence and dumps PNGs + a `manifest.json` to `screenshots/`.
+Two consumers turn that manifest into something humans can browse:
+
+- `scripts/screenshot-readme.py` rewrites the
+  `<!-- screenshots:start -->` / `<!-- screenshots:end -->` block in
+  `README.md` with a collapsed `<details>` gallery (renders on GitHub).
+- `scripts/screenshot-html.py` writes `screenshots/index.html` — a
+  single self-contained, dep-free viewer (sticky group nav,
+  click-to-zoom) that opens directly in any browser. Emitted
+  automatically as the tail step of `make screenshots`; regen
+  standalone with `make screenshots-html`. Pure stdlib so it
+  intentionally does **not** depend on the libretro venv.
+
+Two non-obvious design choices are load-bearing:
+
+1. **Per-`TourGroup` fresh boot.** Each tour group is its own
+   independent libretro session — we boot from cold, navigate to the
+   target screen, capture, exit. Trying to "back out" with
+   `JOYPAD_OPTION` between groups was unreliable because the cart's
+   `controllerLock` state was carried across the menu→test→menu
+   transition. Restarting costs ~0.5 s per group; correctness > speed.
+2. **`TAP_PRESS_FRAMES = 4`.** Single-frame button presses are missed
+   by the in-cart input debouncer (see *Cart input timing* below).
+   `_flatten` asserts each button press for the first 4 frames of a
+   step, then idles for the rest. **Don't lower this floor without
+   re-running the full tour and diffing every PNG.**
+
+`make screenshots-check` (plumbed into CI for the cleanup PR series)
+fails if regenerating the gallery would change `README.md`.
+
+### Cart input timing (relevant to any scripted harness)
+
+Every menu and test in `main.c` / `patterns.c` / `controller_test.c`
+uses the same gate before acting on a joypad bit:
+
+```c
+if ((settings->joy1 & JOYPAD_X) && settings->controllerLock == 0) {
+    settings->controllerLock = 1;
+    /* react */
+}
+```
+
+`controllerLock` is cleared on the next vblank where `settings->joy1
+== 0`. The practical implication for scripted input (libretro.py, MAME
+auto-keypress, a custom `dlopen` host) is **a button press must be
+asserted across at least one full poll-vblank-poll cycle to register**.
+Empirically that's 4 frames at NTSC. Ports of the screenshot tour to
+other emulators must respect this — the cart is correct, the harness
+is what needs to wait. Don't "fix" it in the cart.
+
 ## ROM generation invariants (`scripts/make-rom.py`)
 
 This script ports `makefastboot.cpp` to Python. Correctness rules
@@ -210,8 +354,8 @@ data_unaligned = data_aligned + b'\xAA\xBB\xCC'
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/sdk-image.yml` | push to any branch, PRs, manual | Build SDK Docker image, push to `ghcr.io/<owner>/jaguar-sdk:{latest,sha-<short>}`. PRs build but don't push. Manual `push=false` builds locally and smoke-tests the **just-built image** (not `:latest`). |
-| `.github/workflows/build.yml` | push, PR | Build release + debug `.cof`/`.bin`/`.rom`, upload as artifacts. PR-only sticky comment via `marocchino/sticky-pull-request-comment` — **guarded against fork PRs** (where `GITHUB_TOKEN` is read-only) and `continue-on-error: true` so a comment failure can't redden a green build. |
-| `.github/workflows/release.yml` | tag push | Same build matrix, publishes to GitHub Releases. |
+| `.github/workflows/build.yml` | push, PR | Build release + debug `.cof`/`.bin`/`.rom`, upload as artifacts. Includes a **libretro boot smoke job** that downloads the just-built `.j64` and the libretro Linux core artifact, runs `libretro-load-test.py` for `LIBRETRO_FRAMES` frames, and asserts non-zero pixel coverage. PR-only sticky comment via `marocchino/sticky-pull-request-comment` — **guarded against fork PRs** (where `GITHUB_TOKEN` is read-only) and `continue-on-error: true` so a comment failure can't redden a green build. |
+| `.github/workflows/release.yml` | tag push | Same build matrix, publishes to GitHub Releases. (Smoke test is intentionally `build.yml`-only — releases are cut off the same SHA that the smoke job already validated.) |
 
 Permissions follow least-privilege: only the `pr-comment` job has
 `pull-requests: write`; the build job is `contents: read` + `packages: read`.
@@ -317,6 +461,15 @@ files.
 - **PR review feedback from Copilot / Qodo** should be triaged into a
   TODO list and addressed in a single follow-up commit titled
   `ci/build: address Copilot PR review feedback` (or similar).
+- **Version bumps** live in exactly one place: `main.c` `drawCredits()`
+  (`Ver. X.Y.Z - MM/DD/YYYY`). Tag with `vX.Y.Z` to trigger
+  `release.yml`. Don't bump the version on every PR — bump on the
+  commit that immediately precedes the tag.
+- **README screenshots** are the source of truth for the gallery, but
+  only regenerate them on user-visible UI changes (new menu entries,
+  new tests, layout shifts). Re-running the tour for cosmetic-only
+  edits churns the diff for no reason. Run `make screenshots-check`
+  in CI to catch the cases that *do* matter.
 
 ---
 
@@ -333,4 +486,20 @@ make docker-all         # both ROMs in one shot
 make sdk-shell          # interactive shell in SDK container
 make colima-start       # boot the colima VM
 make help-toolchain     # actionable error when nothing is installed
+
+# Local validation
+make doctor             # probe toolchain + emulators + venv state
+make test               # libretro boot smoke test (alias for libretro-test)
+make test-mame          # boot the .j64 in MAME -bench (BIOS required)
+make verify-sig         # diff fastboot signature vs upstream
+
+# macOS dylib hygiene
+make unquarantine-core  # strip quarantine xattr (auto re-signs if stale)
+make resign-core        # force ad-hoc re-sign of the core dylib
+
+# Screenshot gallery
+make screenshots        # drive the libretro core through every menu (also rebuilds index.html)
+make screenshots-readme # rewrite README gallery between markers
+make screenshots-html   # rewrite screenshots/index.html viewer (dep-free, no venv)
+make screenshots-check  # CI-friendly: fails if README or index.html would change
 ```

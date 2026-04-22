@@ -1,0 +1,134 @@
+{
+  "core": "virtualjaguar_libretro.dylib",
+  "content": "jag_240p_test_suite.jag",
+  "shots": [
+    {
+      "group": "main",
+      "title": "Main menu",
+      "label": "main-menu",
+      "note": "Top-level menu (8 entries)",
+      "path": "main/00-main-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "patterns",
+      "title": "Test patterns",
+      "label": "patterns-menu",
+      "note": "Test Patterns sub-menu",
+      "path": "patterns/00-patterns-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "patterns",
+      "title": "Test patterns",
+      "label": "patterns-pluge",
+      "note": "Pluge (first pattern)",
+      "path": "patterns/01-patterns-pluge.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "video",
+      "title": "Video tests",
+      "label": "video-menu",
+      "note": "Video Tests sub-menu",
+      "path": "video/00-video-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "audio",
+      "title": "Audio tests",
+      "label": "audio-menu",
+      "note": "Audio Tests sub-menu",
+      "path": "audio/00-audio-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "hardware",
+      "title": "Hardware tools",
+      "label": "hardware-menu",
+      "note": "Hardware Tools sub-menu",
+      "path": "hardware/00-hardware-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "screensavers",
+      "title": "Screen savers",
+      "label": "screensavers-menu",
+      "note": "Screen Savers sub-menu",
+      "path": "screensavers/00-screensavers-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "help",
+      "title": "Help",
+      "label": "help-menu",
+      "note": "Help screen",
+      "path": "help/00-help-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "options",
+      "title": "Options",
+      "label": "options-menu",
+      "note": "Options screen",
+      "path": "options/00-options-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "credits",
+      "title": "Credits",
+      "label": "credits-screen",
+      "note": "Credits",
+      "path": "credits/00-credits-screen.png",
+      "width": 326,
+      "height": 241
+    }
+  ],
+  "groups": [
+    {
+      "slug": "main",
+      "title": "Main menu"
+    },
+    {
+      "slug": "patterns",
+      "title": "Test patterns"
+    },
+    {
+      "slug": "video",
+      "title": "Video tests"
+    },
+    {
+      "slug": "audio",
+      "title": "Audio tests"
+    },
+    {
+      "slug": "hardware",
+      "title": "Hardware tools"
+    },
+    {
+      "slug": "screensavers",
+      "title": "Screen savers"
+    },
+    {
+      "slug": "help",
+      "title": "Help"
+    },
+    {
+      "slug": "options",
+      "title": "Options"
+    },
+    {
+      "slug": "credits",
+      "title": "Credits"
+    }
+  ]
+}
