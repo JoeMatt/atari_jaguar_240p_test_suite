@@ -966,7 +966,11 @@ void AudioTestsMenu(){
      * setLineYPos(10) = 86 + 90 = 176, which still leaves 24 px of
      * vertical space before the NTSC/PAL VDP status row at y=200. */
     int done = 0;
-    int lastMenuLine = 10; //counting from zero
+    /* Max 1-based menuState value (cursor wraps between 1 and lastMenuLine).
+     * Same convention as every other *Menu() helper in this file -- the
+     * legacy "counting from zero" comment removed because it contradicts
+     * the actual switch arms below (case 1..10, 1-based). */
+    int lastMenuLine = 10;
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);

@@ -2676,15 +2676,23 @@ static void fillPinkNoise(int16_t *buf){
         /* Centre LFSR sample on zero, scale by 1/4 for headroom. */
         white = (((int32_t)s - 32768) >> 2);
 
-        b0 = (D0 * b0 + G0 * white) >> 15;
-        b1 = (D1 * b1 + G1 * white) >> 15;
-        b2 = (D2 * b2 + G2 * white) >> 15;
-        b3 = (D3 * b3 + G3 * white) >> 15;
-        b4 = (D4 * b4 + G4 * white) >> 15;
-        b5 = (D5 * b5 - G5 * white) >> 15;
+        /* int64_t intermediates: |D| * |b| can blow past INT32_MAX once the
+         * filter rings up (b can hit ~hundreds of thousands once white is
+         * driven hard), so widen the MAC and only narrow back to int32_t
+         * after the >> 15 on the sum. The b5 stage adds (not subtracts)
+         * G5 * white -- G5 is stored with its real sign (-0.0168980), so
+         * the canonical Paul Kellet sum reads `+ G5 * white` directly.
+         * Subtracting it (as the original commit did) double-negates and
+         * skews the spectrum away from -3 dB/oct. */
+        b0 = (int32_t)((((int64_t)D0 * (int64_t)b0) + ((int64_t)G0 * (int64_t)white)) >> 15);
+        b1 = (int32_t)((((int64_t)D1 * (int64_t)b1) + ((int64_t)G1 * (int64_t)white)) >> 15);
+        b2 = (int32_t)((((int64_t)D2 * (int64_t)b2) + ((int64_t)G2 * (int64_t)white)) >> 15);
+        b3 = (int32_t)((((int64_t)D3 * (int64_t)b3) + ((int64_t)G3 * (int64_t)white)) >> 15);
+        b4 = (int32_t)((((int64_t)D4 * (int64_t)b4) + ((int64_t)G4 * (int64_t)white)) >> 15);
+        b5 = (int32_t)((((int64_t)D5 * (int64_t)b5) + ((int64_t)G5 * (int64_t)white)) >> 15);
 
-        pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + ((MIX_W * white) >> 15);
-        b6 = (G6 * white) >> 15;
+        pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + (int32_t)(((int64_t)MIX_W * (int64_t)white) >> 15);
+        b6 = (int32_t)(((int64_t)G6 * (int64_t)white) >> 15);
 
         if(pink >  32767) pink =  32767;
         if(pink < -32768) pink = -32768;
