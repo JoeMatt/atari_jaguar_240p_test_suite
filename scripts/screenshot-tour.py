@@ -190,6 +190,24 @@ TOUR: list[TourGroup] = [
         ],
     ),
     TourGroup(
+        slug="eeprom",
+        title="EEPROM test",
+        steps=[
+            ## Boot -> Hardware Tools sub-menu, then walk DOWN x9 to
+            ## land on "EEPROM Test" (entry index 9 in HardwareMenu(),
+            ## just after Video Mode Test). Press A to enter and
+            ## capture the 8x8 hex grid -- the test snapshots the
+            ## chip on entry and restores on exit, so this is safe to
+            ## script repeatedly.
+            *_boot(),
+            *_open_main_item(3),
+            *(s for _ in range(9) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            _capture("eeprom-grid", "EEPROM Test grid (64 words, hex)"),
+        ],
+    ),
+    TourGroup(
         slug="screensavers",
         title="Screen savers",
         steps=[

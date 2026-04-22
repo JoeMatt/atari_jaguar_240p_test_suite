@@ -1,6 +1,6 @@
 {
   "core": "virtualjaguar_libretro.dylib",
-  "content": "jag_240p_test_suite.jag",
+  "content": "jag_240p_test_suite.j64",
   "shots": [
     {
       "group": "main",
@@ -53,6 +53,15 @@
       "label": "hardware-menu",
       "note": "Hardware Tools sub-menu",
       "path": "hardware/00-hardware-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "eeprom",
+      "title": "EEPROM test",
+      "label": "eeprom-grid",
+      "note": "EEPROM Test grid (64 words, hex)",
+      "path": "eeprom/00-eeprom-grid.png",
       "width": 326,
       "height": 241
     },
@@ -113,6 +122,10 @@
     {
       "slug": "hardware",
       "title": "Hardware tools"
+    },
+    {
+      "slug": "eeprom",
+      "title": "EEPROM test"
     },
     {
       "slug": "screensavers",

@@ -2,7 +2,6 @@
 
 #include "./main.h"
 #include "./text_engine.h"
-#include "./help.h"
 
 /* ---------------------------------------------------------------------------
  * 93C46 EEPROM low-level driver.
@@ -102,17 +101,25 @@ static uint16_t ee_recv_word(void){
     return v;
 }
 
-static void ee_wait_ready(void){
+static int ee_wait_ready(void){
     /* DO is held low while a WRITE/ERASE programs the cell; goes
      * back high when the chip is idle. VJ returns 1 immediately so
      * this is a near-instant no-op there, but it's correct on real
-     * hardware where the program cycle is ~10 ms. */
+     * hardware where the program cycle is ~10 ms.
+     *
+     * Returns 1 when the chip reports idle, 0 if the timeout
+     * expired first. Callers MUST check the return value before
+     * trusting that a WRITE/ERASE landed -- a false return here
+     * means the cell may not have been programmed (or the chip is
+     * unplugged / mis-wired) and the on-screen verification pass
+     * will subsequently catch it as a readback mismatch. */
     int timeout = EE_WRITE_TIMEOUT;
     while(timeout-- > 0){
         if(EE_DO_REG & 1){
-            return;
+            return 1;
         }
     }
+    return 0;
 }
 
 static uint16_t eeprom_read_word_drv(uint8_t addr){
@@ -156,15 +163,23 @@ static void eeprom_ewds_drv(void){
     ee_send_bit(0);
 }
 
-static void eeprom_write_word_drv(uint8_t addr, uint16_t data){
-    /* WRITE: start(1) + op(01) + addr(6) + data(16) -> poll DO until idle. */
+static int eeprom_write_word_drv(uint8_t addr, uint16_t data){
+    /* WRITE: start(1) + op(01) + addr(6) + data(16) -> poll DO until idle.
+     *
+     * Returns the result of ee_wait_ready() so callers can detect a
+     * stuck/disconnected chip without having to do a separate
+     * readback. Walking-1s and address-as-data passes deliberately
+     * ignore this -- they verify by re-READ at the end so any
+     * silent timeout still surfaces as an error count -- but the
+     * exit-time restore path uses it to avoid over-counting retry
+     * attempts that fail for the same underlying reason. */
     ee_cs();
     ee_send_bit(1);
     ee_send_bit(0);
     ee_send_bit(1);
     ee_send_bits((uint16_t)(addr & 0x3F), 6);
     ee_send_bits(data, 16);
-    ee_wait_ready();
+    return ee_wait_ready();
 }
 
 /* ---------------------------------------------------------------------------
@@ -238,11 +253,16 @@ static void readAll(uint16_t out[EE_NWORDS]){
 
 static int writeAll(const uint16_t in[EE_NWORDS]){
     /* Returns the number of words that read back wrong after writing.
-     * Caller is expected to have already issued EWEN. */
+     * Caller is expected to have already issued EWEN.
+     *
+     * The write pass deliberately ignores ee_wait_ready()'s return:
+     * a timeout there will surface here as a readback mismatch, so
+     * counting it twice would inflate the error total. The verify
+     * pass is the source of truth. */
     int i;
     int errors = 0;
     for(i = 0; i < EE_NWORDS; i++){
-        eeprom_write_word_drv((uint8_t)i, in[i]);
+        (void)eeprom_write_word_drv((uint8_t)i, in[i]);
     }
     for(i = 0; i < EE_NWORDS; i++){
         if(eeprom_read_word_drv((uint8_t)i) != in[i]){
@@ -265,7 +285,11 @@ void EepromTest(void){
     uint16_t current[EE_NWORDS];
     char rowBuf[3 + GRID_COLS * 5 + 1];
     char cursorBuf[40];
-    char statusBuf[40];
+    /* Sized for the longest line we publish: the exit-time restore
+     * failure warning ("WARN: restore failed at 0xNN -- check save
+     * data") tops out at ~48 chars, so 64 leaves headroom for any
+     * future status text without reallocating. */
+    char statusBuf[64];
 
     int row, i;
 
@@ -453,14 +477,73 @@ void EepromTest(void){
      * leaves the test exactly the way the user left it on entry --
      * even if every other game on the cart trusts the chip's
      * power-on EWDS state, we can't assume our own rewrites haven't
-     * already cycled it through EWEN. */
-    eeprom_ewen_drv();
-    for(i = 0; i < EE_NWORDS; i++){
-        if(current[i] != original[i]){
-            eeprom_write_word_drv((uint8_t)i, original[i]);
+     * already cycled it through EWEN.
+     *
+     * For each word that was modified during the run, write +
+     * read-back verify with up to RESTORE_RETRIES attempts. A real
+     * 93C46 should never need more than one pass under correct
+     * timing, but the retry loop covers the case where a marginal
+     * cell or a flaky chip drops a single program cycle -- much
+     * better than silently leaving the user's save data half-
+     * restored. If anything still doesn't stick we set a flag,
+     * publish a red warning to the status line, and hold the
+     * screen long enough for the user to read it before tearing
+     * the test down. */
+    {
+        const int RESTORE_RETRIES = 3;
+        int restoreFailed = 0;
+        int badAddr = -1;
+        int attempts;
+        uint16_t verify = 0;
+
+        eeprom_ewen_drv();
+        for(i = 0; i < EE_NWORDS; i++){
+            if(current[i] == original[i]){
+                continue;
+            }
+            verify = current[i];
+            for(attempts = 0; attempts < RESTORE_RETRIES; attempts++){
+                (void)eeprom_write_word_drv((uint8_t)i, original[i]);
+                verify = eeprom_read_word_drv((uint8_t)i);
+                if(verify == original[i]){
+                    current[i] = verify;
+                    break;
+                }
+            }
+            if(verify != original[i] && !restoreFailed){
+                restoreFailed = 1;
+                badAddr = i;
+            }
+        }
+        eeprom_ewds_drv();
+
+        if(restoreFailed){
+            /* Compose "WARN: restore failed at 0xNN -- check save
+             * data" directly into statusBuf -- no printf in this
+             * codebase, so we walk the literals byte-by-byte and
+             * splice in the failing address with hexbyte(). The
+             * 2-second hold (~120 NTSC frames) is short enough not
+             * to feel laggy when the test passes for everyone but
+             * the unlucky user with a flaky cart. All declarations
+             * up top so this stays C89-clean for the cross-compiler. */
+            const char *warn = "WARN: restore failed at 0x";
+            const char *tail = " -- check save data";
+            int n = 0;
+            int t = 0;
+            int hold;
+
+            while(warn[n] != '\0'){ statusBuf[n] = warn[n]; n++; }
+            hexbyte(statusBuf + n, (uint8_t)(badAddr & 0xFF));
+            n += 2;
+            while(tail[t] != '\0'){ statusBuf[n++] = tail[t++]; }
+            statusBuf[n] = '\0';
+            updateLine(settings, mainFont, statusTb, statusBuf, 999999, 999999, RED);
+
+            for(hold = 0; hold < 120; hold++){
+                vsync();
+            }
         }
     }
-    eeprom_ewds_drv();
 
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb2  = freeTextBox(helpTb2);
