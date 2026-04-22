@@ -101,6 +101,9 @@ void DrawHelp(int option){
         case HELP_STRIPED:
         case HELP_SOUND:
         case HELP_SPRITE_STRESS:
+        case HELP_YCDELAY:
+        case HELP_DIAGONAL:
+        case HELP_VERTSCROLL:
             totalPages = 1;
         break;
 
@@ -476,7 +479,7 @@ void DrawHelp(int option){
                     switch(page){
                         
                         case 0:
-                            updateLine(settings, mainFont, helpLineTextBox[0], "BACKLIT TEST", 999999, 999999, GREEN);
+                            updateLine(settings, mainFont, helpLineTextBox[0], "BACKLIGHT TEST", 999999, 999999, GREEN);
                             
                             updateLine(settings, mainFont, helpTextBox, "This test allows you to check how the display's backlight works when only a small array of pixels is shown.^^The user can move around the white pixel arrays with the d-pad, and change the size of the pixel array with 'A'. The 'B' button allows the user to hide the pixel array in order to alternate a fully black screen.", 999999, 999999, WHITE);  
                         break;
@@ -543,9 +546,46 @@ void DrawHelp(int option){
                     }
 
                 break;
-                
-                
-                
+
+                case HELP_YCDELAY:
+
+                    switch(page){
+
+                        case 0:
+                            updateLine(settings, mainFont, helpLineTextBox[0], "Y/C DELAY", 999999, 999999, GREEN);
+
+                            updateLine(settings, mainFont, helpTextBox, "Vertical strips of red, green, blue, yellow, cyan and magenta separated by 1px white dividers.^^On a clean RGB path the dividers stay white. On composite/S-Video, chroma trails luma so the divider picks up coloured fringing on either side -- that is the visible Y/C delay.^^Useful to confirm a SCART/component cable is really running RGB and not falling back to composite.", 999999, 999999, WHITE);
+                        break;
+                    }
+
+                break;
+
+                case HELP_DIAGONAL:
+
+                    switch(page){
+
+                        case 0:
+                            updateLine(settings, mainFont, helpLineTextBox[0], "DIAGONAL / CLOCK", 999999, 999999, GREEN);
+
+                            updateLine(settings, mainFont, helpTextBox, "Parallel 1-pixel diagonal lines at 45 degrees.^^On a CRT or a clean digital path each line is a clean stair-step. Upscalers (HDMI, OSSC, RetroTink) reveal stair-stepping or blur artefacts here.^^UP/DOWN: change line spacing (4/8/16/32 px). A: invert (white-on-black <-> black-on-white). OPTION: exit.", 999999, 999999, WHITE);
+                        break;
+                    }
+
+                break;
+
+                case HELP_VERTSCROLL:
+
+                    switch(page){
+
+                        case 0:
+                            updateLine(settings, mainFont, helpLineTextBox[0], "VERTICAL SCROLL", 999999, 999999, GREEN);
+
+                            updateLine(settings, mainFont, helpTextBox, "A full-screen banded pattern scrolls top-to-bottom (or bottom-to-top) at a user-selectable speed. Mirror of the horizontal Scroll Test, exercising vertical OP/blitter pacing.^^UP/DOWN: speed. LEFT/RIGHT: reverse direction. A: pause. OPTION: exit.^^Vertical jitter, tearing or pacing hitches that don't show up in horizontal scroll usually surface here.", 999999, 999999, WHITE);
+                        break;
+                    }
+
+                break;
+
             }
             
             hide_or_show_display_layer_range(settings->d, 1, 14, 15);
