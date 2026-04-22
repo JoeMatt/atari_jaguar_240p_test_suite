@@ -2644,7 +2644,6 @@ static void fillWhiteNoise(int16_t *buf){
  * pink output is clamped to int16_t. The Kellet filter has a published
  * peak deviation of about 0.05 dB across 9.2 octaves, which is more than
  * good enough for a console-grade A/V bench test. */
-#define PINK_Q15(x) ((int32_t)((x) * 32768.0 + ((x) >= 0 ? 0.5 : -0.5)))
 
 static void fillPinkNoise(int16_t *buf){
     /* All coefficients pre-scaled to Q15. Decay terms keep the IIR poles
@@ -2924,11 +2923,14 @@ void ChannelSeparationTest(void){
     int mode = CSEP_MODE_BOTH;
     int ii, i;
 
-    /* 75 cycles of the 128-sample DSP sine wavetable, played at C7 ~= 1 kHz.
-     * Same shape as AudioBalanceTest's reference tone -- proven to give a
-     * clean tone on real hardware. We keep two copies (normal + inverted)
-     * for the 180-degree-out-of-phase mode; in-phase modes only need the
-     * normal copy. */
+    /* 75 cycles of the 128-sample DSP sine wavetable, played at C6.
+     * The codebase note table (tests.h) plus the MDFourier sweep labels
+     * (extra_tests.c sweepLabel[]) establish C6 ~= 1 kHz at the 16 kHz
+     * driver rate -- which is what the help text and menu name promise.
+     * (The older LRBalance test uses C7 with a "1 kHz" comment that's
+     * actually a 2 kHz tone -- we don't follow that bug here.) Two
+     * copies (normal + inverted) for 180-out-of-phase mode; in-phase
+     * modes only need the normal copy. */
     int sampleRepeat = 75;
     int sampleSize = 128 * sampleRepeat;
     int16_t *normSample = malloc(sampleSize * (int)sizeof(int16_t));
@@ -3018,21 +3020,21 @@ void ChannelSeparationTest(void){
                  * voice 1 carries inverted phase fully R. */
                 switch(mode){
                     case CSEP_MODE_LEFT:
-                        set_voice(0, VOICE_16 | VOICE_BALANCE(0)  | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(0)  | VOICE_VOLUME(vol) | VOICE_FREQ(C6, freq),
                                   (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
                         break;
                     case CSEP_MODE_RIGHT:
-                        set_voice(0, VOICE_16 | VOICE_BALANCE(16) | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(16) | VOICE_VOLUME(vol) | VOICE_FREQ(C6, freq),
                                   (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
                         break;
                     case CSEP_MODE_BOTH:
-                        set_voice(0, VOICE_16 | VOICE_BALANCE(8)  | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(8)  | VOICE_VOLUME(vol) | VOICE_FREQ(C6, freq),
                                   (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
                         break;
                     case CSEP_MODE_INV:
-                        set_voice(0, VOICE_16 | VOICE_BALANCE(0)  | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(0)  | VOICE_VOLUME(vol) | VOICE_FREQ(C6, freq),
                                   (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
-                        set_voice(1, VOICE_16 | VOICE_BALANCE(16) | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                        set_voice(1, VOICE_16 | VOICE_BALANCE(16) | VOICE_VOLUME(vol) | VOICE_FREQ(C6, freq),
                                   (char*)invSample,  sizeBytes, (char*)invSample,  sizeBytes);
                         break;
                 }
