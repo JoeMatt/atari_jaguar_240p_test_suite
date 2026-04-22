@@ -106,7 +106,8 @@ SRCC=	main.c\
 	tests.c\
 	extra_tests.c\
 	controller_test.c\
-	eeprom_test.c
+	eeprom_test.c\
+	sprite_stress.c
 SRCS=
 SRCH=
 STRUCT_S=$(wildcard ./struct/*.s)
