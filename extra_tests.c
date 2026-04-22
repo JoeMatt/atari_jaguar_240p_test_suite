@@ -2593,3 +2593,500 @@ void VertScrollTest(void){
     labelTb = freeTextBox(labelTb);
     teardownFullscreenSprite(s, buf);
 }
+
+/* ---------------------------------------------------------------------------
+ * Audio test plumbing: shared LFSR + pink filter helpers.
+ *
+ * Both noise generators below burn a long looped buffer up front and let
+ * the DSP play it back at the system sample rate (no resampling). The
+ * loop is much longer than 1/20 s so the seam is below human pitch
+ * perception -- it just sounds like continuous noise.
+ *
+ * NOISE_BUF_SAMPLES = 16384 keeps the loop period at ~1 Hz with the
+ * default freq=16000, well below audible. Two buffers (32 KiB each)
+ * cost ~64 KiB of RAM total, comfortably inside the Jaguar's 2 MiB.
+ * --------------------------------------------------------------------------- */
+
+#define NOISE_BUF_SAMPLES 16384
+#define NOISE_BUF_BYTES   (NOISE_BUF_SAMPLES * (int)sizeof(int16_t))
+
+/* Galois 16-bit LFSR with the maximal-length polynomial 0xB400. Period
+ * is 2^16 - 1 = 65535, which is longer than NOISE_BUF_SAMPLES so the
+ * buffer is filled entirely from non-repeating LFSR samples. */
+static uint16_t lfsrAdvance(uint16_t state){
+    /* Standard Galois shift: rotate right, then XOR the polynomial in
+     * if the bit shifted out was a 1. */
+    uint16_t lsb = state & 1u;
+    state >>= 1;
+    if(lsb){
+        state ^= 0xB400u;
+    }
+    return state;
+}
+
+/* Fill `buf` with NOISE_BUF_SAMPLES of signed 16-bit white noise. The
+ * LFSR's natural output is uniform on [1..65535]; we centre it on zero
+ * by subtracting the midpoint to get full-range int16_t samples. */
+static void fillWhiteNoise(int16_t *buf){
+    uint16_t s = 0xACE1u;            /* arbitrary non-zero seed */
+    int i;
+    for(i = 0; i < NOISE_BUF_SAMPLES; i++){
+        s = lfsrAdvance(s);
+        buf[i] = (int16_t)((int32_t)s - 32768);
+    }
+}
+
+/* Paul Kellet's "economy" pink filter (5-stage IIR plus white pass-through).
+ * Implemented in Q15 fixed-point so the inner loop is integer-only on the
+ * 68000 -- the original float coefficients are scaled by 32768 and the
+ * accumulator stays in int32_t. White input is pre-attenuated by 4x to
+ * leave headroom for the filter's small overshoot, then the accumulated
+ * pink output is clamped to int16_t. The Kellet filter has a published
+ * peak deviation of about 0.05 dB across 9.2 octaves, which is more than
+ * good enough for a console-grade A/V bench test. */
+#define PINK_Q15(x) ((int32_t)((x) * 32768.0 + ((x) >= 0 ? 0.5 : -0.5)))
+
+static void fillPinkNoise(int16_t *buf){
+    /* All coefficients pre-scaled to Q15. Decay terms keep the IIR poles
+     * just inside the unit circle; gain terms set each band's contribution
+     * so the summed spectrum slopes -3 dB/oct. */
+    static const int32_t D0 = (int32_t)(0.99886 * 32768);  /* 32731 */
+    static const int32_t D1 = (int32_t)(0.99332 * 32768);  /* 32549 */
+    static const int32_t D2 = (int32_t)(0.96900 * 32768);  /* 31752 */
+    static const int32_t D3 = (int32_t)(0.86650 * 32768);  /* 28393 */
+    static const int32_t D4 = (int32_t)(0.55000 * 32768);  /* 18022 */
+    static const int32_t D5 = (int32_t)(-0.7616 * 32768);  /* -24962 */
+    static const int32_t G0 = (int32_t)(0.0555179 * 32768); /* 1819 */
+    static const int32_t G1 = (int32_t)(0.0750759 * 32768); /* 2460 */
+    static const int32_t G2 = (int32_t)(0.1538520 * 32768); /* 5042 */
+    static const int32_t G3 = (int32_t)(0.3104856 * 32768); /* 10174 */
+    static const int32_t G4 = (int32_t)(0.5329522 * 32768); /* 17464 */
+    static const int32_t G5 = (int32_t)(-0.0168980 * 32768); /* -554 */
+    static const int32_t G6 = (int32_t)(0.115926 * 32768); /* 3799 */
+    static const int32_t MIX_W = (int32_t)(0.5362 * 32768); /* 17570 */
+
+    int32_t b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    uint16_t s = 0xACE1u;
+    int i;
+    int32_t white;
+    int32_t pink;
+
+    for(i = 0; i < NOISE_BUF_SAMPLES; i++){
+        s = lfsrAdvance(s);
+        /* Centre LFSR sample on zero, scale by 1/4 for headroom. */
+        white = (((int32_t)s - 32768) >> 2);
+
+        b0 = (D0 * b0 + G0 * white) >> 15;
+        b1 = (D1 * b1 + G1 * white) >> 15;
+        b2 = (D2 * b2 + G2 * white) >> 15;
+        b3 = (D3 * b3 + G3 * white) >> 15;
+        b4 = (D4 * b4 + G4 * white) >> 15;
+        b5 = (D5 * b5 - G5 * white) >> 15;
+
+        pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + ((MIX_W * white) >> 15);
+        b6 = (G6 * white) >> 15;
+
+        if(pink >  32767) pink =  32767;
+        if(pink < -32768) pink = -32768;
+        buf[i] = (int16_t)pink;
+    }
+}
+
+/* Re-issue set_voice() with the current play / channel state. Centralised
+ * because both noise tests and (a stripped-down version) the channel
+ * separation test share the same play/mute/L/R cycling logic.
+ *
+ * channelMode: 0 = both, 1 = LEFT only, 2 = RIGHT only.
+ *
+ * Channel selection is done via VOICE_BALANCE because the SDK voice has a
+ * single mono source with a balance pan control: BALANCE(0) silences right,
+ * BALANCE(16) silences left. This is the same trick AudioBalanceTest uses,
+ * which is the closest existing reference for L/R selection on this DSP. */
+static void noisePlay(int16_t *buf, int playing, int channelMode){
+    int pan = 8;
+    clear_voice(0);
+    if(!playing){ return; }
+    if(channelMode == 1){ pan = 0;  }
+    if(channelMode == 2){ pan = 16; }
+    set_voice(0,
+              VOICE_16 | VOICE_BALANCE(pan) | VOICE_VOLUME(settings->masterVolume) | VOICE_FREQ(freq, freq),
+              (char*)buf, NOISE_BUF_BYTES,
+              (char*)buf, NOISE_BUF_BYTES);
+}
+
+/* Shared UI loop body for the white / pink noise tests. Owns the textboxes,
+ * controller handling and teardown so the two test functions reduce to
+ * "fill the buffer, then call this with the right title / help_id".
+ *
+ * The buffer is freed by the caller -- it owns the lifetime so the noise
+ * generation itself stays in the per-test function (closer to the help
+ * text the user sees). */
+static void runNoiseTest(int16_t *buf, const char *title, int helpId){
+    int exit = 0;
+    int redraw = 1;
+    int playing = 0;
+    int channelMode = 0;       /* 0 both, 1 left, 2 right */
+    int i;
+
+    settings->fadeToColor = 0x0000;
+
+    /* Title -- pre-sized for the longest runtime string we emit. */
+    textBox *titleTb = newTextBox("CHANNEL SEPARATION TEST ", 256, 9, mainFont, 0,
+                                   settings->d, 48, 64, 13, 1);
+    /* Copy the runtime title into the worst-case-sized buffer so we don't
+     * realloc tb->text every redraw. Once we hit the source NUL we switch
+     * to space padding -- reading past the literal's NUL would be UB on
+     * any string shorter than 24 chars (e.g. "WHITE NOISE" is 11). */
+    {
+        int padding = 0;
+        for(i = 0; i < 24; i++){
+            if(!padding && title[i] == '\0'){ padding = 1; }
+            titleTb->text[i] = padding ? ' ' : title[i];
+        }
+        titleTb->text[24] = '\0';
+    }
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    /* Initial strings deliberately one char longer than the worst-case
+     * runtime label (see "textBox sizing rules" in AGENTS.md). updateLine
+     * doesn't grow tb->text when the new text is longer; we patch in-place
+     * so the trailing char must always be the '\0' the engine relies on. */
+    textBox *stateTb = newTextBox("STATE   : IDLE    ", 192, 9, mainFont, 0,
+                                   settings->d, 80, 96, 13, 1);
+    updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
+
+    textBox *channelTb = newTextBox("CHANNEL : BOTH   ", 192, 9, mainFont, 0,
+                                     settings->d, 80, 112, 13, 1);
+    updateLine(settings, mainFont, channelTb, NULL, 999999, 999999, WHITE);
+
+    textBox *helpTb = newTextBox("A: play/pause  B: cycle channel  OPTION:exit", 320, 9, mainFont, 0,
+                                  settings->d, 0, 184, 13, 1);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+
+    textBox *infoTb = newTextBox("Mute one channel to verify L/R isolation", 320, 9, mainFont, 0,
+                                  settings->d, 0, 200, 13, 1);
+    updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(redraw){
+            const char *st = playing ? "PLAYING" : "IDLE   ";
+            const char *ch = "BOTH ";
+            if(channelMode == 1){ ch = "LEFT "; }
+            if(channelMode == 2){ ch = "RIGHT"; }
+            for(i = 0; i < 7; i++){ stateTb->text[10 + i] = st[i]; }
+            for(i = 0; i < 5; i++){ channelTb->text[10 + i] = ch[i]; }
+            updateLine(settings, mainFont, stateTb,   NULL, 999999, 999999, playing ? RED : WHITE);
+            updateLine(settings, mainFont, channelTb, NULL, 999999, 999999, channelMode == 0 ? WHITE : GREEN);
+            noisePlay(buf, playing, channelMode);
+            redraw = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        /* DOWN+OPTION reaches the help screen. Match the gate every other
+         * extra_tests test uses so muscle memory works across the menu. */
+        if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            DrawHelp(helpId);
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            playing = !playing;
+            redraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_B) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            channelMode = (channelMode + 1) % 3;
+            redraw = 1;
+        }
+
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    /* Silence the DSP before returning to the menu -- without this, the
+     * noise keeps playing through the next test the user enters. */
+    clear_voice(0);
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    infoTb    = freeTextBox(infoTb);
+    helpTb    = freeTextBox(helpTb);
+    channelTb = freeTextBox(channelTb);
+    stateTb   = freeTextBox(stateTb);
+    titleTb   = freeTextBox(titleTb);
+}
+
+/* ---------------------------------------------------------------------------
+ * Audio test: White Noise Generator
+ *
+ * Equal energy per Hz across the full audio bandwidth (DC up to Nyquist
+ * = freq/2 ~= 8 kHz at the default 16 kHz replay rate). The classic
+ * "tssssss" hiss used to stress-test cables, amplifier headroom and
+ * speaker drivers -- everything in the chain should reproduce it
+ * smoothly, with no rattles or buzzes.
+ *
+ * Mirrors the White Noise entry shipped by every other major 240p Test
+ * Suite (PS2, GameCube, Dreamcast, etc), implemented as a 16-bit Galois
+ * LFSR (poly 0xB400) for cheap broadband samples.
+ * --------------------------------------------------------------------------- */
+void WhiteNoiseTest(void){
+    int16_t *buf = malloc(NOISE_BUF_BYTES);
+    if(buf == NULL){ return; }   /* unlikely on a 2 MiB target, but fail safe */
+    fillWhiteNoise(buf);
+    runNoiseTest(buf, "WHITE NOISE", HELP_WHITE_NOISE);
+    free(buf);
+}
+
+/* ---------------------------------------------------------------------------
+ * Audio test: Pink Noise Generator
+ *
+ * Equal energy per *octave* (1/f spectrum) -- the canonical reference
+ * signal for measuring frequency response. A real-time analyser pointed
+ * at a flat speaker / room / cable chain shows a flat trace on a pink
+ * source; any tilt is the chain's response.
+ *
+ * Generated by Paul Kellet's "economy" 5-stage IIR pink filter (peak
+ * deviation +/- 0.05 dB across 9.2 octaves, published reference) applied
+ * to the white noise from the LFSR above. All filter math is Q15
+ * fixed-point so the inner loop is 100% integer on the 68000 -- the
+ * 32 KiB buffer is generated once at test entry in well under a frame.
+ * --------------------------------------------------------------------------- */
+void PinkNoiseTest(void){
+    int16_t *buf = malloc(NOISE_BUF_BYTES);
+    if(buf == NULL){ return; }
+    fillPinkNoise(buf);
+    runNoiseTest(buf, "PINK NOISE", HELP_PINK_NOISE);
+    free(buf);
+}
+
+/* ---------------------------------------------------------------------------
+ * Audio test: L/R Channel Separation
+ *
+ * Verifies that left and right outputs are physically isolated and not
+ * crossed or mono'd together. Plays a 1 kHz sine reference tone in a
+ * single selected channel at a time so a tester can confirm each output
+ * carries the signal it's supposed to.
+ *
+ * Distinct from the existing L/R Balance test, which is about the
+ * relative *amplitude* of the two channels (volume trim). This test is
+ * about *isolation* -- the failure mode it catches is "right speaker is
+ * playing when only left should be active", which a balance-only test
+ * cannot diagnose.
+ *
+ * Phase-inverted "BOTH" mode is included because some monoising mixers
+ * sum the two channels with one inverted, which silences the result --
+ * a 180-degree mode that goes silent on a particular receiver is a
+ * smoking gun for that wiring fault.
+ *
+ * Implementation: source is JERRY's 128-sample ROM sine wavetable looped
+ * to ~1 second. For phase-inverted both, voice 0 plays the normal table
+ * panned full left and voice 1 plays a pre-inverted copy panned full
+ * right. For the in-phase modes a single voice with VOICE_BALANCE is
+ * sufficient and matches AudioBalanceTest's well-tested approach.
+ *
+ * Controls:
+ *   UP   = LEFT only
+ *   DOWN = RIGHT only
+ *   LEFT = BOTH (in phase)
+ *   RIGHT= BOTH (180 deg out of phase)
+ *   A    = play / pause
+ *   OPTION = exit
+ * --------------------------------------------------------------------------- */
+
+#define CSEP_MODE_LEFT   0
+#define CSEP_MODE_RIGHT  1
+#define CSEP_MODE_BOTH   2
+#define CSEP_MODE_INV    3
+
+void ChannelSeparationTest(void){
+    int exit = 0;
+    int redraw = 1;
+    int playing = 0;
+    int mode = CSEP_MODE_BOTH;
+    int ii, i;
+
+    /* 75 cycles of the 128-sample DSP sine wavetable, played at C7 ~= 1 kHz.
+     * Same shape as AudioBalanceTest's reference tone -- proven to give a
+     * clean tone on real hardware. We keep two copies (normal + inverted)
+     * for the 180-degree-out-of-phase mode; in-phase modes only need the
+     * normal copy. */
+    int sampleRepeat = 75;
+    int sampleSize = 128 * sampleRepeat;
+    int16_t *normSample = malloc(sampleSize * (int)sizeof(int16_t));
+    int16_t *invSample  = malloc(sampleSize * (int)sizeof(int16_t));
+    if(normSample == NULL || invSample == NULL){
+        if(normSample != NULL){ free(normSample); }
+        if(invSample  != NULL){ free(invSample);  }
+        return;
+    }
+    for(ii = 0; ii < sampleRepeat; ii++){
+        for(i = 0; i < 128; i++){
+            int16_t s = (int16_t)JERRYREGS->rom_sine[i];
+            normSample[(ii*128) + i] =  s;
+            /* -32768 cannot be safely negated in two's-complement int16_t
+             * (the result overflows); clamp to 32767. The ROM sine table
+             * stays well inside int16_t range so this is a defensive
+             * guard, not an expected hit. */
+            invSample[(ii*128) + i]  = (s == -32768) ? 32767 : (int16_t)(-s);
+        }
+    }
+
+    settings->fadeToColor = 0x0000;
+
+    textBox *titleTb = newTextBox("L/R CHANNEL SEPARATION", 256, 9, mainFont, 0,
+                                   settings->d, 32, 56, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    /* Worst-case state string: "BOTH (180 OUT-OF-PHASE)" = 23 chars at the
+     * "BOTH (180 OUT-OF-PHASE) " field starting at offset 10. We size the
+     * initial string one char longer than the largest label we'll ever
+     * patch in so the trailing '\0' stays put -- updateLine() doesn't
+     * grow tb->text after construction. 320-px box keeps us inside the
+     * phrase-aligned width ladder. */
+    textBox *stateTb = newTextBox("STATE   : BOTH (180 OUT-OF-PHASE) ", 320, 9, mainFont, 0,
+                                   settings->d, 0, 88, 13, 1);
+    updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
+
+    textBox *playTb  = newTextBox("PLAYING : OFF  ", 192, 9, mainFont, 0,
+                                   settings->d, 80, 104, 13, 1);
+    updateLine(settings, mainFont, playTb, NULL, 999999, 999999, WHITE);
+
+    textBox *help1Tb = newTextBox("UP:LEFT  DOWN:RIGHT  LEFT:BOTH  RIGHT:OUT-PHASE", 320, 9, mainFont, 0,
+                                   settings->d, 0, 168, 13, 1);
+    updateLine(settings, mainFont, help1Tb, NULL, 999999, 999999, GREY);
+
+    textBox *help2Tb = newTextBox("A: play/pause   OPTION: exit", 256, 9, mainFont, 0,
+                                   settings->d, 32, 184, 13, 1);
+    updateLine(settings, mainFont, help2Tb, NULL, 999999, 999999, GREY);
+
+    textBox *infoTb  = newTextBox("Verify L and R outputs are not crossed/mono'd", 320, 9, mainFont, 0,
+                                   settings->d, 0, 200, 13, 1);
+    updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(redraw){
+            const char *label = "BOTH (IN PHASE)         ";
+            switch(mode){
+                case CSEP_MODE_LEFT:  label = "LEFT ONLY               "; break;
+                case CSEP_MODE_RIGHT: label = "RIGHT ONLY              "; break;
+                case CSEP_MODE_BOTH:  label = "BOTH (IN PHASE)         "; break;
+                case CSEP_MODE_INV:   label = "BOTH (180 OUT-OF-PHASE) "; break;
+            }
+            for(i = 0; i < 24; i++){ stateTb->text[10 + i] = label[i]; }
+            updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
+
+            for(i = 0; i < 4; i++){ playTb->text[10 + i] = playing ? "ON  "[i] : "OFF "[i]; }
+            updateLine(settings, mainFont, playTb, NULL, 999999, 999999, playing ? RED : WHITE);
+
+            /* Always silence both voices before the new configuration --
+             * otherwise a stale voice from a previous mode keeps playing
+             * underneath the newly-set one. */
+            clear_voice(0);
+            clear_voice(1);
+            if(playing){
+                int vol = settings->masterVolume;
+                int sizeBytes = sampleSize * (int)sizeof(int16_t);
+                /* In-phase modes use a single voice with a panning balance
+                 * (the same approach AudioBalanceTest takes). The 180-out
+                 * mode needs two voices because the SDK only has one mono
+                 * source per voice; voice 0 carries normal phase fully L,
+                 * voice 1 carries inverted phase fully R. */
+                switch(mode){
+                    case CSEP_MODE_LEFT:
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(0)  | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                                  (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
+                        break;
+                    case CSEP_MODE_RIGHT:
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(16) | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                                  (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
+                        break;
+                    case CSEP_MODE_BOTH:
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(8)  | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                                  (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
+                        break;
+                    case CSEP_MODE_INV:
+                        set_voice(0, VOICE_16 | VOICE_BALANCE(0)  | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                                  (char*)normSample, sizeBytes, (char*)normSample, sizeBytes);
+                        set_voice(1, VOICE_16 | VOICE_BALANCE(16) | VOICE_VOLUME(vol) | VOICE_FREQ(C7, freq),
+                                  (char*)invSample,  sizeBytes, (char*)invSample,  sizeBytes);
+                        break;
+                }
+            }
+            redraw = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        /* DOWN is also a state-selector here, so the help-screen gate must
+         * be tested *before* the bare-DOWN handler -- otherwise pressing
+         * DOWN+OPTION just sets RIGHT-only mode and never reaches help. */
+        if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            DrawHelp(HELP_CHANNEL_SEP);
+        }
+        else if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            mode = CSEP_MODE_LEFT;
+            redraw = 1;
+        }
+        else if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            mode = CSEP_MODE_RIGHT;
+            redraw = 1;
+        }
+        else if((settings->joy1 & JOYPAD_LEFT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            mode = CSEP_MODE_BOTH;
+            redraw = 1;
+        }
+        else if((settings->joy1 & JOYPAD_RIGHT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            mode = CSEP_MODE_INV;
+            redraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            playing = !playing;
+            redraw = 1;
+        }
+
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    /* Silence both voices before exit so the previous tone doesn't bleed
+     * into the next test. */
+    clear_voice(0);
+    clear_voice(1);
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    infoTb   = freeTextBox(infoTb);
+    help2Tb  = freeTextBox(help2Tb);
+    help1Tb  = freeTextBox(help1Tb);
+    playTb   = freeTextBox(playTb);
+    stateTb  = freeTextBox(stateTb);
+    titleTb  = freeTextBox(titleTb);
+    free(invSample);
+    free(normSample);
+}

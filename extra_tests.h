@@ -46,6 +46,15 @@ void VertScrollTest(void);
 /* Audio tests */
 void AudioBalanceTest(void);
 void MDFourierTest(void);
+/* Broadband + reference noise generators and L/R isolation, mirrors the
+ * canonical Audio menu items in the Genesis / GameCube / Dreamcast 240p
+ * Test Suites. White noise is for full-bandwidth driver / cable stress;
+ * pink noise (equal energy per octave) is the standard frequency-response
+ * test signal; channel separation isolates L vs R to catch crossed
+ * wiring or a mono'd output. */
+void WhiteNoiseTest(void);
+void PinkNoiseTest(void);
+void ChannelSeparationTest(void);
 
 /* Hardware tests */
 void HardwareInfo(void);
