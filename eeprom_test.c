@@ -201,9 +201,17 @@ static int eeprom_write_word_drv(uint8_t addr, uint16_t data){
 
 #define GRID_COLS 8
 #define GRID_ROWS 8
-#define GRID_X 56
+/* Grid sits at x=0 with a full-screen 320 px wide sprite per row.
+ * That gives the 43-char "00: 0000 0000 ..." line ~62 px of right-
+ * margin slack at 6 px/char so the in-engine word-wrap can never
+ * trigger (a wrap would push the second line outside the sprite's
+ * fixed-height framebuffer and corrupt the next box -- see comment
+ * on textBox widths below). Y starts at 80 with 14-px row spacing
+ * so the 10-px-tall (8 font + 1 spacing + 1 shadow) sprites have a
+ * 4-px gap between them. */
+#define GRID_X 0
 #define GRID_Y 80
-#define GRID_ROW_H 12
+#define GRID_ROW_H 14
 
 static void hexbyte(char *out, uint8_t v){
     /* No printf in this codebase -- itostring handles ints but
@@ -233,6 +241,15 @@ static void formatGridRow(char *out, const uint16_t *words, int row){
 }
 
 static void formatCursorLine(char *out, int cursor, uint16_t orig, uint16_t cur){
+    /* Template offsets (0-based):
+     *   "ADDR: 0x00  ORIG: 0000  CUR: 0000"
+     *    0123456789012345678901234567890123
+     *            ^^         ^^^^         ^^^^
+     *            8,9        18..21       29..32
+     * The CUR field starts at column 29 -- column 28 is the space
+     * after "CUR:". Writing the hex word at 28 (the original code)
+     * stomped on that space and left the trailing '0' of the
+     * template intact, producing "CUR:FFFF0" on screen. */
     int i;
     static const char tmpl[] = "ADDR: 0x00  ORIG: 0000  CUR: 0000";
     for(i = 0; tmpl[i] != '\0'; i++){
@@ -241,7 +258,7 @@ static void formatCursorLine(char *out, int cursor, uint16_t orig, uint16_t cur)
     out[i] = '\0';
     hexbyte(out + 8, (uint8_t)(cursor & 0xFF));
     hexword(out + 18, orig);
-    hexword(out + 28, cur);
+    hexword(out + 29, cur);
 }
 
 static void readAll(uint16_t out[EE_NWORDS]){
@@ -298,31 +315,51 @@ void EepromTest(void){
         current[i] = original[i];
     }
 
-    textBox *titleTb  = newTextBox("EEPROM TEST (93C46 64x16)", 256, 9, mainFont, 0,
-                                   settings->d, 32, 8 + settings->PALOffset, 13, 1);
+    /* All textboxes here use 320 px width (full screen, phrase-
+     * aligned at 40 octets / 320/8) for two reasons:
+     *   1) Sprite buffers are allocated at newTextBox() time based
+     *      on the *initial* string's line_count after word-wrap.
+     *      If a later updateTextBox() pushes the text long enough
+     *      to wrap an extra line, drawing overflows the framebuffer
+     *      and corrupts adjacent sprites (the symptom is the
+     *      garbled-grid screenshot we shipped first).
+     *   2) The Object Processor expects DEPTH8 sprite widths to be
+     *      multiples of a phrase (8 px). 300 was *not* phrase-
+     *      aligned; 320 is.
+     * Initial strings are deliberately the worst-case length each
+     * box will ever hold so the per-frame strncpy in updateLine
+     * never has to grow tb->text -- that keeps the heap quiet and
+     * matches the BounceSquareTest / AudioTest pattern. */
+    textBox *titleTb  = newTextBox("EEPROM TEST (93C46 64x16)            ", 320, 9, mainFont, 0,
+                                   settings->d, 0, 8 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *statusTb = newTextBox("STATUS: idle (press A or X)        ", 256, 9, mainFont, 0,
-                                   settings->d, 32, 24 + settings->PALOffset, 13, 1);
-    updateLine(settings, mainFont, statusTb, NULL, 999999, 999999, GREY);
+    /* Worst-case status: "WARN: restore failed at 0xNN -- check save data" (48 chars). */
+    textBox *statusTb = newTextBox("WARN: restore failed at 0xFF -- check save data", 320, 9, mainFont, 0,
+                                   settings->d, 0, 24 + settings->PALOffset, 13, 1);
+    updateLine(settings, mainFont, statusTb, "STATUS: idle (press A or X)", 999999, 999999, GREY);
 
-    textBox *cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000  ", 280, 9, mainFont, 0,
-                                   settings->d, 32, 40 + settings->PALOffset, 13, 1);
+    textBox *cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000", 320, 9, mainFont, 0,
+                                   settings->d, 0, 40 + settings->PALOffset, 13, 1);
 
     textBox *gridTb[GRID_ROWS];
     for(row = 0; row < GRID_ROWS; row++){
-        gridTb[row] = newTextBox("00: 0000 0000 0000 0000 0000 0000 0000 0000", 264, 9, mainFont, 0,
+        gridTb[row] = newTextBox("00: 0000 0000 0000 0000 0000 0000 0000 0000", 320, 9, mainFont, 0,
                                  settings->d, GRID_X, GRID_Y + row * GRID_ROW_H + settings->PALOffset, 13, 1);
     }
 
-    textBox *helpTb1 = newTextBox("D-PAD: select  A: walking-1s test  X: addr-as-data test",
-                                  300, 9, mainFont, 0,
-                                  settings->d, 16, 188 + settings->PALOffset, 13, 1);
+    /* Help text deliberately kept under 50 chars so it fits on one
+     * line in a 320-px box (50 chars * 6 px/char = 300 px, with
+     * 20 px slack). Shortened from the verbose first draft which
+     * wrapped to 2 lines and overflowed the sprite. */
+    textBox *helpTb1 = newTextBox("D-PAD move  A walk-1s  X addr-as-data",
+                                  320, 9, mainFont, 0,
+                                  settings->d, 0, 188 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, helpTb1, NULL, 999999, 999999, GREY);
 
-    textBox *helpTb2 = newTextBox("B: re-read  Y: erase selected  OPTION: restore + exit",
-                                  300, 9, mainFont, 0,
-                                  settings->d, 16, 200 + settings->PALOffset, 13, 1);
+    textBox *helpTb2 = newTextBox("B re-read  Y erase  OPTION restore+exit",
+                                  320, 9, mainFont, 0,
+                                  settings->d, 0, 200 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, helpTb2, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -421,11 +458,18 @@ void EepromTest(void){
             /* Status line summarises the most recent destructive test
              * pass plus running error total. Idle is shown in grey,
              * pass in green, fail in red so it pops at a glance. */
-            const char *label = "idle (press A or X)            ";
+            /* Labels are deliberately short (no trailing pad) -- updateLine
+             * recomputes char_count from the new string each call, so we
+             * don't need to splat trailing spaces just to "erase" leftover
+             * pixels from a previous longer label. The initial newTextBox
+             * allocation reserved enough sprite framebuffer for the
+             * worst-case string (the WARN: line on exit), so anything
+             * shorter draws cleanly into a freshly cleared screen. */
+            const char *label = "idle (press A or X)";
             if(lastTestRan == 1){
-                label = "WALKING-1S complete             ";
+                label = "WALKING-1S complete";
             } else if(lastTestRan == 2){
-                label = "ADDR-AS-DATA complete           ";
+                label = "ADDR-AS-DATA complete";
             }
             int n = 0;
             const char *prefix = "STATUS: ";
