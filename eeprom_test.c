@@ -484,15 +484,23 @@ void EepromTest(void){
                 while(errLabel[j] != '\0' && n < (int)sizeof(statusBuf) - 5){
                     statusBuf[n++] = errLabel[j++];
                 }
-                /* totalErrors is bounded by 64 per pass; 4 chars covers it. */
-                if(totalErrors > 999) totalErrors = 999;
-                if(totalErrors >= 100){
-                    statusBuf[n++] = (char)('0' + (totalErrors / 100));
+                /* Clamp only the *displayed* count -- totalErrors is the
+                 * cumulative running total across button-triggered passes
+                 * and is read again below for status colour selection.
+                 * Mutating it here would silently cap the true count at
+                 * 999 forever after the first overflow. 64 errors per
+                 * pass max means it'd take 16+ destructive passes back-
+                 * to-back to actually hit 999, but the bug is real
+                 * either way. */
+                int displayErrors = totalErrors;
+                if(displayErrors > 999) displayErrors = 999;
+                if(displayErrors >= 100){
+                    statusBuf[n++] = (char)('0' + (displayErrors / 100));
                 }
-                if(totalErrors >= 10){
-                    statusBuf[n++] = (char)('0' + ((totalErrors / 10) % 10));
+                if(displayErrors >= 10){
+                    statusBuf[n++] = (char)('0' + ((displayErrors / 10) % 10));
                 }
-                statusBuf[n++] = (char)('0' + (totalErrors % 10));
+                statusBuf[n++] = (char)('0' + (displayErrors % 10));
             }
             statusBuf[n] = '\0';
             uint16_t statusColor = GREY;

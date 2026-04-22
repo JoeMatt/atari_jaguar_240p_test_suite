@@ -1095,7 +1095,12 @@ void AudioTestsMenu(){
 void HardwareMenu(){
     
     int done = 0;
-    int lastMenuLine = 13; //counting from zero
+    /* Max 1-based menuState value (cursor wraps between 1 and
+     * lastMenuLine). EEPROM Test is switch case 10, "Back to Main
+     * Menu" is the final case 13. The other *Menu() helpers in this
+     * file use the same convention -- the legacy "counting from zero"
+     * comment was misleading since menuState is 1-based. */
+    int lastMenuLine = 13;
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
