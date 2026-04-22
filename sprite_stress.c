@@ -25,11 +25,11 @@
  * from "pixel-fetch" cost when comparing emulators against hardware.
  * --------------------------------------------------------------------------- */
 
-/* OP layer for the stress sprites. The Hardware menu hides layers
- * 0..2 on entry to a test (see HardwareMenu), then we re-show
- * layers 3..15 once our textboxes are attached. Layer 12 keeps the
- * stress sprites well clear of layer 13 (textboxes) so the OP walks
- * them as a contiguous block. */
+/* OP layer for the stress sprites. HardwareMenu hides every layer
+ * (0..15) before launching a test, then we re-show layers 3..15 once
+ * our textboxes are attached so the test owns its own layer band.
+ * Layer 12 keeps the stress sprites well clear of layer 13
+ * (textboxes) so the OP walks them as a contiguous block. */
 #define STRESS_LAYER     12
 
 /* Hard cap on the number of sprite objects in our pool. 256 was
@@ -160,7 +160,7 @@ void SpriteStressTest(void){
                         320, 9, mainFont, 0, settings->d,
                         0, 40 + settings->PALOffset, 13, 1);
 
-    helpTb1 = newTextBox("L/R: -/+1  U/D: -/+8  A: SIZE  B: MODE",
+    helpTb1 = newTextBox("L/R: -/+1  U/D: +/-8  A: SIZE  B: MODE",
                          320, 9, mainFont, 0, settings->d,
                          0, 200 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, helpTb1, NULL, 999999, 999999, GREY);

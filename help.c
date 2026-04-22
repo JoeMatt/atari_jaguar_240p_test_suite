@@ -538,7 +538,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "SPRITE STRESS (OP SATURATION)", 999999, 999999, GREEN);
 
-                            updateLine(settings, mainFont, helpTextBox, "Stresses the Object Processor by spawning many DEPTH8 sprites on a single scanline. The OP walks its display list once per line until horizontal time runs out -- once your sprites exceed the ~8 KiB/line pixel-fetch budget, the OP drops or tears the trailing entries.^^L/R: -/+1 sprite. U/D: -/+8 (fast ramp). A: cycle 8x8/16x16/32x32. B: SINGLE-LINE vs TILED. C: reset to 1. OPTION: exit.^^Compare real-hardware drop-out against Virtual Jaguar / BigPEmu.", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "Stresses the Object Processor by spawning many DEPTH8 sprites on a single scanline. The OP walks its display list once per line until horizontal time runs out -- once your sprites exceed the ~8 KiB/line pixel-fetch budget, the OP drops or tears the trailing entries.^^L/R: -/+1 sprite. U/D: +/-8 (fast ramp). A: cycle 8x8/16x16/32x32. B: SINGLE-LINE vs TILED. C: reset to 1. OPTION: exit.^^Compare real-hardware drop-out against Virtual Jaguar / BigPEmu.", 999999, 999999, WHITE);
                         break;
                     }
 
