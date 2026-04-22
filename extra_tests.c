@@ -2603,8 +2603,9 @@ void VertScrollTest(void){
  * perception -- it just sounds like continuous noise.
  *
  * NOISE_BUF_SAMPLES = 16384 keeps the loop period at ~1 Hz with the
- * default freq=16000, well below audible. Two buffers (32 KiB each)
- * cost ~64 KiB of RAM total, comfortably inside the Jaguar's 2 MiB.
+ * default freq=16000, well below audible. Each test allocates one
+ * 32 KiB noise buffer on entry and frees it on exit, so peak resident
+ * RAM is a single buffer -- comfortably inside the Jaguar's 2 MiB.
  * --------------------------------------------------------------------------- */
 
 #define NOISE_BUF_SAMPLES 16384
