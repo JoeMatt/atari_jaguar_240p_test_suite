@@ -554,7 +554,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "Y/C DELAY", 999999, 999999, GREEN);
 
-                            updateLine(settings, mainFont, helpTextBox, "Vertical strips of pure red, green and blue separated by 1px white dividers.^^On a clean RGB path the dividers stay white. On composite/S-Video, chroma trails luma so the divider picks up coloured fringing on either side -- that is the visible Y/C delay.^^Useful to confirm a SCART/component cable is really running RGB and not falling back to composite.", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "Vertical strips of red, green, blue, yellow, cyan and magenta separated by 1px white dividers.^^On a clean RGB path the dividers stay white. On composite/S-Video, chroma trails luma so the divider picks up coloured fringing on either side -- that is the visible Y/C delay.^^Useful to confirm a SCART/component cable is really running RGB and not falling back to composite.", 999999, 999999, WHITE);
                         break;
                     }
 

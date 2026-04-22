@@ -2222,12 +2222,13 @@ void ScrollingBarsSaver(void){
  * Test pattern: Y/C Delay
  *
  * Canonical chroma-subsampling visualizer ported from the Artemio Urbina
- * suite. We render vertical strips of pure red, green and blue separated
- * by 1-pixel pure-white dividers. Cabling that carries true RGB (SCART RGB,
- * VGA, component on a clean path) keeps the dividers perfectly white --
- * the luma and chroma edges of each strip line up. Composite or S-Video
- * routes the chroma through a delay/notch filter, and the divider picks up
- * coloured fringing on either side as chroma trails luma.
+ * suite. We render six vertical strips -- red, green, blue, yellow, cyan
+ * and magenta -- separated by 1-pixel pure-white dividers. Cabling that
+ * carries true RGB (SCART RGB, VGA, component on a clean path) keeps the
+ * dividers perfectly white -- the luma and chroma edges of each strip line
+ * up. Composite or S-Video routes the chroma through a delay/notch filter,
+ * and the divider picks up coloured fringing on either side as chroma
+ * trails luma.
  *
  * Useful as a quick "is my SCART cable actually RGB?" check before trusting
  * the rest of the colour-bar suite.
@@ -2328,6 +2329,10 @@ void DrawDiagonal(void){
     settings->fadeToColor = 0x0000;
 
     buf = malloc(sizeof(uint16_t) * W * H);
+    /* Pre-clear so the first vsync after attach/show never displays the
+     * uninitialised malloc payload. The needRedraw branch below repaints
+     * the real diagonals on the first loop iteration. */
+    fillPACK_RGB16(buf, W * H, COLOR_BLACK);
 
     s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
     s->trans = 0;
@@ -2382,7 +2387,11 @@ void DrawDiagonal(void){
             buf2[20] = invert ? 'O' : 'O';
             buf2[21] = invert ? 'N' : 'F';
             buf2[22] = invert ? ' ' : 'F';
-            buf2[23] = '\0';
+            /* No trailing '\0' inside the visible 24-byte window: textBox's
+             * lineBreakAndWordWrap() walks i < tb->char_count and computes
+             * char_widths[tb->text[i]-32], so an embedded NUL would index
+             * the table at -32. The terminator already lives at
+             * tb->text[char_count] from newTextBox's allocation. */
             for(i = 0; i < 24; i++){ labelTb->text[i] = buf2[i]; }
             updateLine(settings, mainFont, labelTb, NULL, 999999, 999999, GREEN);
 
@@ -2463,7 +2472,8 @@ static void vertScrollUpdateLabel(textBox *tb, int speed, int dir, int paused){
     if(paused){
         line[18]='P'; line[19]='A'; line[20]='U'; line[21]='S'; line[22]='E';
     }
-    line[23] = '\0';
+    /* No embedded NUL inside the visible 24-byte window -- see DrawDiagonal
+     * label loop above. The terminator lives at tb->text[char_count]. */
     for(i = 0; i < 24; i++){ tb->text[i] = line[i]; }
     updateLine(settings, mainFont, tb, NULL, 999999, 999999, GREEN);
 }
