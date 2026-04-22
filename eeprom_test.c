@@ -290,12 +290,17 @@ static int writeAll(const uint16_t in[EE_NWORDS]){
 }
 
 void EepromTest(void){
+    /* C89-style: every local declared at the top of the function
+     * before any executable statement. m68k-atari-mint-gcc currently
+     * defaults to gnu99 so mixed decls would compile, but every
+     * other test in this codebase plays C89-strict and there's no
+     * reason to be the odd one out. */
     int exit_test = 0;
     int cursor = 0;          /* 0..63 -- selected word */
     int needRedraw = 1;
     int totalErrors = 0;     /* cumulative across button-triggered passes */
     int lastTestRan = 0;     /* 0=none, 1=walking-1s, 2=address-as-data */
-
+    int row, i;
     /* Originals are restored on exit; current is what's on the chip
      * right now (refreshed after every write-test pass and on B). */
     uint16_t original[EE_NWORDS];
@@ -307,8 +312,12 @@ void EepromTest(void){
      * data") tops out at ~48 chars, so 64 leaves headroom for any
      * future status text without reallocating. */
     char statusBuf[64];
-
-    int row, i;
+    textBox *titleTb;
+    textBox *statusTb;
+    textBox *cursorTb;
+    textBox *gridTb[GRID_ROWS];
+    textBox *helpTb1;
+    textBox *helpTb2;
 
     readAll(original);
     for(i = 0; i < EE_NWORDS; i++){
@@ -330,19 +339,18 @@ void EepromTest(void){
      * box will ever hold so the per-frame strncpy in updateLine
      * never has to grow tb->text -- that keeps the heap quiet and
      * matches the BounceSquareTest / AudioTest pattern. */
-    textBox *titleTb  = newTextBox("EEPROM TEST (93C46 64x16)            ", 320, 9, mainFont, 0,
-                                   settings->d, 0, 8 + settings->PALOffset, 13, 1);
+    titleTb  = newTextBox("EEPROM TEST (93C46 64x16)            ", 320, 9, mainFont, 0,
+                          settings->d, 0, 8 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
     /* Worst-case status: "WARN: restore failed at 0xNN -- check save data" (48 chars). */
-    textBox *statusTb = newTextBox("WARN: restore failed at 0xFF -- check save data", 320, 9, mainFont, 0,
-                                   settings->d, 0, 24 + settings->PALOffset, 13, 1);
+    statusTb = newTextBox("WARN: restore failed at 0xFF -- check save data", 320, 9, mainFont, 0,
+                          settings->d, 0, 24 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, statusTb, "STATUS: idle (press A or X)", 999999, 999999, GREY);
 
-    textBox *cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000", 320, 9, mainFont, 0,
-                                   settings->d, 0, 40 + settings->PALOffset, 13, 1);
+    cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000", 320, 9, mainFont, 0,
+                          settings->d, 0, 40 + settings->PALOffset, 13, 1);
 
-    textBox *gridTb[GRID_ROWS];
     for(row = 0; row < GRID_ROWS; row++){
         gridTb[row] = newTextBox("00: 0000 0000 0000 0000 0000 0000 0000 0000", 320, 9, mainFont, 0,
                                  settings->d, GRID_X, GRID_Y + row * GRID_ROW_H + settings->PALOffset, 13, 1);
@@ -352,14 +360,14 @@ void EepromTest(void){
      * line in a 320-px box (50 chars * 6 px/char = 300 px, with
      * 20 px slack). Shortened from the verbose first draft which
      * wrapped to 2 lines and overflowed the sprite. */
-    textBox *helpTb1 = newTextBox("D-PAD move  A walk-1s  X addr-as-data",
-                                  320, 9, mainFont, 0,
-                                  settings->d, 0, 188 + settings->PALOffset, 13, 1);
+    helpTb1 = newTextBox("D-PAD move  A walk-1s  X addr-as-data",
+                         320, 9, mainFont, 0,
+                         settings->d, 0, 188 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, helpTb1, NULL, 999999, 999999, GREY);
 
-    textBox *helpTb2 = newTextBox("B re-read  Y erase  OPTION restore+exit",
-                                  320, 9, mainFont, 0,
-                                  settings->d, 0, 200 + settings->PALOffset, 13, 1);
+    helpTb2 = newTextBox("B re-read  Y erase  OPTION restore+exit",
+                         320, 9, mainFont, 0,
+                         settings->d, 0, 200 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, helpTb2, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -398,13 +406,14 @@ void EepromTest(void){
             /* Walking-1s pattern: word[i] = 1 << (i % 16). Touches every
              * data bit at every cell at least once across the 64-word
              * span -- catches stuck bits and address aliasing in one pass. */
-            settings->controllerLock = 1;
             uint16_t pattern[EE_NWORDS];
+            int errs;
+            settings->controllerLock = 1;
             for(i = 0; i < EE_NWORDS; i++){
                 pattern[i] = (uint16_t)(1u << (i % 16));
             }
             eeprom_ewen_drv();
-            int errs = writeAll(pattern);
+            errs = writeAll(pattern);
             totalErrors += errs;
             lastTestRan = 1;
             readAll(current);
@@ -416,13 +425,14 @@ void EepromTest(void){
              * cell holds a unique value derived from its index, so a
              * mis-addressed write is immediately visible on the grid
              * (the value won't line up with its row/col label). */
-            settings->controllerLock = 1;
             uint16_t pattern[EE_NWORDS];
+            int errs;
+            settings->controllerLock = 1;
             for(i = 0; i < EE_NWORDS; i++){
                 pattern[i] = (uint16_t)(((uint16_t)i << 8) | ((~(uint16_t)i) & 0xFF));
             }
             eeprom_ewen_drv();
-            int errs = writeAll(pattern);
+            errs = writeAll(pattern);
             totalErrors += errs;
             lastTestRan = 2;
             readAll(current);
@@ -453,46 +463,57 @@ void EepromTest(void){
         }
 
         if(needRedraw){
+            /* C89-strict: every local declared at the top of this
+             * block before any executable statement. Same convention
+             * as EepromTest()'s function prologue above. */
+            const char *label;
+            const char *prefix;
+            int n;
+            int k;
+            uint16_t statusColor;
+
             needRedraw = 0;
 
             /* Status line summarises the most recent destructive test
              * pass plus running error total. Idle is shown in grey,
-             * pass in green, fail in red so it pops at a glance. */
-            /* Labels are deliberately short (no trailing pad) -- updateLine
-             * recomputes char_count from the new string each call, so we
-             * don't need to splat trailing spaces just to "erase" leftover
-             * pixels from a previous longer label. The initial newTextBox
-             * allocation reserved enough sprite framebuffer for the
-             * worst-case string (the WARN: line on exit), so anything
-             * shorter draws cleanly into a freshly cleared screen. */
-            const char *label = "idle (press A or X)";
+             * pass in green, fail in red so it pops at a glance.
+             *
+             * Labels are deliberately short (no trailing pad) --
+             * updateLine recomputes char_count from the new string
+             * each call, so we don't need to splat trailing spaces
+             * just to "erase" leftover pixels from a previous longer
+             * label. The initial newTextBox allocation reserved
+             * enough sprite framebuffer for the worst-case string
+             * (the WARN: line on exit), so anything shorter draws
+             * cleanly into a freshly cleared screen. */
+            label = "idle (press A or X)";
             if(lastTestRan == 1){
                 label = "WALKING-1S complete";
             } else if(lastTestRan == 2){
                 label = "ADDR-AS-DATA complete";
             }
-            int n = 0;
-            const char *prefix = "STATUS: ";
+            n = 0;
+            prefix = "STATUS: ";
             while(prefix[n] != '\0'){ statusBuf[n] = prefix[n]; n++; }
-            int k = 0;
+            k = 0;
             while(label[k] != '\0' && n < (int)sizeof(statusBuf) - 12){
                 statusBuf[n++] = label[k++];
             }
             if(lastTestRan){
                 const char *errLabel = "  ERRORS: ";
                 int j = 0;
+                /* Clamp only the *displayed* count -- totalErrors is
+                 * the cumulative running total across button-
+                 * triggered passes and is read again below for status
+                 * colour selection. Mutating it here would silently
+                 * cap the true count at 999 forever after the first
+                 * overflow. 64 errors per pass max means it'd take
+                 * 16+ destructive passes back-to-back to actually
+                 * hit 999, but the bug is real either way. */
+                int displayErrors = totalErrors;
                 while(errLabel[j] != '\0' && n < (int)sizeof(statusBuf) - 5){
                     statusBuf[n++] = errLabel[j++];
                 }
-                /* Clamp only the *displayed* count -- totalErrors is the
-                 * cumulative running total across button-triggered passes
-                 * and is read again below for status colour selection.
-                 * Mutating it here would silently cap the true count at
-                 * 999 forever after the first overflow. 64 errors per
-                 * pass max means it'd take 16+ destructive passes back-
-                 * to-back to actually hit 999, but the bug is real
-                 * either way. */
-                int displayErrors = totalErrors;
                 if(displayErrors > 999) displayErrors = 999;
                 if(displayErrors >= 100){
                     statusBuf[n++] = (char)('0' + (displayErrors / 100));
@@ -503,7 +524,7 @@ void EepromTest(void){
                 statusBuf[n++] = (char)('0' + (displayErrors % 10));
             }
             statusBuf[n] = '\0';
-            uint16_t statusColor = GREY;
+            statusColor = GREY;
             if(lastTestRan){
                 statusColor = (totalErrors == 0) ? GREEN : RED;
             }
@@ -513,13 +534,13 @@ void EepromTest(void){
             updateLine(settings, mainFont, cursorTb, cursorBuf, 999999, 999999, WHITE);
 
             for(row = 0; row < GRID_ROWS; row++){
-                formatGridRow(rowBuf, current, row);
                 /* Highlight the row that contains the cursor in red so
                  * the active selection is obvious without having to
                  * underline a single 4-char hex word (which would need
                  * a sub-textBox). The selected cell within that row
                  * is the one whose address matches the cursor info line. */
                 uint16_t color = (cursor / GRID_COLS == row) ? RED : WHITE;
+                formatGridRow(rowBuf, current, row);
                 updateLine(settings, mainFont, gridTb[row], rowBuf, 999999, 999999, color);
             }
         }
