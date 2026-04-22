@@ -45,6 +45,9 @@
 #define HELP_LAG 24
 #define HELP_CONVERGENCE 32
 #define HELP_SPRITE_STRESS 33
+#define HELP_YCDELAY 34
+#define HELP_DIAGONAL 35
+#define HELP_VERTSCROLL 36
 
 extern uint8_t help;
 phrase *helpData;

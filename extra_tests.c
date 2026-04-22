@@ -2217,3 +2217,369 @@ void ScrollingBarsSaver(void){
     hide_or_show_display_layer_range(settings->d, 1, 0, 15);
     helpTb = freeTextBox(helpTb);
 }
+
+/* ---------------------------------------------------------------------------
+ * Test pattern: Y/C Delay
+ *
+ * Canonical chroma-subsampling visualizer ported from the Artemio Urbina
+ * suite. We render vertical strips of pure red, green and blue separated
+ * by 1-pixel pure-white dividers. Cabling that carries true RGB (SCART RGB,
+ * VGA, component on a clean path) keeps the dividers perfectly white --
+ * the luma and chroma edges of each strip line up. Composite or S-Video
+ * routes the chroma through a delay/notch filter, and the divider picks up
+ * coloured fringing on either side as chroma trails luma.
+ *
+ * Useful as a quick "is my SCART cable actually RGB?" check before trusting
+ * the rest of the colour-bar suite.
+ * --------------------------------------------------------------------------- */
+void DrawYCDelay(void){
+    const int W = 320, H = 240;
+    /* 6 colour strips on a black background, each strip flanked by a 1-pixel
+     * white divider. Width chosen so chroma fringing has room to develop
+     * across a typical CRT's PAL/NTSC chroma-delay window without strips
+     * bleeding into one another. */
+    const int STRIP_W = 48;
+    const int STRIP_COUNT = 6;
+    static const uint16_t strips[6] = {
+        COLOR_RED, COLOR_GREEN, COLOR_BLUE,
+        COLOR_YELLOW, COLOR_CYAN, COLOR_MAGENTA
+    };
+
+    int exit = 0;
+    int i, x0;
+    int totalW = STRIP_COUNT * STRIP_W + (STRIP_COUNT + 1);
+    int xStart = (W - totalW) / 2;
+
+    settings->fadeToColor = 0x0000;
+
+    uint16_t *buf = malloc(sizeof(uint16_t) * W * H);
+    fillPACK_RGB16(buf, W * H, COLOR_BLACK);
+
+    for(i = 0; i < STRIP_COUNT; i++){
+        x0 = xStart + i * (STRIP_W + 1);
+        rectPACK_RGB16(buf, W, x0 + 1, 16, STRIP_W, H - 32, strips[i]);
+        /* 1-pixel white divider on the leading edge -- this is the actual
+         * test target. On RGB it stays white; on composite it fringes. */
+        rectPACK_RGB16(buf, W, x0,             16, 1, H - 32, COLOR_WHITE);
+    }
+    /* Trailing divider after the last strip. */
+    rectPACK_RGB16(buf, W, xStart + STRIP_COUNT * (STRIP_W + 1), 16, 1, H - 32, COLOR_WHITE);
+
+    {
+        sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+        s->trans = 0;
+        attach_sprite_to_display_at_layer(s, settings->d, 13);
+
+        hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+        while(!exit){
+            read_joypad_state(settings->j_state);
+            settings->joy1 = settings->j_state->j1;
+            vsync();
+
+            if((settings->joy1 & 0xFFFFFF) == 0){
+                settings->controllerLock = 0;
+            }
+
+            if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+                settings->controllerLock = 1;
+                DrawHelp(HELP_YCDELAY);
+            }
+
+            if(extraExitPressed()){
+                settings->controllerLock = 1;
+                exit = 1;
+            }
+        }
+
+        hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+        teardownFullscreenSprite(s, buf);
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * Test pattern: Diagonal / Clock
+ *
+ * Parallel 1-pixel diagonals at 45 degrees on a flat background. Stair-
+ * stepping is invisible on a CRT (the analogue beam smears the steps) and
+ * minimal on a 1:1 digital path, but upscalers (HDMI, OSSC, RetroTink,
+ * generic TV scaler ASICs) produce visibly different artefacts depending
+ * on their interpolation kernel. Shipping the same pattern at multiple
+ * spacings makes it easy to spot scaler kernels that handle dense edges
+ * differently from sparse ones.
+ *
+ * Controls:
+ *   D-pad UP/DOWN   -- cycle spacing 4 / 8 / 16 / 32 px
+ *   A               -- invert (white-on-black <-> black-on-white)
+ *   OPTION          -- exit
+ * --------------------------------------------------------------------------- */
+void DrawDiagonal(void){
+    const int W = 320, H = 240;
+    static const int SPACINGS[4] = { 4, 8, 16, 32 };
+    int spacingIdx = 1;        /* default 8 px to match upstream canonical */
+    int invert = 0;
+    int exit = 0;
+    int needRedraw = 1;
+
+    uint16_t *buf;
+    sprite *s;
+    textBox *labelTb;
+
+    settings->fadeToColor = 0x0000;
+
+    buf = malloc(sizeof(uint16_t) * W * H);
+
+    s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    s->trans = 0;
+    attach_sprite_to_display_at_layer(s, settings->d, 13);
+
+    /* Worst-case-sized label so newTextBox allocates a framebuffer wide
+     * enough; later updateLine calls only ever shorten the visible string. */
+    labelTb = newTextBox("SPACING: 32  INVERT: ON ", 192, 9, mainFont, 0, settings->d, 8, 8, 14, 1);
+    updateLine(settings, mainFont, labelTb, NULL, 999999, 999999, GREEN);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(needRedraw){
+            int spacing = SPACINGS[spacingIdx];
+            uint16_t bg = invert ? COLOR_WHITE : COLOR_BLACK;
+            uint16_t fg = invert ? COLOR_BLACK : COLOR_WHITE;
+            int x, y, k;
+            char buf2[24];
+            int i;
+
+            fillPACK_RGB16(buf, W * H, bg);
+
+            /* Each diagonal satisfies x + y = k. Stepping k by `spacing`
+             * gives a family of equally-spaced parallel 45-degree lines
+             * that cover the full frame regardless of aspect. */
+            for(k = 0; k < (W + H); k += spacing){
+                for(y = 0; y < H; y++){
+                    x = k - y;
+                    if(x >= 0 && x < W){
+                        buf[y * W + x] = fg;
+                    }
+                }
+            }
+
+            /* Rebuild the label in-place. Width chosen to match the worst-
+             * case string so the sprite framebuffer never needs to grow. */
+            for(i = 0; i < 24; i++){ buf2[i] = ' '; }
+            buf2[0]='S'; buf2[1]='P'; buf2[2]='A'; buf2[3]='C'; buf2[4]='I'; buf2[5]='N'; buf2[6]='G'; buf2[7]=':';
+            if(spacing >= 10){
+                buf2[9] = '0' + (spacing / 10);
+                buf2[10] = '0' + (spacing % 10);
+            } else {
+                buf2[9] = '0' + spacing;
+                buf2[10] = ' ';
+            }
+            buf2[12]='I'; buf2[13]='N'; buf2[14]='V'; buf2[15]='E'; buf2[16]='R'; buf2[17]='T'; buf2[18]=':';
+            buf2[20] = invert ? 'O' : 'O';
+            buf2[21] = invert ? 'N' : 'F';
+            buf2[22] = invert ? ' ' : 'F';
+            buf2[23] = '\0';
+            for(i = 0; i < 24; i++){ labelTb->text[i] = buf2[i]; }
+            updateLine(settings, mainFont, labelTb, NULL, 999999, 999999, GREEN);
+
+            needRedraw = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            DrawHelp(HELP_DIAGONAL);
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_UP) && !(settings->joy1 & JOYPAD_OPTION) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            spacingIdx = (spacingIdx + 1) & 3;
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_DOWN) && !(settings->joy1 & JOYPAD_OPTION) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            spacingIdx = (spacingIdx + 3) & 3;
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            invert ^= 1;
+            needRedraw = 1;
+        }
+
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    labelTb = freeTextBox(labelTb);
+    teardownFullscreenSprite(s, buf);
+}
+
+/* ---------------------------------------------------------------------------
+ * Video test: Vertical Scroll
+ *
+ * Mirror of the existing horizontal Scroll Test from tests.c, scrolling
+ * top->bottom (or bottom->top) instead of side-to-side. Implemented
+ * procedurally so it doesn't need an LZ77-packed asset.
+ *
+ * The pattern is a 240-line repeating stripe (16-pixel-tall colour bands
+ * separated by 1-pixel white rules) that we shift by one pixel per frame
+ * by changing the sprite's y origin. Vertical OP/blitter pacing bugs --
+ * tearing, jitter, dropped lines -- show up here even when the existing
+ * horizontal scroll looks clean, because horizontal and vertical fetch
+ * paths exercise different parts of the OP list-walker.
+ *
+ * Controls:
+ *   D-pad UP/DOWN    -- speed (1, 2, 4 px/frame; 0 = paused)
+ *   D-pad LEFT/RIGHT -- reverse direction
+ *   A                -- pause toggle
+ *   OPTION           -- exit
+ * --------------------------------------------------------------------------- */
+
+/* HUD label rebuild for VertScrollTest, factored out so the per-frame loop
+ * stays small enough not to trip GCC 4.x's reload pass on m68k at -O2. */
+static void vertScrollUpdateLabel(textBox *tb, int speed, int dir, int paused){
+    int i;
+    char line[24];
+    for(i = 0; i < 24; i++){ line[i] = ' '; }
+    line[0]='S'; line[1]='P'; line[2]='E'; line[3]='E'; line[4]='D'; line[5]=':';
+    line[7] = (char)('0' + (paused ? 0 : speed));
+    line[9]='D'; line[10]='I'; line[11]='R'; line[12]=':';
+    if(dir > 0){ line[14]='D'; line[15]='N'; }
+    else       { line[14]='U'; line[15]='P'; }
+    if(paused){
+        line[18]='P'; line[19]='A'; line[20]='U'; line[21]='S'; line[22]='E';
+    }
+    line[23] = '\0';
+    for(i = 0; i < 24; i++){ tb->text[i] = line[i]; }
+    updateLine(settings, mainFont, tb, NULL, 999999, 999999, GREEN);
+}
+
+/* Stripe-pattern fill for the doubled framebuffer. Pulled out so the
+ * caller's stack frame stays slim. */
+static void vertScrollFillBuffer(uint16_t *buf, int W, int H, int BUF_H){
+    static const uint16_t bands[6] = {
+        COLOR_RED, COLOR_YELLOW, COLOR_GREEN,
+        COLOR_CYAN, COLOR_BLUE, COLOR_MAGENTA
+    };
+    const int BAND_H = 16;
+    int x, y;
+    for(y = 0; y < BUF_H; y++){
+        int yMod = y % H;
+        int b = (yMod / BAND_H) % 6;
+        uint16_t c = ((yMod % BAND_H) == 0) ? COLOR_WHITE : bands[b];
+        for(x = 0; x < W; x++){
+            buf[y * W + x] = c;
+        }
+    }
+}
+
+void VertScrollTest(void){
+    const int W = 320;
+    const int H = 240;
+    const int BUF_H = 480;
+
+    int exit = 0;
+    int paused = 0;
+    int speed = 1;
+    int dir = 1;
+    int yOff = 0;
+    int needLabel = 1;
+
+    uint16_t *buf;
+    sprite *s;
+    textBox *labelTb;
+
+    settings->fadeToColor = 0x0000;
+
+    buf = malloc(sizeof(uint16_t) * W * BUF_H);
+    fillPACK_RGB16(buf, W * BUF_H, COLOR_BLACK);
+    vertScrollFillBuffer(buf, W, H, BUF_H);
+
+    s = new_sprite(W, BUF_H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    s->trans = 0;
+    attach_sprite_to_display_at_layer(s, settings->d, 13);
+
+    labelTb = newTextBox("SPEED: 4 DIR: UP   PAUSE", 200, 9, mainFont, 0, settings->d, 8, 8, 14, 1);
+    updateLine(settings, mainFont, labelTb, NULL, 999999, 999999, GREEN);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if(!paused){
+            yOff += dir * speed;
+            if(yOff <= -H) yOff += H;
+            if(yOff > 0)   yOff -= H;
+            s->y = yOff + settings->PALOffset;
+        }
+
+        if(needLabel){
+            vertScrollUpdateLabel(labelTb, speed, dir, paused);
+            needLabel = 0;
+        }
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        if(settings->controllerLock != 0){
+            continue;
+        }
+
+        if((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)){
+            settings->controllerLock = 1;
+            DrawHelp(HELP_VERTSCROLL);
+            needLabel = 1;
+        }
+        else if((settings->joy1 & JOYPAD_UP)){
+            settings->controllerLock = 1;
+            if(speed < 4) speed <<= 1;
+            needLabel = 1;
+        }
+        else if((settings->joy1 & JOYPAD_DOWN)){
+            settings->controllerLock = 1;
+            if(speed > 1) speed >>= 1;
+            needLabel = 1;
+        }
+        else if((settings->joy1 & JOYPAD_LEFT)){
+            settings->controllerLock = 1;
+            dir = -1;
+            needLabel = 1;
+        }
+        else if((settings->joy1 & JOYPAD_RIGHT)){
+            settings->controllerLock = 1;
+            dir = 1;
+            needLabel = 1;
+        }
+        else if((settings->joy1 & JOYPAD_A)){
+            settings->controllerLock = 1;
+            paused ^= 1;
+            needLabel = 1;
+        }
+        else if((settings->joy1 & JOYPAD_OPTION)){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    labelTb = freeTextBox(labelTb);
+    teardownFullscreenSprite(s, buf);
+}

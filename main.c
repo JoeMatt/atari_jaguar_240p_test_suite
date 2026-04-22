@@ -539,7 +539,10 @@ void testPatternMenu(){
 void morePatternsMenu(){
 
     int done = 0;
-    int lastMenuLine = 6; //counting from zero
+    /* 7 patterns + Back (case 8). Y/C Delay and Diagonal are added here
+     * rather than testPatternMenu because that page already runs to 16
+     * lines and adding more would push the cursor row off the safe area. */
+    int lastMenuLine = 8;
     settings->menuState = 1;
 
     hide_display_layer(settings->d, 2);
@@ -555,8 +558,10 @@ void morePatternsMenu(){
     updateLine(settings, mainFont, lineTextBox[3], "Phase", settings->lineXOffset, setLineYPos(2), WHITE);
     updateLine(settings, mainFont, lineTextBox[4], "Brightness", settings->lineXOffset, setLineYPos(3), WHITE);
     updateLine(settings, mainFont, lineTextBox[5], "Contrast", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Y/C Delay", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Diagonal / Clock", settings->lineXOffset, setLineYPos(6), WHITE);
 
-    updateLine(settings, mainFont, lineTextBox[6], "Back to Test Patterns", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Back to Test Patterns", settings->lineXOffset, setLineYPos(8), WHITE);
 
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
 
@@ -619,9 +624,11 @@ void morePatternsMenu(){
                 case 3: DrawPhase();        break;
                 case 4: DrawBrightness();   break;
                 case 5: DrawContrast();     break;
+                case 6: DrawYCDelay();      break;
+                case 7: DrawDiagonal();     break;
 
                 //return to Test Patterns menu
-                case 6:
+                case 8:
                     done = 1;
                 break;
 
@@ -736,7 +743,9 @@ void ScreenSaversMenu(){
 void VideoTestsMenu(){
     
     int done = 0;
-    int lastMenuLine = 14; //counting from zero
+    /* Vertical Scroll Test added immediately after the existing horizontal
+     * Scroll Test, so every following entry shifts down by one slot. */
+    int lastMenuLine = 15;
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
@@ -753,15 +762,16 @@ void VideoTestsMenu(){
     updateLine(settings, mainFont, lineTextBox[4], "Manual Lag Test", settings->lineXOffset, setLineYPos(3), WHITE);
     updateLine(settings, mainFont, lineTextBox[5], "Timing & Reflex Test", settings->lineXOffset, setLineYPos(4), WHITE);
     updateLine(settings, mainFont, lineTextBox[6], "Scroll Test", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Grid Scroll Test", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[8], "Horiz/Vert Stripes", settings->lineXOffset, setLineYPos(7), WHITE);
-    updateLine(settings, mainFont, lineTextBox[9], "Checkerboard", settings->lineXOffset, setLineYPos(8), WHITE);
-    updateLine(settings, mainFont, lineTextBox[10], "Backlit Zone Test", settings->lineXOffset, setLineYPos(9), WHITE);
-    updateLine(settings, mainFont, lineTextBox[11], "Alternate 240p/480i", settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "Vertical Scroll Test", settings->lineXOffset, setLineYPos(6), WHITE);
+    updateLine(settings, mainFont, lineTextBox[8], "Grid Scroll Test", settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Horiz/Vert Stripes", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "Checkerboard", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "Backlight Zone Test", settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Alternate 240p/480i", settings->lineXOffset, setLineYPos(11), WHITE);
     
-    updateLine(settings, mainFont, lineTextBox[12], "Help", settings->lineXOffset, setLineYPos(12), WHITE);
-    updateLine(settings, mainFont, lineTextBox[13], "Options", settings->lineXOffset, setLineYPos(13), WHITE);
-    updateLine(settings, mainFont, lineTextBox[14], "Back to Main Menu", settings->lineXOffset, setLineYPos(14), WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Help", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[14], "Options", settings->lineXOffset, setLineYPos(14), WHITE);
+    updateLine(settings, mainFont, lineTextBox[15], "Back to Main Menu", settings->lineXOffset, setLineYPos(15), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -866,44 +876,51 @@ void VideoTestsMenu(){
                     HScrollTest();
                     
                 break;
-                    
-                //VScrollTest
+
+                //VertScrollTest (procedural mirror of horizontal Scroll Test)
                 case 7:
+
+                    VertScrollTest();
+
+                break;
+
+                //VScrollTest (canonical "Grid Scroll" backed by an LZ77 asset)
+                case 8:
                     
                     VScrollTest();
                     
                 break;
                     
                 //DrawStripes
-                case 8:
+                case 9:
                     
                     DrawStripes();
                     
                 break;
                     
                 //DrawCheckBoard
-                case 9:
+                case 10:
                     
                     DrawCheckBoard();
                     
                 break;
                     
                 //LEDZoneTest
-                case 10:
+                case 11:
                     
                     LEDZoneTest();
                     
                 break;
                     
                 //Alternate240p480i
-                case 11:
+                case 12:
 
                     Alternate240p480iTest();
 
                 break;
                     
                 //DrawHelp
-                case 12:
+                case 13:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -915,14 +932,14 @@ void VideoTestsMenu(){
                 break;
                     
                 //OptionsMenu
-                case 13:
+                case 14:
 
                     OptionsMenu();
 
                 break;
                     
                 //return to main menu
-                case 14:
+                case 15:
                     
                     done = 1;
                     

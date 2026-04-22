@@ -35,10 +35,13 @@ void DrawLinearity(void);
 void DrawPhase(void);
 void DrawBrightness(void);
 void DrawContrast(void);
+void DrawYCDelay(void);
+void DrawDiagonal(void);
 
 /* Video tests */
 void ManualLagTest(void);
 void Alternate240p480iTest(void);
+void VertScrollTest(void);
 
 /* Audio tests */
 void AudioBalanceTest(void);
