@@ -567,12 +567,30 @@ screenshots-preflight: ensure-j64 libretro-venv unquarantine-core
 		printf '!! No libretro core found in CWD (see libretro-test).\n' >&2; \
 		exit 1; \
 	fi
+	@# Match libretro-test: default LIBRETRO_CONTENT is $(OUT_PROJECT).jag;
+	@# a fresh tree may have .cof/.j64 but not the .cof->.jag copy yet.
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		$(MAKE) --no-print-directory "$(LIBRETRO_CONTENT)" 2>/dev/null || true; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		printf '!! libretro content not found: %s\n' "$(LIBRETRO_CONTENT)" >&2; \
+		printf '   Run `make` first, or override LIBRETRO_CONTENT=/path/to/rom.jag|j64\n' >&2; \
+		exit 1; \
+	fi
 	"$(LIBRETRO_PYTHON)" scripts/screenshot-tour.py --preflight \
 		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
 
 screenshots: ensure-j64 libretro-venv unquarantine-core screenshots-preflight
 	@if [ -z "$(LIBRETRO_CORE)" ]; then \
 		printf '!! No libretro core found in CWD (see libretro-test).\n' >&2; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		$(MAKE) --no-print-directory "$(LIBRETRO_CONTENT)" 2>/dev/null || true; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		printf '!! libretro content not found: %s\n' "$(LIBRETRO_CONTENT)" >&2; \
+		printf '   Run `make` first, or override LIBRETRO_CONTENT=/path/to/rom.jag|j64\n' >&2; \
 		exit 1; \
 	fi
 	rm -rf $(SCREENSHOT_DIR)

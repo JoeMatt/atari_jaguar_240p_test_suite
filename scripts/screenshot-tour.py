@@ -7,10 +7,10 @@ under ``screenshots/<group>/<NN>-<slug>.png`` and a ``manifest.json``
 indexes everything for the README stitcher.
 
 Usage:
-    scripts/screenshot-tour.py CORE.dylib CONTENT.j64
+    scripts/screenshot-tour.py CORE.dylib CONTENT.jag
     scripts/screenshot-tour.py --out screenshots --group main \\
         ./virtualjaguar_libretro.dylib jag_240p_test_suite.jag
-    scripts/screenshot-tour.py --preflight CORE.dylib CONTENT.j64
+    scripts/screenshot-tour.py --preflight CORE.dylib CONTENT.jag
 
 Local-only: needs the libretro core .dylib + libretro.py venv
 (``make libretro-venv``). Run via ``make screenshots`` for the wired
@@ -316,24 +316,31 @@ TOUR: list[TourGroup] = [
         slug="pink-noise",
         title="Pink noise test",
         steps=[
-            ## Audio Tests, Pink Noise is item 6 (5 DOWN). Pink takes
-            ## noticeably longer than white because it runs Paul
-            ## Kellet's 5-stage IIR filter over all 16384 samples on
-            ## entry; the 32 KiB buffer fill blocks the main loop so
-            ## the framebuffer stays black until it finishes. 240
-            ## frames (~4 s NTSC) gives a comfortable margin for the
-            ## buffer fill to complete before the capture frame.
+            ## Audio Tests, Pink Noise is item 6 (5 DOWN). Entering is
+            ## slower than white: Paul Kellet's 5-stage IIR must fill the
+            ## 32 KiB playback buffer (16384 int16) on the 68000 before the
+            ## UI loop can draw. That work blocks the main thread -- the
+            ## cart is not "waiting to settle"; it is busy computing. 240
+            ## frames (~4 s NTSC) is headroom for that fill, not a guess
+            ## at the libretro *screenshot* path.
             ##
-            ## Some libretro builds composite only a top band in headless
-            ## `retro_run` (main-menu capture <2k non-zero pixels). Use a
-            ## core that passes a quick ``--group main`` check before
-            ## trusting the pink-noise capture.
+            ## Separately: if the *read* framebuffer from libretro stays
+            ## black or shows only a top band, that is a **core/headless
+            ## compositing** failure (or a bad `virtualjaguar` build), not
+            ## something longer settle fixes -- ``make screenshots`` runs
+            ## ``--preflight`` (main menu pixel gate) for exactly that. On a
+            ## working build the idle UI (green title, STATE/CHANNEL lines)
+            ## appears; an all-black PNG under those conditions is a
+            ## harness/core bug, not a timing gap in the 240 frame budget.
             *_boot(),
             *_open_main_item(2),
             *(s for _ in range(5) for s in (_press("down"), _settle(8))),
             _press("a"),
             _settle(240),
-            _capture("pink-noise-idle", "Pink Noise Test (idle, ready to play)"),
+            _capture(
+                "pink-noise-idle",
+                "Pink Noise Test (idle, ready to play) — all-black: bad headless libretro read-FB, not the cart",
+            ),
         ],
     ),
     TourGroup(

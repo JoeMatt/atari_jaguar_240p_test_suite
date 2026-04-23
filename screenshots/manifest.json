@@ -114,7 +114,7 @@
       "group": "pink-noise",
       "title": "Pink noise test",
       "label": "pink-noise-idle",
-      "note": "Pink Noise Test (idle, ready to play)",
+      "note": "Pink Noise Test (idle, ready to play) — all-black: bad headless libretro read-FB, not the cart",
       "path": "pink-noise/00-pink-noise-idle.png",
       "width": 326,
       "height": 241
