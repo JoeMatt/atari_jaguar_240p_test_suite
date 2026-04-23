@@ -638,7 +638,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "JAGUAR CD PROBE", 999999, 999999, GREEN);
 
-                            updateLine(settings, mainFont, helpTextBox, "Probes a handful of 16-bit words: four in the Butch (CD) ASIC at $F14000+ and the first word of the paged-in CD boot ROM window at $00800000. On a base Jaguar with no CD, those often read 0x0000 or 0xFFFF (open bus).^If *any* word returns a different value, the heuristic reports DETECTED.^Values are re-read *every frame* so emulators and hardware bring-up can watch registers change in real time. This is not a full Memory-Track or disc I/O test -- use real media for that.^^DOWN+OPTION: this help.   OPTION: exit", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "Probes a handful of 16-bit words: four in the Butch (CD) ASIC at $F14000+ and the first word of the paged-in CD boot ROM window at $800000. On a base Jaguar with no CD, those often read 0x0000 or 0xFFFF (open bus).^If *any* word returns a different value, the heuristic reports DETECTED.^Values are re-read *every frame* so emulators and hardware bring-up can watch registers change in real time. This is not a full Memory-Track or disc I/O test -- use real media for that.^^DOWN+OPTION: this help.   OPTION: exit", 999999, 999999, WHITE);
                             highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
                         break;
                     }

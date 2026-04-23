@@ -1822,13 +1822,62 @@ void MDFourierTest(void){
  * and is purely informational. On a Jag CD it gives the user a quick
  * sanity check that the CD's data bus is alive without booting media.
  * --------------------------------------------------------------------------- */
+/* jlibc has no strstr; only used for short footer phrases here. */
+static int extraTextStrstrIndex(const char *hay, const char *needle){
+    int i, j;
+    if(hay == NULL || needle == NULL){ return -1; }
+    if(needle[0] == '\0'){ return 0; }
+    for(i = 0; hay[i] != '\0'; i++){
+        for(j = 0; needle[j] != '\0' && hay[i + j] == needle[j]; j++){ /* match */ }
+        if(needle[j] == '\0'){ return i; }
+        if(hay[i + j] == '\0'){ return -1; }
+    }
+    return -1;
+}
+
+/* GREY body text, GREEN on "DOWN+OPTION" — same idea as help.c highlight. */
+static void extraHighlightJagCdFooterLine(textBox *tb){
+    const char *phrase = "DOWN+OPTION";
+    int start, plen;
+    if(tb == NULL || tb->text == NULL){ return; }
+    start = extraTextStrstrIndex((const char *)tb->text, phrase);
+    if(start < 0){ return; }
+    plen = 0;
+    while(phrase[plen] != '\0'){ plen++; }
+    textRangeColorChange(tb, start, plen, GREY, GREEN);
+}
+
 static void jagCdSetHex4(textBox *tb, char *buf, uint16_t v){
-    int n, i, pad;
+    int n, i, pad, j, hexStart, cmax;
+    if(tb == NULL || tb->text == NULL){ return; }
     itostring(buf, (int)v, 16);
     n = 0;
     while(buf[n] != '\0' && n < 4) n++;
-    for(pad = 0; pad < 4 - n; pad++) tb->text[10 + pad] = '0';
-    for(i = 0; i < n; i++) tb->text[10 + (4 - n) + i] = buf[i];
+    /* Find the 4-hex run after " : " using char_count; never write past
+     * the buffer. Fall back to offset 10 for the shipped templates. */
+    cmax = tb->char_count;
+    hexStart = 10;
+    j = 0;
+    while(j < cmax && tb->text[j] != '\0' && tb->text[j] != ':'){
+        j++;
+    }
+    if(j < cmax && tb->text[j] == ':'){
+        j++;
+        while(j < cmax && tb->text[j] == ' '){
+            j++;
+        }
+        if(j + 4 <= cmax){
+            hexStart = j;
+        }
+    }
+    if(hexStart + 4 > cmax){
+        hexStart = 10;
+        if(hexStart + 4 > cmax){
+            return;
+        }
+    }
+    for(pad = 0; pad < 4 - n; pad++) tb->text[hexStart + pad] = '0';
+    for(i = 0; i < n; i++) tb->text[hexStart + (4 - n) + i] = buf[i];
 }
 
 void JaguarCDTest(void){
@@ -1854,9 +1903,10 @@ void JaguarCDTest(void){
     textBox *dTb = newTextBox("$F14008 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 128, 13, 1);
     textBox *eTb = newTextBox("$800000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 144, 13, 1);
     textBox *noteTb = newTextBox("LIVE/frm: hex refresh  0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 168, 13, 1);
-    textBox *helpTb = newTextBox("DOWN+OPT: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 196, 13, 1);
+    textBox *helpTb = newTextBox("DOWN+OPTION: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 196, 13, 1);
     updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+    extraHighlightJagCdFooterLine(helpTb);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
 
