@@ -1823,12 +1823,28 @@ void MDFourierTest(void){
  * sanity check that the CD's data bus is alive without booting media.
  * --------------------------------------------------------------------------- */
 static void jagCdSetHex4(textBox *tb, char *buf, uint16_t v){
-    int n, i, pad;
+    int n, i, pad, j, hexStart;
     itostring(buf, (int)v, 16);
     n = 0;
     while(buf[n] != '\0' && n < 4) n++;
-    for(pad = 0; pad < 4 - n; pad++) tb->text[10 + pad] = '0';
-    for(i = 0; i < n; i++) tb->text[10 + (4 - n) + i] = buf[i];
+    /* Find first digit of the 4-hex field (after " : " in labels like
+     * "$F14000 : 0000 ") so rewording the prefix does not desync a hard
+     * offset; fall back to 10 to match the initial template layout. */
+    hexStart = 10;
+    if(tb != NULL && tb->text != NULL){
+        j = 0;
+        while(tb->text[j] != '\0' && tb->text[j] != ':'){
+            j++;
+            if(j > 120) break;
+        }
+        if(tb->text[j] == ':'){
+            j++;
+            while(tb->text[j] == ' ') j++;
+            hexStart = j;
+        }
+    }
+    for(pad = 0; pad < 4 - n; pad++) tb->text[hexStart + pad] = '0';
+    for(i = 0; i < n; i++) tb->text[hexStart + (4 - n) + i] = buf[i];
 }
 
 void JaguarCDTest(void){
@@ -1854,7 +1870,7 @@ void JaguarCDTest(void){
     textBox *dTb = newTextBox("$F14008 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 128, 13, 1);
     textBox *eTb = newTextBox("$800000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 144, 13, 1);
     textBox *noteTb = newTextBox("LIVE/frm: hex refresh  0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 168, 13, 1);
-    textBox *helpTb = newTextBox("DOWN+OPT: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 196, 13, 1);
+    textBox *helpTb = newTextBox("DOWN+OPTION: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 196, 13, 1);
     updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
