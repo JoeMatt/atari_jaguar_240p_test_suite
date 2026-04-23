@@ -2626,8 +2626,11 @@ static uint16_t lfsrAdvance(uint16_t state){
 }
 
 /* Fill `buf` with NOISE_BUF_SAMPLES of signed 16-bit white noise. The
- * LFSR's natural output is uniform on [1..65535]; we centre it on zero
- * by subtracting the midpoint to get full-range int16_t samples. */
+ * maximal-length 16-bit Galois LFSR cycles through every state except
+ * 0, so its raw output is uniform on [1..65535]; subtracting the
+ * 32768 midpoint centres it on zero with effective range [-32767..32767].
+ * INT16_MIN (-32768) is unreachable -- the asymmetry is one LSB on a
+ * 16-bit signal, well below any audible or measurable threshold. */
 static void fillWhiteNoise(int16_t *buf){
     uint16_t s = 0xACE1u;            /* arbitrary non-zero seed */
     int i;
