@@ -10,6 +10,7 @@ Usage:
     scripts/screenshot-tour.py CORE.dylib CONTENT.j64
     scripts/screenshot-tour.py --out screenshots --group main \\
         ./virtualjaguar_libretro.dylib jag_240p_test_suite.jag
+    scripts/screenshot-tour.py --preflight CORE.dylib CONTENT.j64
 
 Local-only: needs the libretro core .dylib + libretro.py venv
 (``make libretro-venv``). Run via ``make screenshots`` for the wired
@@ -31,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -111,6 +113,14 @@ class TourGroup:
 # scrollLock decay has finished so the next press isn't dropped.
 SETTLE_FRAMES = 25
 BOOT_FRAMES = 90
+
+# Headless libretro run must composite the 240p test suite to the
+# read framebuffer. Broken or incomplete cores leave ~0.1% of pixels
+# non-black (a single top line); a healthy main-menu screen is on the
+# order of 10^4--10^5 non-zero RGB pixels. ``make screenshots`` runs
+# ``--preflight`` first so a bad local core cannot wipe a good
+# ./screenshots/ tree (see _count_nonzero_rgb + _run_group check).
+MAIN_MENU_MIN_NONZERO_RGB_PIXELS = 2000
 
 
 def _boot() -> list[Step]:
@@ -407,6 +417,16 @@ _BUTTON_KWARGS = {
 TAP_PRESS_FRAMES = 4
 
 
+def _count_nonzero_rgb(shot) -> int:
+    """Count RGBA buffer pixels with any of R, G, or B non-zero (alpha ignored)."""
+    data = memoryview(shot.data)
+    n = 0
+    for i in range(0, len(data), 4):
+        if (data[i] | data[i + 1] | data[i + 2]) != 0:
+            n += 1
+    return n
+
+
 def _flatten(tour: list[TourGroup]) -> list[tuple[str, str | None, str | None, str]]:
     """Flatten the tour DSL into a per-frame action list.
 
@@ -465,6 +485,13 @@ def main(argv: list[str]) -> int:
                    help="only run these tour group slugs (repeatable)")
     p.add_argument("--list", action="store_true",
                    help="list group slugs + step counts and exit")
+    p.add_argument(
+        "--preflight",
+        action="store_true",
+        help="boot and capture the main menu only (temp output); fail if the read "
+        "framebuffer is nearly empty. Used by `make screenshots-preflight` before "
+        "wiping ./screenshots/.",
+    )
     p.add_argument("--verbose", action="store_true",
                    help="print per-frame action log")
     args = p.parse_args(argv[1:])
@@ -494,6 +521,41 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+
+    if args.preflight:
+        main_tour = [g for g in TOUR if g.slug == "main"]
+        if not main_tour:
+            print("!! preflight: no 'main' group in TOUR", file=sys.stderr)
+            return 64
+        save_png = _resolve_png_writer()
+        if save_png is None:
+            return 1
+        print(">> preflight: main menu only (temp dir; does not touch ./screenshots/)",
+              flush=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            missed_pf: list[str] = []
+            manifest_pf: list[dict[str, object]] = []
+            rc = _run_group(
+                main_tour[0],
+                core=args.core,
+                content=args.content,
+                out=out,
+                manifest=manifest_pf,
+                missed=missed_pf,
+                save_png=save_png,
+                verbose=args.verbose,
+                session_builder_cls=SessionBuilder,
+                iterable_input_driver_cls=IterableInputDriver,
+            )
+            if rc != 0:
+                return rc
+            if missed_pf:
+                for label in missed_pf:
+                    print(f"!! preflight: no framebuffer: {label}", file=sys.stderr)
+                return 3
+        print(">> preflight: OK (core passed main-menu framebuffer sanity check).", flush=True)
+        return 0
 
     tour = [g for g in TOUR if not args.group or g.slug in args.group]
     if not tour:
@@ -618,6 +680,24 @@ def _run_group(
                     "height": shot.height,
                 })
                 print(f"   {rel}  ({shot.width}x{shot.height})", flush=True)
+                if group.slug == "main" and label == "main-menu":
+                    c = _count_nonzero_rgb(shot)
+                    tot = shot.width * shot.height
+                    if c < MAIN_MENU_MIN_NONZERO_RGB_PIXELS:
+                        print(
+                            f"!! main-menu framebuffer check failed: only {c} / {tot} "
+                            f"non-black RGB pixels (need >= {MAIN_MENU_MIN_NONZERO_RGB_PIXELS}).\n"
+                            f"   This libretro build is not compositing the 240p test suite to "
+                            f"the read framebuffer; use a different virtualjaguar core "
+                            f"(e.g. RetroArch's) for `make screenshots`.",
+                            file=sys.stderr,
+                        )
+                        return 4
+                    print(
+                        f"   (main-menu sanity: {c} / {tot} non-black RGB pixels, "
+                        f"min {MAIN_MENU_MIN_NONZERO_RGB_PIXELS})",
+                        flush=True,
+                    )
     except Exception as exc:
         print(f"!! [{group.slug}] failed: {type(exc).__name__}: {exc}",
               file=sys.stderr)

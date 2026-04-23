@@ -279,6 +279,14 @@ Two non-obvious design choices are load-bearing:
    `_flatten` asserts each button press for the first 4 frames of a
    step, then idles for the rest. **Don't lower this floor without
    re-running the full tour and diffing every PNG.**
+3. **Main-menu preflight (`make screenshots-preflight`).** Full
+   `make screenshots` depends on it: one boot and `main-menu` capture
+   to a temp directory. If the read framebuffer has fewer than 2000
+   non-black RGB pixels (a broken or headless-incomplete libretro build
+   may show only a thin top band), the tour exits 4 before `rm -rf
+   screenshots/`, so a good tracked gallery is not deleted in vain.
+   Run `make screenshots-preflight` alone when swapping
+   `virtualjaguar_libretro` builds.
 
 `make screenshots-check` (plumbed into CI for the cleanup PR series)
 fails if regenerating the gallery would change `README.md`.
@@ -547,7 +555,8 @@ make unquarantine-core  # strip quarantine xattr (auto re-signs if stale)
 make resign-core        # force ad-hoc re-sign of the core dylib
 
 # Screenshot gallery
-make screenshots        # drive the libretro core through every menu (also rebuilds index.html)
+make screenshots-preflight  # main menu only: fail if read framebuffer is nearly empty (no rm -rf)
+make screenshots        # same as preflight, then full tour (also rebuilds index.html)
 make screenshots-readme # rewrite README gallery between markers
 make screenshots-html   # rewrite screenshots/index.html viewer (dep-free, no venv)
 make screenshots-check  # CI-friendly: fails if README or index.html would change
