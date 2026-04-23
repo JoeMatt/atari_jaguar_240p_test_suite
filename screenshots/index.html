@@ -80,9 +80,9 @@ footer code { color: var(--accent-soft); }
 <header>
   <h1>Atari Jaguar 240p Test Suite — screenshot gallery</h1>
   <div class="meta">
-    11 captures across 10 screens
+    18 captures across 17 screens
     &middot; core <code>virtualjaguar_libretro.dylib</code>
-    &middot; content <code>jag_240p_test_suite.j64</code>
+    &middot; content <code>jag_240p_test_suite.jag</code>
   </div>
   <nav>
       <a href="#main">Main menu</a>
@@ -91,6 +91,13 @@ footer code { color: var(--accent-soft); }
       <a href="#audio">Audio tests</a>
       <a href="#hardware">Hardware tools</a>
       <a href="#eeprom">EEPROM test</a>
+      <a href="#sprite-stress">Sprite stress test</a>
+      <a href="#ycdelay">Y/C delay pattern</a>
+      <a href="#diagonal">Diagonal / clock pattern</a>
+      <a href="#vertscroll">Vertical scroll test</a>
+      <a href="#white-noise">White noise test</a>
+      <a href="#pink-noise">Pink noise test</a>
+      <a href="#channel-sep">L/R channel separation</a>
       <a href="#screensavers">Screen savers</a>
       <a href="#help">Help</a>
       <a href="#options">Options</a>
@@ -184,6 +191,104 @@ footer code { color: var(--accent-soft); }
   <figcaption>
     <div class="label">EEPROM Test grid (64 words, hex)</div>
     <div class="path">eeprom-grid &middot; eeprom/00-eeprom-grid.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="sprite-stress">
+  <h2>Sprite stress test</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="sprite-stress/00-sprite-stress-default.png" target="_blank" rel="noopener"><img src="sprite-stress/00-sprite-stress-default.png" alt="Sprite Stress Test default (1 sprite, 8x8, single-line)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Sprite Stress Test default (1 sprite, 8x8, single-line)</div>
+    <div class="path">sprite-stress-default &middot; sprite-stress/00-sprite-stress-default.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="ycdelay">
+  <h2>Y/C delay pattern</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="ycdelay/00-ycdelay-strips.png" target="_blank" rel="noopener"><img src="ycdelay/00-ycdelay-strips.png" alt="Y/C Delay (RGB+CMY strips with 1px white dividers)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Y/C Delay (RGB+CMY strips with 1px white dividers)</div>
+    <div class="path">ycdelay-strips &middot; ycdelay/00-ycdelay-strips.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="diagonal">
+  <h2>Diagonal / clock pattern</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="diagonal/00-diagonal-default.png" target="_blank" rel="noopener"><img src="diagonal/00-diagonal-default.png" alt="Diagonal / Clock pattern (8 px spacing, default invert off)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Diagonal / Clock pattern (8 px spacing, default invert off)</div>
+    <div class="path">diagonal-default &middot; diagonal/00-diagonal-default.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="vertscroll">
+  <h2>Vertical scroll test</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="vertscroll/00-vertscroll-running.png" target="_blank" rel="noopener"><img src="vertscroll/00-vertscroll-running.png" alt="Vertical Scroll Test (default speed 1, dir DN)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Vertical Scroll Test (default speed 1, dir DN)</div>
+    <div class="path">vertscroll-running &middot; vertscroll/00-vertscroll-running.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="white-noise">
+  <h2>White noise test</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="white-noise/00-white-noise-idle.png" target="_blank" rel="noopener"><img src="white-noise/00-white-noise-idle.png" alt="White Noise Test (idle, ready to play)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">White Noise Test (idle, ready to play)</div>
+    <div class="path">white-noise-idle &middot; white-noise/00-white-noise-idle.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="pink-noise">
+  <h2>Pink noise test</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="pink-noise/00-pink-noise-idle.png" target="_blank" rel="noopener"><img src="pink-noise/00-pink-noise-idle.png" alt="Pink Noise Test (idle, ready to play) — all-black: bad headless libretro read-FB, not the cart" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Pink Noise Test (idle, ready to play) — all-black: bad headless libretro read-FB, not the cart</div>
+    <div class="path">pink-noise-idle &middot; pink-noise/00-pink-noise-idle.png</div>
+  </figcaption>
+</figure>
+  </div>
+</section>
+
+<section id="channel-sep">
+  <h2>L/R channel separation</h2>
+  <div class="count">1 capture</div>
+  <div class="grid">
+    <figure>
+  <a href="channel-sep/00-channel-sep-default.png" target="_blank" rel="noopener"><img src="channel-sep/00-channel-sep-default.png" alt="Channel Separation (BOTH in-phase, OFF)" loading="lazy"></a>
+  <figcaption>
+    <div class="label">Channel Separation (BOTH in-phase, OFF)</div>
+    <div class="path">channel-sep-default &middot; channel-sep/00-channel-sep-default.png</div>
   </figcaption>
 </figure>
   </div>

@@ -547,13 +547,50 @@ libretro-frames: ensure-j64 libretro-venv
 #   SCREENSHOT_GROUPS -- whitespace-separated tour group slugs to limit
 #                        the run (default: all). E.g.
 #                          make screenshots SCREENSHOT_GROUPS="main patterns"
+#
+#   ``make screenshots`` runs ``screenshots-preflight`` first: one boot
+#   + main-menu capture to a temp directory. If the read framebuffer is
+#   nearly empty (broken libretro build), the script exits 4 before
+#   ``rm -rf $(SCREENSHOT_DIR)`` so a good gallery is not deleted in vain.
+#   Test the core with ``make screenshots-preflight`` alone. The full
+#   tour (``scripts/screenshot-tour.py`` without ``--preflight``) can be
+#   run by hand to skip the gate if you are debugging a partial tour.
 # ---------------------------------------------------------------------------
 SCREENSHOT_DIR ?= screenshots
 SCREENSHOT_GROUPS ?=
 
-screenshots: ensure-j64 libretro-venv unquarantine-core
+# Quick boot + main-menu frame check (no write under SCREENSHOT_DIR).
+# Intentionally separate from the full tour so ``make screenshots`` can
+# depend on it before ``rm -rf`` on ./screenshots/.
+screenshots-preflight: ensure-j64 libretro-venv unquarantine-core
 	@if [ -z "$(LIBRETRO_CORE)" ]; then \
 		printf '!! No libretro core found in CWD (see libretro-test).\n' >&2; \
+		exit 1; \
+	fi
+	@# Match libretro-test: default LIBRETRO_CONTENT is $(OUT_PROJECT).jag;
+	@# a fresh tree may have .cof/.j64 but not the .cof->.jag copy yet.
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		$(MAKE) --no-print-directory "$(LIBRETRO_CONTENT)" 2>/dev/null || true; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		printf '!! libretro content not found: %s\n' "$(LIBRETRO_CONTENT)" >&2; \
+		printf '   Run `make` first, or override LIBRETRO_CONTENT=/path/to/rom.jag|j64\n' >&2; \
+		exit 1; \
+	fi
+	"$(LIBRETRO_PYTHON)" scripts/screenshot-tour.py --preflight \
+		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
+
+screenshots: screenshots-preflight
+	@if [ -z "$(LIBRETRO_CORE)" ]; then \
+		printf '!! No libretro core found in CWD (see libretro-test).\n' >&2; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		$(MAKE) --no-print-directory "$(LIBRETRO_CONTENT)" 2>/dev/null || true; \
+	fi
+	@if [ ! -f "$(LIBRETRO_CONTENT)" ]; then \
+		printf '!! libretro content not found: %s\n' "$(LIBRETRO_CONTENT)" >&2; \
+		printf '   Run `make` first, or override LIBRETRO_CONTENT=/path/to/rom.jag|j64\n' >&2; \
 		exit 1; \
 	fi
 	rm -rf $(SCREENSHOT_DIR)
@@ -948,6 +985,7 @@ help:
 	@printf '  %-22s %s\n' 'libretro-test'    'load .jag (RAM-loaded COFF) into the libretro core (drop the .dylib in CWD)'
 	@printf '  %-22s %s\n' 'libretro-run'     'libretro-test + run 0 frames (load-only smoke-test, see comment in target)'
 	@printf '  %-22s %s\n' 'libretro-frames'  'render 180 frames and dump every 30th to ./frames/*.png'
+	@printf '  %-22s %s\n' 'screenshots-preflight' 'boot + main menu only: fail if read framebuffer is nearly empty (before wiping ./screenshots/)'
 	@printf '  %-22s %s\n' 'screenshots'      'walk every menu in libretro core and dump PNGs to ./screenshots/ (local-only)'
 	@printf '  %-22s %s\n' 'screenshots-readme' 'rewrite the gallery block in README.md from screenshots/manifest.json'
 	@printf '  %-22s %s\n' 'screenshots-html'   'render screenshots/index.html viewer from manifest.json (open in any browser)'

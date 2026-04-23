@@ -1,6 +1,6 @@
 {
   "core": "virtualjaguar_libretro.dylib",
-  "content": "jag_240p_test_suite.j64",
+  "content": "jag_240p_test_suite.jag",
   "shots": [
     {
       "group": "main",
@@ -66,6 +66,69 @@
       "height": 241
     },
     {
+      "group": "sprite-stress",
+      "title": "Sprite stress test",
+      "label": "sprite-stress-default",
+      "note": "Sprite Stress Test default (1 sprite, 8x8, single-line)",
+      "path": "sprite-stress/00-sprite-stress-default.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "ycdelay",
+      "title": "Y/C delay pattern",
+      "label": "ycdelay-strips",
+      "note": "Y/C Delay (RGB+CMY strips with 1px white dividers)",
+      "path": "ycdelay/00-ycdelay-strips.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "diagonal",
+      "title": "Diagonal / clock pattern",
+      "label": "diagonal-default",
+      "note": "Diagonal / Clock pattern (8 px spacing, default invert off)",
+      "path": "diagonal/00-diagonal-default.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "vertscroll",
+      "title": "Vertical scroll test",
+      "label": "vertscroll-running",
+      "note": "Vertical Scroll Test (default speed 1, dir DN)",
+      "path": "vertscroll/00-vertscroll-running.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "white-noise",
+      "title": "White noise test",
+      "label": "white-noise-idle",
+      "note": "White Noise Test (idle, ready to play)",
+      "path": "white-noise/00-white-noise-idle.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "pink-noise",
+      "title": "Pink noise test",
+      "label": "pink-noise-idle",
+      "note": "Pink Noise Test (idle, ready to play) — all-black: bad headless libretro read-FB, not the cart",
+      "path": "pink-noise/00-pink-noise-idle.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "channel-sep",
+      "title": "L/R channel separation",
+      "label": "channel-sep-default",
+      "note": "Channel Separation (BOTH in-phase, OFF)",
+      "path": "channel-sep/00-channel-sep-default.png",
+      "width": 326,
+      "height": 241
+    },
+    {
       "group": "screensavers",
       "title": "Screen savers",
       "label": "screensavers-menu",
@@ -126,6 +189,34 @@
     {
       "slug": "eeprom",
       "title": "EEPROM test"
+    },
+    {
+      "slug": "sprite-stress",
+      "title": "Sprite stress test"
+    },
+    {
+      "slug": "ycdelay",
+      "title": "Y/C delay pattern"
+    },
+    {
+      "slug": "diagonal",
+      "title": "Diagonal / clock pattern"
+    },
+    {
+      "slug": "vertscroll",
+      "title": "Vertical scroll test"
+    },
+    {
+      "slug": "white-noise",
+      "title": "White noise test"
+    },
+    {
+      "slug": "pink-noise",
+      "title": "Pink noise test"
+    },
+    {
+      "slug": "channel-sep",
+      "title": "L/R channel separation"
     },
     {
       "slug": "screensavers",

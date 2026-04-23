@@ -279,9 +279,47 @@ Two non-obvious design choices are load-bearing:
    `_flatten` asserts each button press for the first 4 frames of a
    step, then idles for the rest. **Don't lower this floor without
    re-running the full tour and diffing every PNG.**
+3. **Main-menu preflight (`make screenshots-preflight`).** Full
+   `make screenshots` depends on it: one boot and `main-menu` capture
+   to a temp directory. If the read framebuffer has fewer than 2000
+   non-black RGB pixels (a broken or headless-incomplete libretro build
+   may show only a thin top band), the tour exits 4 before `rm -rf
+   screenshots/`, so a good tracked gallery is not deleted in vain.
+   Run `make screenshots-preflight` alone when swapping
+   `virtualjaguar_libretro` builds.
 
 `make screenshots-check` (plumbed into CI for the cleanup PR series)
 fails if regenerating the gallery would change `README.md`.
+
+### Profiling: `__muldi3` and 64×64 multiply (host / libretro builds)
+
+`__muldi3` is a **compiler runtime** symbol (GCC libgcc / LLVM compiler-rt):
+signed 64×64→64 multiply. The compiler emits a call when a full 64-bit
+multiply is needed and the target ABI does not lower it to one or a few
+machine instructions. It is **not** Jaguar- or 240p-specific; seeing
+time under `__muldi3` means some hot path is doing 64-bit multiplies
+often (typical on a **32-bit** ARM slice, e.g. armv7), not that the
+**emulation model** of video or timing is wrong. On **arm64** iOS/tvOS
+device builds, many projects never show `__muldi3` meaningfully; `nm` on
+an arm64 `virtualjaguar_libretro.dylib` may show **no** `muldi` symbols
+— so always **confirm which binary and arch** were profiled (simulator
+vs device, Rosetta, thin binary slice).
+
+| Symptom | Typical cause |
+| --- | --- |
+| Undefined / missing `__muldi3` at **link** time | Link line missing compiler runtime (e.g. `-lgcc` / compiler-rt) or an unusual LTO/strip path. |
+| **Slow** / lots of time **in** `__muldi3` at **run** time | 64-bit multiplies in a hot loop on a 32-bit target, or accidental widening. |
+
+Neither case is, by itself, evidence of a **240p test correctness** bug
+(geometry, levels, sync). Heavy time in a libgcc helper is a **ABI /
+performance** signal; you still need **wrong output, wrong state, or a
+failing test** to justify calling it a logic bug. Debug path: expand the
+stack **above** `__muldi3` to the **call sites in project code**; if the
+goal is speed on 32-bit, reduce 64-bit work in those loops (where the
+Jaguar-side model allows staying in 32-bit). This repository does **not**
+treat `__muldi3` in profiles as a smoking gun for headless-screenshot or
+OP behavior — use framebuffer / register evidence (see *Screenshot
+tour* preflight) separately.
 
 ### Text rendering: textBox sizing rules
 
@@ -547,7 +585,8 @@ make unquarantine-core  # strip quarantine xattr (auto re-signs if stale)
 make resign-core        # force ad-hoc re-sign of the core dylib
 
 # Screenshot gallery
-make screenshots        # drive the libretro core through every menu (also rebuilds index.html)
+make screenshots-preflight  # main menu only: fail if read framebuffer is nearly empty (no rm -rf)
+make screenshots        # same as preflight, then full tour (also rebuilds index.html)
 make screenshots-readme # rewrite README gallery between markers
 make screenshots-html   # rewrite screenshots/index.html viewer (dep-free, no venv)
 make screenshots-check  # CI-friendly: fails if README or index.html would change

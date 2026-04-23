@@ -7,9 +7,10 @@ under ``screenshots/<group>/<NN>-<slug>.png`` and a ``manifest.json``
 indexes everything for the README stitcher.
 
 Usage:
-    scripts/screenshot-tour.py CORE.dylib CONTENT.j64
+    scripts/screenshot-tour.py CORE.dylib CONTENT.jag
     scripts/screenshot-tour.py --out screenshots --group main \\
         ./virtualjaguar_libretro.dylib jag_240p_test_suite.jag
+    scripts/screenshot-tour.py --preflight CORE.dylib CONTENT.jag
 
 Local-only: needs the libretro core .dylib + libretro.py venv
 (``make libretro-venv``). Run via ``make screenshots`` for the wired
@@ -31,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -111,6 +113,14 @@ class TourGroup:
 # scrollLock decay has finished so the next press isn't dropped.
 SETTLE_FRAMES = 25
 BOOT_FRAMES = 90
+
+# Headless libretro run must composite the 240p test suite to the
+# read framebuffer. Broken or incomplete cores leave ~0.1% of pixels
+# non-black (a single top line); a healthy main-menu screen is on the
+# order of 10^4--10^5 non-zero RGB pixels. ``make screenshots`` runs
+# ``--preflight`` first so a bad local core cannot wipe a good
+# ./screenshots/ tree (see _count_nonzero_rgb + _run_group check).
+MAIN_MENU_MIN_NONZERO_RGB_PIXELS = 2000
 
 
 def _boot() -> list[Step]:
@@ -211,6 +221,143 @@ TOUR: list[TourGroup] = [
         ],
     ),
     TourGroup(
+        slug="sprite-stress",
+        title="Sprite stress test",
+        steps=[
+            ## Hardware Tools sub-menu, walk DOWN x10 to land on
+            ## "Sprite Stress Test" (lineTextBox[11], one slot below
+            ## EEPROM at [10]). The test enters with spriteCount=1 and
+            ## SIZE=8x8 / SINGLE-LINE mode -- safe baseline that
+            ## doesn't yet saturate the OP, so the framebuffer still
+            ## renders cleanly for a screenshot.
+            *_boot(),
+            *_open_main_item(3),
+            *(s for _ in range(10) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            _capture("sprite-stress-default", "Sprite Stress Test default (1 sprite, 8x8, single-line)"),
+        ],
+    ),
+    TourGroup(
+        slug="ycdelay",
+        title="Y/C delay pattern",
+        steps=[
+            ## Test Patterns sub-menu cursor starts on Pluge (case 1).
+            ## "More Patterns..." is item 15 (14 DOWN), then Y/C Delay
+            ## is item 6 inside More Patterns (5 DOWN from default
+            ## cursor on Color Bars w/ Gray at item 1). The pattern's
+            ## first redraw allocates 6 fullscreen-strip sprites + a
+            ## label textBox -- give it 60 frames of settle so the
+            ## OP has finished compositing before we grab the FB.
+            *_boot(),
+            *_open_main_item(0),
+            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            *(s for _ in range(5) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(60),
+            _capture("ycdelay-strips", "Y/C Delay (RGB+CMY strips with 1px white dividers)"),
+        ],
+    ),
+    TourGroup(
+        slug="diagonal",
+        title="Diagonal / clock pattern",
+        steps=[
+            ## Same path as ycdelay but Diagonal is item 7 (6 DOWN
+            ## inside More Patterns). Default spacing=8px and not
+            ## inverted -- canonical form for the screenshot.
+            *_boot(),
+            *_open_main_item(0),
+            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(60),
+            _capture("diagonal-default", "Diagonal / Clock pattern (8 px spacing, default invert off)"),
+        ],
+    ),
+    TourGroup(
+        slug="vertscroll",
+        title="Vertical scroll test",
+        steps=[
+            ## Video Tests cursor starts on Drop Shadow (case 1).
+            ## Vertical Scroll is item 7 (6 DOWN), inserted right
+            ## after the existing horizontal Scroll Test. Bumped
+            ## settle to 60: the test allocates a 320x16 procedural
+            ## bar sprite + label, and the FIRST scroll tick has to
+            ## land at a non-trivial Y so the bars are actually in
+            ## the visible area when we capture.
+            *_boot(),
+            *_open_main_item(1),
+            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(60),
+            _capture("vertscroll-running", "Vertical Scroll Test (default speed 1, dir DN)"),
+        ],
+    ),
+    TourGroup(
+        slug="white-noise",
+        title="White noise test",
+        steps=[
+            ## Audio Tests cursor starts on Sound Test (case 1).
+            ## White Noise is item 5 (4 DOWN). Capture the IDLE state
+            ## -- screenshot doesn't need playback, just the UI.
+            *_boot(),
+            *_open_main_item(2),
+            *(s for _ in range(4) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(45),
+            _capture("white-noise-idle", "White Noise Test (idle, ready to play)"),
+        ],
+    ),
+    TourGroup(
+        slug="pink-noise",
+        title="Pink noise test",
+        steps=[
+            ## Audio Tests, Pink Noise is item 6 (5 DOWN). Entering is
+            ## slower than white: Paul Kellet's 5-stage IIR must fill the
+            ## 32 KiB playback buffer (16384 int16) on the 68000 before the
+            ## UI loop can draw. That work blocks the main thread -- the
+            ## cart is not "waiting to settle"; it is busy computing. 240
+            ## frames (~4 s NTSC) is headroom for that fill, not a guess
+            ## at the libretro *screenshot* path.
+            ##
+            ## Separately: if the *read* framebuffer from libretro stays
+            ## black or shows only a top band, that is a **core/headless
+            ## compositing** failure (or a bad `virtualjaguar` build), not
+            ## something longer settle fixes -- ``make screenshots`` runs
+            ## ``--preflight`` (main menu pixel gate) for exactly that. On a
+            ## working build the idle UI (green title, STATE/CHANNEL lines)
+            ## appears; an all-black PNG under those conditions is a
+            ## harness/core bug, not a timing gap in the 240 frame budget.
+            *_boot(),
+            *_open_main_item(2),
+            *(s for _ in range(5) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(240),
+            _capture(
+                "pink-noise-idle",
+                "Pink Noise Test (idle, ready to play) — all-black: bad headless libretro read-FB, not the cart",
+            ),
+        ],
+    ),
+    TourGroup(
+        slug="channel-sep",
+        title="L/R channel separation",
+        steps=[
+            ## Audio Tests, L/R Channel Separation is item 7 (6 DOWN).
+            ## Default mode is BOTH (in phase), playback OFF.
+            *_boot(),
+            *_open_main_item(2),
+            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(45),
+            _capture("channel-sep-default", "Channel Separation (BOTH in-phase, OFF)"),
+        ],
+    ),
+    TourGroup(
         slug="screensavers",
         title="Screen savers",
         steps=[
@@ -277,6 +424,16 @@ _BUTTON_KWARGS = {
 TAP_PRESS_FRAMES = 4
 
 
+def _count_nonzero_rgb(shot) -> int:
+    """Count RGBA buffer pixels with any of R, G, or B non-zero (alpha ignored)."""
+    data = memoryview(shot.data)
+    n = 0
+    for i in range(0, len(data), 4):
+        if (data[i] | data[i + 1] | data[i + 2]) != 0:
+            n += 1
+    return n
+
+
 def _flatten(tour: list[TourGroup]) -> list[tuple[str, str | None, str | None, str]]:
     """Flatten the tour DSL into a per-frame action list.
 
@@ -335,6 +492,13 @@ def main(argv: list[str]) -> int:
                    help="only run these tour group slugs (repeatable)")
     p.add_argument("--list", action="store_true",
                    help="list group slugs + step counts and exit")
+    p.add_argument(
+        "--preflight",
+        action="store_true",
+        help="boot and capture the main menu only (temp output); fail if the read "
+        "framebuffer is nearly empty. Used by `make screenshots-preflight` before "
+        "wiping ./screenshots/.",
+    )
     p.add_argument("--verbose", action="store_true",
                    help="print per-frame action log")
     args = p.parse_args(argv[1:])
@@ -364,6 +528,41 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+
+    if args.preflight:
+        main_tour = [g for g in TOUR if g.slug == "main"]
+        if not main_tour:
+            print("!! preflight: no 'main' group in TOUR", file=sys.stderr)
+            return 64
+        save_png = _resolve_png_writer()
+        if save_png is None:
+            return 1
+        print(">> preflight: main menu only (temp dir; does not touch ./screenshots/)",
+              flush=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            missed_pf: list[str] = []
+            manifest_pf: list[dict[str, object]] = []
+            rc = _run_group(
+                main_tour[0],
+                core=args.core,
+                content=args.content,
+                out=out,
+                manifest=manifest_pf,
+                missed=missed_pf,
+                save_png=save_png,
+                verbose=args.verbose,
+                session_builder_cls=SessionBuilder,
+                iterable_input_driver_cls=IterableInputDriver,
+            )
+            if rc != 0:
+                return rc
+            if missed_pf:
+                for label in missed_pf:
+                    print(f"!! preflight: no framebuffer: {label}", file=sys.stderr)
+                return 3
+        print(">> preflight: OK (core passed main-menu framebuffer sanity check).", flush=True)
+        return 0
 
     tour = [g for g in TOUR if not args.group or g.slug in args.group]
     if not tour:
@@ -488,6 +687,24 @@ def _run_group(
                     "height": shot.height,
                 })
                 print(f"   {rel}  ({shot.width}x{shot.height})", flush=True)
+                if group.slug == "main" and label == "main-menu":
+                    c = _count_nonzero_rgb(shot)
+                    tot = shot.width * shot.height
+                    if c < MAIN_MENU_MIN_NONZERO_RGB_PIXELS:
+                        print(
+                            f"!! main-menu framebuffer check failed: only {c} / {tot} "
+                            f"non-black RGB pixels (need >= {MAIN_MENU_MIN_NONZERO_RGB_PIXELS}).\n"
+                            f"   This libretro build is not compositing the 240p test suite to "
+                            f"the read framebuffer; use a different virtualjaguar core "
+                            f"(e.g. RetroArch's) for `make screenshots`.",
+                            file=sys.stderr,
+                        )
+                        return 4
+                    print(
+                        f"   (main-menu sanity: {c} / {tot} non-black RGB pixels, "
+                        f"min {MAIN_MENU_MIN_NONZERO_RGB_PIXELS})",
+                        flush=True,
+                    )
     except Exception as exc:
         print(f"!! [{group.slug}] failed: {type(exc).__name__}: {exc}",
               file=sys.stderr)
