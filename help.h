@@ -48,6 +48,11 @@
 #define HELP_YCDELAY 34
 #define HELP_DIAGONAL 35
 #define HELP_VERTSCROLL 36
+/* Audio noise / channel-separation tests (extra_tests.c). IDs picked to
+ * avoid clashing with the legacy slot range (1..32 above). */
+#define HELP_WHITE_NOISE 37
+#define HELP_PINK_NOISE 38
+#define HELP_CHANNEL_SEP 39
 
 extern uint8_t help;
 phrase *helpData;

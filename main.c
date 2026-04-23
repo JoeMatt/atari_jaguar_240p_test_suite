@@ -960,8 +960,17 @@ void VideoTestsMenu(){
 
 void AudioTestsMenu(){
     
+    /* lastMenuLine bumped from 7 to 10: White Noise, Pink Noise and L/R
+     * Channel Separation slot in between MDFourier Sweep and the
+     * Help/Options/Back trio so all the audio test entries stay grouped.
+     * setLineYPos(10) = 86 + 90 = 176, which still leaves 24 px of
+     * vertical space before the NTSC/PAL VDP status row at y=200. */
     int done = 0;
-    int lastMenuLine = 7; //counting from zero
+    /* Max 1-based menuState value (cursor wraps between 1 and lastMenuLine).
+     * Same convention as every other *Menu() helper in this file -- the
+     * legacy "counting from zero" comment removed because it contradicts
+     * the actual switch arms below (case 1..10, 1-based). */
+    int lastMenuLine = 10;
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
@@ -976,10 +985,13 @@ void AudioTestsMenu(){
     updateLine(settings, mainFont, lineTextBox[2], "Audio Sync Test", settings->lineXOffset, setLineYPos(1), WHITE);
     updateLine(settings, mainFont, lineTextBox[3], "L/R Balance + 1kHz Tone", settings->lineXOffset, setLineYPos(2), WHITE);
     updateLine(settings, mainFont, lineTextBox[4], "MDFourier Sweep", settings->lineXOffset, setLineYPos(3), WHITE);
-    
-    updateLine(settings, mainFont, lineTextBox[5], "Help", settings->lineXOffset, setLineYPos(5), WHITE);
-    updateLine(settings, mainFont, lineTextBox[6], "Options", settings->lineXOffset, setLineYPos(6), WHITE);
-    updateLine(settings, mainFont, lineTextBox[7], "Back to Main Menu", settings->lineXOffset, setLineYPos(7), WHITE);
+    updateLine(settings, mainFont, lineTextBox[5], "White Noise", settings->lineXOffset, setLineYPos(4), WHITE);
+    updateLine(settings, mainFont, lineTextBox[6], "Pink Noise", settings->lineXOffset, setLineYPos(5), WHITE);
+    updateLine(settings, mainFont, lineTextBox[7], "L/R Channel Separation", settings->lineXOffset, setLineYPos(6), WHITE);
+
+    updateLine(settings, mainFont, lineTextBox[8], "Help", settings->lineXOffset, setLineYPos(8), WHITE);
+    updateLine(settings, mainFont, lineTextBox[9], "Options", settings->lineXOffset, setLineYPos(9), WHITE);
+    updateLine(settings, mainFont, lineTextBox[10], "Back to Main Menu", settings->lineXOffset, setLineYPos(10), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -1070,9 +1082,30 @@ void AudioTestsMenu(){
                     MDFourierTest();
                     
                 break;
-                    
-                //DrawHelp
+
+                //WhiteNoiseTest
                 case 5:
+
+                    WhiteNoiseTest();
+
+                break;
+
+                //PinkNoiseTest
+                case 6:
+
+                    PinkNoiseTest();
+
+                break;
+
+                //ChannelSeparationTest
+                case 7:
+
+                    ChannelSeparationTest();
+
+                break;
+
+                //DrawHelp
+                case 8:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -1084,13 +1117,13 @@ void AudioTestsMenu(){
                 break;
                     
                 //OptionsMenu
-                case 6:
+                case 9:
 
                     OptionsMenu();
 
                 break;
                     
-                case 7:
+                case 10:
                     
                     done = 1;
                     
