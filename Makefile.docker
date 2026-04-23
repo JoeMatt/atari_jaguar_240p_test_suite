@@ -580,7 +580,7 @@ screenshots-preflight: ensure-j64 libretro-venv unquarantine-core
 	"$(LIBRETRO_PYTHON)" scripts/screenshot-tour.py --preflight \
 		"$(LIBRETRO_CORE)" "$(LIBRETRO_CONTENT)"
 
-screenshots: ensure-j64 libretro-venv unquarantine-core screenshots-preflight
+screenshots: screenshots-preflight
 	@if [ -z "$(LIBRETRO_CORE)" ]; then \
 		printf '!! No libretro core found in CWD (see libretro-test).\n' >&2; \
 		exit 1; \
