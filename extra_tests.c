@@ -1811,86 +1811,51 @@ void MDFourierTest(void){
  * attached, those addresses read open-bus / 0xFFFF.
  *
  * We don't ship the upstream Memory-Track flow here -- that requires
- * actually driving the CD transport -- but we DO probe a few well-known
- * register addresses, print their raw values in hex, and apply a simple
- * heuristic: if at least one of the probed words returns something other
- * than 0x0000 / 0xFFFF, the unit is almost certainly attached.
+ * actually driving the CD transport -- but we DO probe four 16-bit words
+ * in the Butch (CD ASIC) window at $F14000+ plus the first word of the
+ * paged-in CD boot ROM at $00800000, re-read every video frame, print hex,
+ * and apply a simple heuristic: if at least one probed word returns
+ * something other than 0x0000 / 0xFFFF, the unit is almost certainly
+ * attached.
  *
  * On a stock Jaguar console (no CD) this screen will report "NOT DETECTED"
  * and is purely informational. On a Jag CD it gives the user a quick
  * sanity check that the CD's data bus is alive without booting media.
  * --------------------------------------------------------------------------- */
+static void jagCdSetHex4(textBox *tb, char *buf, uint16_t v){
+    int n, i, pad;
+    itostring(buf, (int)v, 16);
+    n = 0;
+    while(buf[n] != '\0' && n < 4) n++;
+    for(pad = 0; pad < 4 - n; pad++) tb->text[10 + pad] = '0';
+    for(i = 0; i < n; i++) tb->text[10 + (4 - n) + i] = buf[i];
+}
+
 void JaguarCDTest(void){
     int exit = 0;
     char buf[12] = "00000000\0";
     int i;
+    int detected;
+    uint16_t u0, u1, u2, u3, u4;
 
-    /* Three Butch register addresses we sample. The first two are part of
-     * the CD audio interface (subcode + status); the third is well inside
-     * the paged-in CD BIOS window when the unit is attached. */
-    volatile uint16_t *butchA  = (volatile uint16_t*)0xF14000;
-    volatile uint16_t *butchB  = (volatile uint16_t*)0xF14002;
-    volatile uint16_t *cdBios  = (volatile uint16_t*)0x00800000;
+    volatile uint16_t *butch0  = (volatile uint16_t*)0xF14000;
+    volatile uint16_t *butch1  = (volatile uint16_t*)0xF14002;
+    volatile uint16_t *butch2  = (volatile uint16_t*)0xF14004;
+    volatile uint16_t *butch3  = (volatile uint16_t*)0xF14008;
+    volatile uint16_t *cdBios0 = (volatile uint16_t*)0x00800000;
 
-    uint16_t vA = *butchA;
-    uint16_t vB = *butchB;
-    uint16_t vC = *cdBios;
-
-    /* Heuristic: open bus on this region tends to read 0x0000 or 0xFFFF.
-     * If anything else comes back from at least one probe, the CD is
-     * almost certainly mapped in. This is identical in spirit to the
-     * "CD detected?" probe used by Skunkboard and homebrew loaders. */
-    int detected = 0;
-    if(vA != 0x0000 && vA != 0xFFFF) detected = 1;
-    if(vB != 0x0000 && vB != 0xFFFF) detected = 1;
-    if(vC != 0x0000 && vC != 0xFFFF) detected = 1;
-
-    textBox *titleTb = newTextBox("JAGUAR CD PROBE", 192, 9, mainFont, 0, settings->d, 80, 48, 13, 1);
+    textBox *titleTb = newTextBox("JAGUAR CD PROBE", 192, 9, mainFont, 0, settings->d, 80, 40, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *statusTb = newTextBox("STATUS  : NOT DETECTED  ", 256, 9, mainFont, 0, settings->d, 48, 80, 13, 1);
-    if(detected){
-        const char *yes = "DETECTED      ";
-        for(i = 0; i < 14; i++){ statusTb->text[10 + i] = yes[i]; }
-    }
-    updateLine(settings, mainFont, statusTb, NULL, 999999, 999999, detected ? GREEN : RED);
-
-    /* Print each probed value as a 4-char hex word so the user can sanity
-     * check against schematics or compare to a known-good unit. */
-    textBox *aTb = newTextBox("$F14000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 104, 13, 1);
-    itostring(buf, (int)vA, 16);
-    {
-        int n = 0; while(buf[n] != '\0' && n < 4) n++;
-        int pad;
-        for(pad = 0; pad < 4 - n; pad++) aTb->text[10 + pad] = '0';
-        for(i = 0; i < n; i++) aTb->text[10 + (4 - n) + i] = buf[i];
-    }
-    updateLine(settings, mainFont, aTb, NULL, 999999, 999999, WHITE);
-
-    textBox *bTb = newTextBox("$F14002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 120, 13, 1);
-    itostring(buf, (int)vB, 16);
-    {
-        int n = 0; while(buf[n] != '\0' && n < 4) n++;
-        int pad;
-        for(pad = 0; pad < 4 - n; pad++) bTb->text[10 + pad] = '0';
-        for(i = 0; i < n; i++) bTb->text[10 + (4 - n) + i] = buf[i];
-    }
-    updateLine(settings, mainFont, bTb, NULL, 999999, 999999, WHITE);
-
-    textBox *cTb = newTextBox("$800000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 136, 13, 1);
-    itostring(buf, (int)vC, 16);
-    {
-        int n = 0; while(buf[n] != '\0' && n < 4) n++;
-        int pad;
-        for(pad = 0; pad < 4 - n; pad++) cTb->text[10 + pad] = '0';
-        for(i = 0; i < n; i++) cTb->text[10 + (4 - n) + i] = buf[i];
-    }
-    updateLine(settings, mainFont, cTb, NULL, 999999, 999999, WHITE);
-
-    textBox *noteTb = newTextBox("0000/FFFF on all = open bus, no CD", 256, 9, mainFont, 0, settings->d, 24, 168, 13, 1);
+    textBox *statusTb = newTextBox("STATUS  : NOT DETECTED  ", 256, 9, mainFont, 0, settings->d, 48, 60, 13, 1);
+    textBox *aTb = newTextBox("$F14000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 80, 13, 1);
+    textBox *bTb = newTextBox("$F14002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 96, 13, 1);
+    textBox *cTb = newTextBox("$F14004 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 112, 13, 1);
+    textBox *dTb = newTextBox("$F14008 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 128, 13, 1);
+    textBox *eTb = newTextBox("$800000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 144, 13, 1);
+    textBox *noteTb = newTextBox("LIVE/frm: hex refresh  0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 168, 13, 1);
+    textBox *helpTb = newTextBox("DOWN+OPT: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 196, 13, 1);
     updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
-
-    textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 200, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -1898,20 +1863,61 @@ void JaguarCDTest(void){
     while(!exit){
         read_joypad_state(settings->j_state);
         settings->joy1 = settings->j_state->j1;
+        u0 = *butch0;
+        u1 = *butch1;
+        u2 = *butch2;
+        u3 = *butch3;
+        u4 = *cdBios0;
         vsync();
 
         if((settings->joy1 & 0xFFFFFF) == 0){
             settings->controllerLock = 0;
         }
+        if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            DrawHelp(HELP_JAGUAR_CD);
+        }
         if(extraExitPressed()){
             settings->controllerLock = 1;
             exit = 1;
         }
+
+        detected = 0;
+        if(u0 != 0x0000U && u0 != 0xFFFFU) detected = 1;
+        if(u1 != 0x0000U && u1 != 0xFFFFU) detected = 1;
+        if(u2 != 0x0000U && u2 != 0xFFFFU) detected = 1;
+        if(u3 != 0x0000U && u3 != 0xFFFFU) detected = 1;
+        if(u4 != 0x0000U && u4 != 0xFFFFU) detected = 1;
+
+        if(detected){
+            {
+                const char *yes = "DETECTED      ";
+                for(i = 0; i < 14; i++){ statusTb->text[10 + i] = yes[i]; }
+            }
+        } else {
+            {
+                const char *no = "NOT DETECTED  ";
+                for(i = 0; i < 14; i++){ statusTb->text[10 + i] = no[i]; }
+            }
+        }
+        updateLine(settings, mainFont, statusTb, NULL, 999999, 999999, detected ? GREEN : RED);
+        jagCdSetHex4(aTb, buf, u0);
+        updateLine(settings, mainFont, aTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(bTb, buf, u1);
+        updateLine(settings, mainFont, bTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(cTb, buf, u2);
+        updateLine(settings, mainFont, cTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(dTb, buf, u3);
+        updateLine(settings, mainFont, dTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(eTb, buf, u4);
+        updateLine(settings, mainFont, eTb, NULL, 999999, 999999, WHITE);
     }
 
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb   = freeTextBox(helpTb);
     noteTb   = freeTextBox(noteTb);
+    eTb      = freeTextBox(eTb);
+    dTb      = freeTextBox(dTb);
     cTb      = freeTextBox(cTb);
     bTb      = freeTextBox(bTb);
     aTb      = freeTextBox(aTb);
