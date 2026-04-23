@@ -1400,7 +1400,7 @@ void drawCredits(){
                     updateLine(settings, mainFont, lineTextBox[16], "Advisor:", settings->lineXOffset, setLineYPos(15), GREEN);
                     updateLine(settings, mainFont, lineTextBox[17], "  ()  ", settings->lineXOffset, setLineYPos(16), WHITE);
 
-                    updateLine(settings, mainFont, lineTextBox[18], "                   Ver. 0.7.3 - 04/22/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
+                    updateLine(settings, mainFont, lineTextBox[18], "                   Ver. 1.0.0 - 04/22/2026", settings->lineXOffset, setLineYPos(0) - 11, GREEN);
 
                     updateLine(settings, mainFont, lineTextBox[19], "Option - Return To Main Menu", settings->lineXOffset, setLineYPos(18) + 4, WHITE);
                 break;
