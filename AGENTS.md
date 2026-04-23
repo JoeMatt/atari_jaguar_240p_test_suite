@@ -511,6 +511,24 @@ files.
 
 ---
 
+## Testing
+
+### Headless framebuffer / Virtual Jaguar — reporting to core maintainers
+
+Use this when opening issues against **virtualjaguar-libretro** or
+debugging any **non-RetroArch** libretro frontend (Provenance, scripted
+harnesses, etc.):
+
+| | |
+| --- | --- |
+| **Repro** | Load `jag_240p_test_suite` (v1.0.0), advance to the **main menu**, then compare the framebuffer the libretro API gives a **headless** client (same class of run as `make screenshots`, `libretro.py`, `SessionBuilder`, `video.screenshot`) with **RetroArch** using the **same core binary** on the same machine. |
+| **Signal** | Count **non-black RGB** pixels on that menu frame. Broken builds land around **~1k** (thin band); a healthy compositing path shows **tens of thousands**. In this repo: `MAIN_MENU_MIN_NONZERO_RGB_PIXELS` (**2000+**) in `scripts/screenshot-tour.py`; run **`make screenshots-preflight`**. |
+| **Interpretation** | **Core / host presentation:** OP → blit → buffer the **headless client actually reads**. Not “Jaguar 240p timing is wrong” until you prove that with hardware or a reference capture. |
+| **Not the primary report** | **`__muldi3` / pink-noise IIR** — compiler ABI / perf on some slices, not the headless black-screen class of bug. See *Profiling: `__muldi3` and 64×64 multiply* above. Exception: you are explicitly optimizing **hot 64-bit mul** on **32-bit** targets. |
+| **When to close / reopen** | If the **latest dylib passes preflight**, treat headless read-FB as **fixed for that artifact**; file again only on **regression**. If preflight **fails**, file with **logs** and **two cores** (bad vs good), not a long `__muldi3` narrative. |
+
+---
+
 ## Known caveats / gotchas
 
 - **`mac -d` is broken.** The original Makefile had `MACFLAGS += -d` in
