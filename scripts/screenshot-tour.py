@@ -311,16 +311,13 @@ TOUR: list[TourGroup] = [
             ## Kellet's 5-stage IIR filter over all 16384 samples on
             ## entry; the 32 KiB buffer fill blocks the main loop so
             ## the framebuffer stays black until it finishes. 240
-            ## frames (~4 s NTSC) is the empirical floor that always
-            ## clears it on the libretro core.
+            ## frames (~4 s NTSC) gives a comfortable margin for the
+            ## buffer fill to complete before the capture frame.
             ##
-            ## KNOWN ISSUE (v1.0.0): under the libretro virtualjaguar
-            ## core the pink-noise framebuffer captures as all-black
-            ## even with 10 s of settle. Suspect missing/slow
-            ## __muldi3 helper used by the int64 IIR MACs. The test
-            ## works on real hardware / BigPEmu. Tracking separately;
-            ## the placeholder PNG is left in the manifest so the
-            ## gallery layout stays stable.
+            ## Some libretro builds composite only a top band in headless
+            ## `retro_run` (main-menu capture <2k non-zero pixels). Use a
+            ## core that passes a quick ``--group main`` check before
+            ## trusting the pink-noise capture.
             *_boot(),
             *_open_main_item(2),
             *(s for _ in range(5) for s in (_press("down"), _settle(8))),
