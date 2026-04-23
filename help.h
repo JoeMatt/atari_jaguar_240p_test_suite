@@ -53,6 +53,7 @@
 #define HELP_WHITE_NOISE 37
 #define HELP_PINK_NOISE 38
 #define HELP_CHANNEL_SEP 39
+#define HELP_JAGUAR_CD 40
 
 extern uint8_t help;
 phrase *helpData;

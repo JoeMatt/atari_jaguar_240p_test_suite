@@ -107,6 +107,7 @@ void DrawHelp(int option){
         case HELP_WHITE_NOISE:
         case HELP_PINK_NOISE:
         case HELP_CHANNEL_SEP:
+        case HELP_JAGUAR_CD:
             totalPages = 1;
         break;
 
@@ -625,6 +626,20 @@ void DrawHelp(int option){
                             updateLine(settings, mainFont, helpLineTextBox[0], "CHANNEL SEPARATION", 999999, 999999, GREEN);
 
                             updateLine(settings, mainFont, helpTextBox, "Plays a 1 kHz sine tone in selected channels to verify left and right outputs are isolated and correctly wired (this is distinct from L/R Balance, which is about volume trim).^^UP   : LEFT only^DOWN : RIGHT only^LEFT : BOTH (in phase)^RIGHT: BOTH (180-degree out of phase)^A    : play / pause", 999999, 999999, WHITE);
+                        break;
+                    }
+
+                break;
+
+                case HELP_JAGUAR_CD:
+
+                    switch(page){
+
+                        case 0:
+                            updateLine(settings, mainFont, helpLineTextBox[0], "JAGUAR CD PROBE", 999999, 999999, GREEN);
+
+                            updateLine(settings, mainFont, helpTextBox, "Probes a handful of 16-bit words: four in the Butch (CD) ASIC at $F14000+ and the first word of the paged-in CD boot ROM window at $00800000. On a base Jaguar with no CD, those often read 0x0000 or 0xFFFF (open bus).^If *any* word returns a different value, the heuristic reports DETECTED.^Values are re-read *every frame* so emulators and hardware bring-up can watch registers change in real time. This is not a full Memory-Track or disc I/O test -- use real media for that.^^DOWN+OPTION: this help.   OPTION: exit", 999999, 999999, WHITE);
+                            highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
                         break;
                     }
 
