@@ -211,6 +211,139 @@ TOUR: list[TourGroup] = [
         ],
     ),
     TourGroup(
+        slug="sprite-stress",
+        title="Sprite stress test",
+        steps=[
+            ## Hardware Tools sub-menu, walk DOWN x10 to land on
+            ## "Sprite Stress Test" (lineTextBox[11], one slot below
+            ## EEPROM at [10]). The test enters with spriteCount=1 and
+            ## SIZE=8x8 / SINGLE-LINE mode -- safe baseline that
+            ## doesn't yet saturate the OP, so the framebuffer still
+            ## renders cleanly for a screenshot.
+            *_boot(),
+            *_open_main_item(3),
+            *(s for _ in range(10) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            _capture("sprite-stress-default", "Sprite Stress Test default (1 sprite, 8x8, single-line)"),
+        ],
+    ),
+    TourGroup(
+        slug="ycdelay",
+        title="Y/C delay pattern",
+        steps=[
+            ## Test Patterns sub-menu cursor starts on Pluge (case 1).
+            ## "More Patterns..." is item 15 (14 DOWN), then Y/C Delay
+            ## is item 6 inside More Patterns (5 DOWN from default
+            ## cursor on Color Bars w/ Gray at item 1). The pattern's
+            ## first redraw allocates 6 fullscreen-strip sprites + a
+            ## label textBox -- give it 60 frames of settle so the
+            ## OP has finished compositing before we grab the FB.
+            *_boot(),
+            *_open_main_item(0),
+            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            *(s for _ in range(5) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(60),
+            _capture("ycdelay-strips", "Y/C Delay (RGB+CMY strips with 1px white dividers)"),
+        ],
+    ),
+    TourGroup(
+        slug="diagonal",
+        title="Diagonal / clock pattern",
+        steps=[
+            ## Same path as ycdelay but Diagonal is item 7 (6 DOWN
+            ## inside More Patterns). Default spacing=8px and not
+            ## inverted -- canonical form for the screenshot.
+            *_boot(),
+            *_open_main_item(0),
+            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(60),
+            _capture("diagonal-default", "Diagonal / Clock pattern (8 px spacing, default invert off)"),
+        ],
+    ),
+    TourGroup(
+        slug="vertscroll",
+        title="Vertical scroll test",
+        steps=[
+            ## Video Tests cursor starts on Drop Shadow (case 1).
+            ## Vertical Scroll is item 7 (6 DOWN), inserted right
+            ## after the existing horizontal Scroll Test. Bumped
+            ## settle to 60: the test allocates a 320x16 procedural
+            ## bar sprite + label, and the FIRST scroll tick has to
+            ## land at a non-trivial Y so the bars are actually in
+            ## the visible area when we capture.
+            *_boot(),
+            *_open_main_item(1),
+            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(60),
+            _capture("vertscroll-running", "Vertical Scroll Test (default speed 1, dir DN)"),
+        ],
+    ),
+    TourGroup(
+        slug="white-noise",
+        title="White noise test",
+        steps=[
+            ## Audio Tests cursor starts on Sound Test (case 1).
+            ## White Noise is item 5 (4 DOWN). Capture the IDLE state
+            ## -- screenshot doesn't need playback, just the UI.
+            *_boot(),
+            *_open_main_item(2),
+            *(s for _ in range(4) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(45),
+            _capture("white-noise-idle", "White Noise Test (idle, ready to play)"),
+        ],
+    ),
+    TourGroup(
+        slug="pink-noise",
+        title="Pink noise test",
+        steps=[
+            ## Audio Tests, Pink Noise is item 6 (5 DOWN). Pink takes
+            ## noticeably longer than white because it runs Paul
+            ## Kellet's 5-stage IIR filter over all 16384 samples on
+            ## entry; the 32 KiB buffer fill blocks the main loop so
+            ## the framebuffer stays black until it finishes. 240
+            ## frames (~4 s NTSC) is the empirical floor that always
+            ## clears it on the libretro core.
+            ##
+            ## KNOWN ISSUE (v1.0.0): under the libretro virtualjaguar
+            ## core the pink-noise framebuffer captures as all-black
+            ## even with 10 s of settle. Suspect missing/slow
+            ## __muldi3 helper used by the int64 IIR MACs. The test
+            ## works on real hardware / BigPEmu. Tracking separately;
+            ## the placeholder PNG is left in the manifest so the
+            ## gallery layout stays stable.
+            *_boot(),
+            *_open_main_item(2),
+            *(s for _ in range(5) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(240),
+            _capture("pink-noise-idle", "Pink Noise Test (idle, ready to play)"),
+        ],
+    ),
+    TourGroup(
+        slug="channel-sep",
+        title="L/R channel separation",
+        steps=[
+            ## Audio Tests, L/R Channel Separation is item 7 (6 DOWN).
+            ## Default mode is BOTH (in phase), playback OFF.
+            *_boot(),
+            *_open_main_item(2),
+            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(45),
+            _capture("channel-sep-default", "Channel Separation (BOTH in-phase, OFF)"),
+        ],
+    ),
+    TourGroup(
         slug="screensavers",
         title="Screen savers",
         steps=[
