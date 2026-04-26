@@ -1738,6 +1738,7 @@ void MDFourierTest(void){
     int playing = 0;        /* sweep auto-advancing or idle */
     int tone = 0;           /* current index into sweepFreq[] */
     int holdFrames = 0;     /* frames remaining on current tone in auto mode */
+    const int holdDuration = settings->PALNTSC ? 60 : 50;
     int i, ii;
 
     /* 128-sample wavetable replicated 75x so the voice loop covers ~1s of
@@ -1787,7 +1788,7 @@ void MDFourierTest(void){
                     tone = 0;
                     playing = 0;        /* sweep complete -- stop auto-advance */
                 }
-                holdFrames = 60;
+                holdFrames = holdDuration;
                 redraw = 1;
             }
         }
@@ -1825,14 +1826,14 @@ void MDFourierTest(void){
         if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
             settings->controllerLock = 1;
             playing = !playing;
-            holdFrames = 60;
+            holdFrames = holdDuration;
             redraw = 1;
         }
 
         if((settings->joy1 & JOYPAD_B) && settings->controllerLock == 0){
             settings->controllerLock = 1;
             tone = (tone + 1) % sweepCount;
-            holdFrames = 60;
+            holdFrames = holdDuration;
             redraw = 1;
         }
 

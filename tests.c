@@ -2150,21 +2150,23 @@ void AudioSyncTest(){
         vsync();
         
         if(running){
-            
+
             timer++;
-            
+
             if(dotSprite->invisible != 0){
                 dotSprite->invisible = 0;
             }
-            
-            if(timer < 60){
+
+            int fpHalf = settings->PALNTSC ? 60 : 50;
+
+            if(timer < fpHalf){
                 dotSprite->y--;
             }
-            else if(timer < 120){
+            else if(timer < fpHalf * 2){
                 dotSprite->y++;
             }
             else if(flash < 2){
-                
+
                 set_voice(0, VOICE_16|VOICE_BALANCE(8)|VOICE_VOLUME(settings->masterVolume)|VOICE_FREQ(2148,freq), (char*)DSPSample, sampleSize*2, NULL, 0);
                 TOMREGS->bg = 0xFFFF;
                 flash++;
@@ -2173,7 +2175,11 @@ void AudioSyncTest(){
                 reset = 1;
             }
 
-            if(timer == 20 || timer == 45 || timer == 70 || timer == 95){
+            int b1 = fpHalf / 3;
+            int b2 = (fpHalf * 3) / 4;
+            int b3 = fpHalf + b1;
+            int b4 = fpHalf + b2;
+            if(timer == b1 || timer == b2 || timer == b3 || timer == b4){
                 barSprite[0]->x += 32;
                 barSprite[1]->x -= 32;
             }
