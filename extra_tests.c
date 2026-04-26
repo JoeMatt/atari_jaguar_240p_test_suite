@@ -826,10 +826,35 @@ void HardwareInfo(void){
     }
     updateLine(settings, mainFont, ramTb, NULL, 999999, 999999, WHITE);
 
-    textBox *cpuTb = newTextBox("CPU     : 68000 @ 13.3 MHz", 256, 9, mainFont, 0, settings->d, 64, 128, 13, 1);
+    textBox *vdpTb  = newTextBox("VP=000 VDB=000 VDE=000", 192, 9, mainFont, 0, settings->d, 64, 128, 13, 1);
+    {
+        uint16_t vp  = TOMREGS->vp;
+        uint16_t vdb = TOMREGS->vdb;
+        uint16_t vde = TOMREGS->vde;
+        char nb[6];
+        int n, p2, k2;
+
+        itostring(nb, (int)vp, 10);
+        n = 0; while(nb[n] && n < 3) n++;
+        for(p2 = 0; p2 < 3; p2++) vdpTb->text[3 + p2] = ' ';
+        for(k2 = 0; k2 < n; k2++) vdpTb->text[3 + (3 - n) + k2] = nb[k2];
+
+        itostring(nb, (int)vdb, 10);
+        n = 0; while(nb[n] && n < 3) n++;
+        for(p2 = 0; p2 < 3; p2++) vdpTb->text[11 + p2] = ' ';
+        for(k2 = 0; k2 < n; k2++) vdpTb->text[11 + (3 - n) + k2] = nb[k2];
+
+        itostring(nb, (int)vde, 10);
+        n = 0; while(nb[n] && n < 3) n++;
+        for(p2 = 0; p2 < 3; p2++) vdpTb->text[19 + p2] = ' ';
+        for(k2 = 0; k2 < n; k2++) vdpTb->text[19 + (3 - n) + k2] = nb[k2];
+    }
+    updateLine(settings, mainFont, vdpTb, NULL, 999999, 999999, WHITE);
+
+    textBox *cpuTb = newTextBox("CPU     : 68000 @ 13.3 MHz", 256, 9, mainFont, 0, settings->d, 64, 144, 13, 1);
     updateLine(settings, mainFont, cpuTb, NULL, 999999, 999999, WHITE);
 
-    textBox *gpuTb = newTextBox("GPU/DSP : RISC @ 26.6 MHz", 256, 9, mainFont, 0, settings->d, 64, 144, 13, 1);
+    textBox *gpuTb = newTextBox("GPU/DSP : RISC @ 26.6 MHz", 256, 9, mainFont, 0, settings->d, 64, 160, 13, 1);
     updateLine(settings, mainFont, gpuTb, NULL, 999999, 999999, WHITE);
 
     textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 192, 13, 1);
@@ -855,6 +880,7 @@ void HardwareInfo(void){
     helpTb   = freeTextBox(helpTb);
     gpuTb    = freeTextBox(gpuTb);
     cpuTb    = freeTextBox(cpuTb);
+    vdpTb    = freeTextBox(vdpTb);
     ramTb    = freeTextBox(ramTb);
     vmodeTb  = freeTextBox(vmodeTb);
     regionTb = freeTextBox(regionTb);
@@ -1423,7 +1449,7 @@ void ResolutionTest(void){
     textBox *pwTb      = newTextBox("PWIDTH : 4 320 native       ", 256, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
     textBox *vmodeTb   = newTextBox("VMODE  : 0x0000             ", 256, 9, mainFont, 0, settings->d, 32, 120, 13, 1);
     textBox *geomTb    = newTextBox("GEOM   : 320x000            ", 256, 9, mainFont, 0, settings->d, 32, 136, 13, 1);
-    textBox *regsTb    = newTextBox("VP=000 HP=000               ", 256, 9, mainFont, 0, settings->d, 32, 152, 13, 1);
+    textBox *regsTb    = newTextBox("VP=000 HP=000 VDB=000 VDE=000", 256, 9, mainFont, 0, settings->d, 32, 152, 13, 1);
     textBox *recenTb   = newTextBox("RECENTER: OFF               ", 256, 9, mainFont, 0, settings->d, 32, 168, 13, 1);
 
     textBox *help1Tb   = newTextBox("UP/DOWN: PWIDTH   LEFT/RIGHT: format", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
@@ -1506,6 +1532,19 @@ void ResolutionTest(void){
             int hpn = 0; while(buf[hpn] != '\0' && hpn < 3) hpn++;
             for(p = 0; p < 3; p++){ regsTb->text[10 + p] = ' '; }
             for(k = 0; k < hpn; k++){ regsTb->text[10 + (3 - hpn) + k] = buf[k]; }
+
+            uint16_t vdbReg = TOMREGS->vdb;
+            uint16_t vdeReg = TOMREGS->vde;
+            buf[0] = '\0';
+            itostring(buf, (int)vdbReg, 10);
+            int vdbn = 0; while(buf[vdbn] != '\0' && vdbn < 3) vdbn++;
+            for(p = 0; p < 3; p++){ regsTb->text[18 + p] = ' '; }
+            for(k = 0; k < vdbn; k++){ regsTb->text[18 + (3 - vdbn) + k] = buf[k]; }
+            buf[0] = '\0';
+            itostring(buf, (int)vdeReg, 10);
+            int vden = 0; while(buf[vden] != '\0' && vden < 3) vden++;
+            for(p = 0; p < 3; p++){ regsTb->text[26 + p] = ' '; }
+            for(k = 0; k < vden; k++){ regsTb->text[26 + (3 - vden) + k] = buf[k]; }
             updateLine(settings, mainFont, regsTb, NULL, 999999, 999999, WHITE);
 
             /// RECENTER row -- show state and the actual display->x being used.
