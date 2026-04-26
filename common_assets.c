@@ -33,6 +33,7 @@ globalSettings *initGlobalSettings(){
     s->teamTap2 = 0; //0 - no team tap, 1 - yes team tap
     
     s->masterVolume = 63; //full -- preserves the original hardcoded behavior
+    s->regionOverride = 0; //auto-detect
     
     for(i = 0; i != 20; i++){
         uint16_t red = (rand()%19+6) << 11;
@@ -49,6 +50,22 @@ globalSettings *initGlobalSettings(){
     return s;
     
 };
+
+void applyRegionOverride(globalSettings *s){
+    if(s->regionOverride == 1){
+        s->PALNTSC = 1;
+        s->PALOffset = 0;
+    } else if(s->regionOverride == 2){
+        s->PALNTSC = 0;
+        s->PALOffset = 24;
+    } else {
+        s->PALNTSC = (JERRYREGS->joy2 & 0x10) >> 4;
+        s->PALOffset = (s->PALNTSC ? 0 : 24);
+    }
+    if(s->d != NULL){
+        s->d->x = (s->PALNTSC ? 19 : 14);
+    }
+}
 
 void fadeBGColor(globalSettings *s, int speed){
     

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xxd *)",
+      "Bash(nm *)",
+      "Bash(make help)",
+      "Bash(make doctor)",
+      "Bash(make verify-sig)",
+      "Bash(make screenshots-check)",
+      "Bash(make screenshots-preflight)"
+    ]
+  }
+}

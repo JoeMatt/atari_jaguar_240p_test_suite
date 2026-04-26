@@ -1590,18 +1590,14 @@ void ResolutionTest(void){
 /* ---------------------------------------------------------------------------
  * Options menu
  *
- * Replaces the (x)Options stubs that appeared in every sub-menu. For now the
- * options surface is intentionally narrow but real -- we expose a master
- * audio volume that's wired into the global settings and shown on screen.
- * Future options (PAL/NTSC override, scanline test mode, controller layout)
- * can be added here without touching the menu plumbing in main.c.
+ * Two rows: master audio volume (0..63) and region override (AUTO / NTSC /
+ * PAL). UP/DOWN selects the row, LEFT/RIGHT adjusts the value. The region
+ * override rewrites PALNTSC + PALOffset immediately via applyRegionOverride()
+ * so subsequent tests pick up the forced region. Sprite allocations made at
+ * boot time are not resized -- the override is most useful on emulators
+ * where the hardware strap may not match the user's display.
  * --------------------------------------------------------------------------- */
 void OptionsMenu(void){
-    /* Read/write the shared master volume directly so the value survives
-     * across OptionsMenu invocations *and* is visible to every audio test
-     * (AudioBalanceTest, MDFourierTest, SoundTest, etc) the next time they
-     * call set_voice(). No private static -- the previous static-local copy
-     * was the bug Qodo + Copilot flagged. */
     int exit = 0;
     int redraw = 1;
     int sel = 0;
@@ -1609,10 +1605,13 @@ void OptionsMenu(void){
     textBox *titleTb = newTextBox("OPTIONS", 128, 9, mainFont, 0, settings->d, 116, 48, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *volTb   = newTextBox("AUDIO VOLUME : 63", 192, 9, mainFont, 0, settings->d, 64, 96, 13, 1);
+    textBox *volTb   = newTextBox("AUDIO VOLUME : 63", 192, 9, mainFont, 0, settings->d, 64, 88, 13, 1);
     updateLine(settings, mainFont, volTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb  = newTextBox("LEFT/RIGHT: change   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 192, 13, 1);
+    textBox *regTb   = newTextBox("REGION : AUTO (NTSC)", 192, 9, mainFont, 0, settings->d, 64, 104, 13, 1);
+    updateLine(settings, mainFont, regTb, NULL, 999999, 999999, WHITE);
+
+    textBox *helpTb  = newTextBox("UP/DN: select  L/R: change  OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 192, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -1631,6 +1630,27 @@ void OptionsMenu(void){
             int j;
             for(j = 0; j < len; j++) volTb->text[15 + (2 - len) + j] = nbuf[j];
             updateLine(settings, mainFont, volTb, NULL, 999999, 999999, sel == 0 ? RED : WHITE);
+
+            {
+                const char *lbl;
+                if(settings->regionOverride == 0){
+                    if((JERRYREGS->joy2 & 0x10))
+                        lbl = "REGION : AUTO (NTSC)";
+                    else
+                        lbl = "REGION : AUTO (PAL) ";
+                } else if(settings->regionOverride == 1){
+                    lbl = "REGION : NTSC       ";
+                } else {
+                    lbl = "REGION : PAL        ";
+                }
+                int k;
+                for(k = 0; lbl[k] != '\0' && k < regTb->char_count; k++)
+                    regTb->text[k] = lbl[k];
+                for(; k < regTb->char_count; k++)
+                    regTb->text[k] = ' ';
+            }
+            updateLine(settings, mainFont, regTb, NULL, 999999, 999999, sel == 1 ? RED : WHITE);
+
             redraw = 0;
         }
 
@@ -1638,13 +1658,36 @@ void OptionsMenu(void){
             settings->controllerLock = 0;
         }
 
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            if(sel > 0){ sel--; redraw = 1; }
+        }
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            if(sel < 1){ sel++; redraw = 1; }
+        }
+
         if((settings->joy1 & JOYPAD_LEFT) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            if(settings->masterVolume > 0){ settings->masterVolume--; redraw = 1; }
+            if(sel == 0){
+                if(settings->masterVolume > 0){ settings->masterVolume--; redraw = 1; }
+            } else {
+                if(settings->regionOverride > 0) settings->regionOverride--;
+                else settings->regionOverride = 2;
+                applyRegionOverride(settings);
+                redraw = 1;
+            }
         }
         if((settings->joy1 & JOYPAD_RIGHT) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            if(settings->masterVolume < 63){ settings->masterVolume++; redraw = 1; }
+            if(sel == 0){
+                if(settings->masterVolume < 63){ settings->masterVolume++; redraw = 1; }
+            } else {
+                if(settings->regionOverride < 2) settings->regionOverride++;
+                else settings->regionOverride = 0;
+                applyRegionOverride(settings);
+                redraw = 1;
+            }
         }
         if(extraExitPressed()){
             settings->controllerLock = 1;
@@ -1654,6 +1697,7 @@ void OptionsMenu(void){
 
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb  = freeTextBox(helpTb);
+    regTb   = freeTextBox(regTb);
     volTb   = freeTextBox(volTb);
     titleTb = freeTextBox(titleTb);
 }
