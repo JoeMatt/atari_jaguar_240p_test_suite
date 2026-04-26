@@ -76,7 +76,7 @@ static void teardownFullscreenSprite(sprite *s, void *data){
  * channel against neutral gray with color filters.
  * --------------------------------------------------------------------------- */
 void DrawColorBarsGray(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const uint16_t bars75[7] = {
         PACK_RGB16(24, 24, 48), /* 75% gray   */
         PACK_RGB16(24, 0,  48), /* 75% yellow */
@@ -155,7 +155,7 @@ void DrawColorBarsGray(void){
  * the existing Grid pattern, which is a simple line grid for overscan.
  * --------------------------------------------------------------------------- */
 void DrawLinearity(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     const int STEP = 16;     /* 20x15 grid of 16-pixel squares */
     const int CX = W/2, CY = H/2;
     int exit = 0;
@@ -257,7 +257,7 @@ void DrawLinearity(void){
  * its complementary color so any chroma shift becomes visible at the seam.
  * --------------------------------------------------------------------------- */
 void DrawPhase(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const uint16_t blocks[8] = {
         COLOR_YELLOW, COLOR_MAGENTA, COLOR_CYAN, COLOR_RED,
         COLOR_GREEN,  COLOR_BLUE,    COLOR_WHITE, COLOR_BLACK
@@ -334,7 +334,7 @@ void DrawPhase(void){
  * brightness + contrast cues.
  * --------------------------------------------------------------------------- */
 void DrawBrightness(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     /* 4 levels of "just-above-black" gray, 6-bit green / 5-bit red+blue. */
     static const uint16_t levels[4] = {
         PACK_RGB16(1, 1, 2),   /* ~ 2 IRE  */
@@ -399,7 +399,7 @@ void DrawBrightness(void){
  * the bottom two start to merge, then back off one notch.
  * --------------------------------------------------------------------------- */
 void DrawContrast(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const uint16_t levels[4] = {
         PACK_RGB16(28, 28, 56),  /* ~ 90 IRE */
         PACK_RGB16(29, 29, 59),  /* ~ 95 IRE */
@@ -465,7 +465,7 @@ void DrawContrast(void){
  * auto-scroll; OPTION exits.
  * --------------------------------------------------------------------------- */
 void ManualLagTest(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     int exit = 0;
     uint8_t frameDigit = 0;
     int x = 0, dir = 1;
@@ -565,7 +565,7 @@ void ManualLagTest(void){
  * A cycles modes, OPTION exits.
  * --------------------------------------------------------------------------- */
 void Alternate240p480iTest(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     enum { MODE_STATIC = 0, MODE_TOGGLE = 1, MODE_VERTICAL = 2, MODE_COUNT = 3 };
     int mode = MODE_STATIC;
     int field = 0;
@@ -619,9 +619,14 @@ void Alternate240p480iTest(void){
         if(redrawLabel){
             const char *label = "STATIC 240p ";
             switch(mode){
-                case MODE_STATIC:   label = "STATIC 240p "; fbS->data = (phrase*)fbA; break;
+                case MODE_STATIC:   fbS->data = (phrase*)fbA; break;
                 case MODE_TOGGLE:   label = "TOGGLE FIELD"; field = 0; fbS->data = (phrase*)fbA; break;
-                case MODE_VERTICAL: label = "VERT 240p   "; fbS->data = (phrase*)fbV; break;
+                case MODE_VERTICAL: break;
+            }
+            if(mode == MODE_STATIC){
+                label = settings->PALNTSC ? "STATIC 240p " : "STATIC 288p ";
+            } else if(mode == MODE_VERTICAL){
+                label = settings->PALNTSC ? "VERT 240p   " : "VERT 288p   ";
             }
             int j;
             for(j = 0; j < 12; j++){ modeTb->text[6 + j] = label[j]; }
@@ -2334,7 +2339,7 @@ void ScrollingBarsSaver(void){
  * the rest of the colour-bar suite.
  * --------------------------------------------------------------------------- */
 void DrawYCDelay(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     /* 6 colour strips on a black background, each strip flanked by a 1-pixel
      * white divider. Width chosen so chroma fringing has room to develop
      * across a typical CRT's PAL/NTSC chroma-delay window without strips
@@ -2415,7 +2420,7 @@ void DrawYCDelay(void){
  *   OPTION          -- exit
  * --------------------------------------------------------------------------- */
 void DrawDiagonal(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const int SPACINGS[4] = { 4, 8, 16, 32 };
     int spacingIdx = 1;        /* default 8 px to match upstream canonical */
     int invert = 0;
@@ -2599,8 +2604,8 @@ static void vertScrollFillBuffer(uint16_t *buf, int W, int H, int BUF_H){
 
 void VertScrollTest(void){
     const int W = 320;
-    const int H = 240;
-    const int BUF_H = 480;
+    const int H = settings->PALNTSC ? 240 : 288;
+    const int BUF_H = H * 2;
 
     int exit = 0;
     int paused = 0;
