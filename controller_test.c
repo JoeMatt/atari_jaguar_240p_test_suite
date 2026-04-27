@@ -7,7 +7,7 @@ void ControllerTest(){
     int timeout = 1000;
     
     //warning message
-    textBox *warningTextBox = newTextBox("                 WARNING^^Never plug or unplug controllers into the^  Jaguar console while it is turned on!^^    Press LEFT + OPTION to Exit Test^^^^      Press Any Button to Continue", 256, 64, mainFont, 0, settings->d, 36, 72, 13, 1);
+    textBox *warningTextBox = newTextBox("                 WARNING^^Never plug or unplug controllers into the^  Jaguar console while it is turned on!^^    Press LEFT + OPTION to Exit Test^^^^      Press Any Button to Continue", 256, 64, mainFont, 0, settings->d, 36, 72 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, warningTextBox, '\0', 999999, 999999, WHITE);
     
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -37,7 +37,7 @@ void ControllerTest(){
     
     int i = 0;
     int ii = 0;
-    int offset[2] = {28, 47};
+    int offset[2] = {28, 47 + settings->PALOffset};
     int controllerLayoutXPadding = 68;
     int controllerLayoutYPadding = 108;
     int controllerHEXCode = 0;

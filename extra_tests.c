@@ -467,6 +467,7 @@ void DrawContrast(void){
  * --------------------------------------------------------------------------- */
 void ManualLagTest(void){
     const int W = 320, H = settings->PALNTSC ? 240 : 288;
+    int palY = settings->PALOffset;
     int exit = 0;
     uint8_t frameDigit = 0;
     int x = 0, dir = 1;
@@ -496,7 +497,7 @@ void ManualLagTest(void){
     attach_sprite_to_display_at_layer(sqS, settings->d, 13);
 
     /* Frame counter readout */
-    textBox *fnTb = newTextBox("FRAME 0  ", 80, 9, mainFont, 0, settings->d, 8, 40, 13, 1);
+    textBox *fnTb = newTextBox("FRAME 0  ", 80, 9, mainFont, 0, settings->d, 8, 40 + palY, 13, 1);
     updateLine(settings, mainFont, fnTb, NULL, 999999, 999999, GREEN);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -790,11 +791,12 @@ void AudioBalanceTest(void){
 void HardwareInfo(void){
     int exit = 0;
     char buf[12] = "00000000\0";
+    int palY = settings->PALOffset;
 
-    textBox *titleTb = newTextBox("SYSTEM INFO", 128, 9, mainFont, 0, settings->d, 100, 48, 13, 1);
+    textBox *titleTb = newTextBox("SYSTEM INFO", 128, 9, mainFont, 0, settings->d, 100, 48 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *regionTb = newTextBox("REGION  : NTSC", 192, 9, mainFont, 0, settings->d, 64, 80, 13, 1);
+    textBox *regionTb = newTextBox("REGION  : NTSC", 192, 9, mainFont, 0, settings->d, 64, 80 + palY, 13, 1);
     if(settings->PALNTSC == 0){
         regionTb->text[10] = 'P';
         regionTb->text[11] = 'A';
@@ -806,7 +808,7 @@ void HardwareInfo(void){
     /* TOM VMODE register, hex */
     uint16_t vmode = TOMREGS->vmode;
     itostring(buf, (int)vmode, 16);
-    textBox *vmodeTb = newTextBox("VMODE   : 0000", 192, 9, mainFont, 0, settings->d, 64, 96, 13, 1);
+    textBox *vmodeTb = newTextBox("VMODE   : 0000", 192, 9, mainFont, 0, settings->d, 64, 96 + palY, 13, 1);
     int n = 0; while(buf[n] != '\0' && n < 4) n++;
     int pad;
     for(pad = 0; pad < 4 - n; pad++) vmodeTb->text[10 + pad] = '0';
@@ -821,14 +823,14 @@ void HardwareInfo(void){
     volatile uint32_t *m0  = (volatile uint32_t*)0x000004;
     volatile uint32_t *m1f = (volatile uint32_t*)0x1F0000;
     int distinct = (*m0 != *m1f) ? 1 : 0;
-    textBox *ramTb = newTextBox("MAIN RAM: 2 MiB", 192, 9, mainFont, 0, settings->d, 64, 112, 13, 1);
+    textBox *ramTb = newTextBox("MAIN RAM: 2 MiB", 192, 9, mainFont, 0, settings->d, 64, 112 + palY, 13, 1);
     if(!distinct){
         ramTb->text[10] = '?';
         ramTb->text[11] = ' ';
     }
     updateLine(settings, mainFont, ramTb, NULL, 999999, 999999, WHITE);
 
-    textBox *vdpTb  = newTextBox("VP=000 VDB=000 VDE=000", 192, 9, mainFont, 0, settings->d, 64, 128, 13, 1);
+    textBox *vdpTb  = newTextBox("VP=000 VDB=000 VDE=000", 192, 9, mainFont, 0, settings->d, 64, 128 + palY, 13, 1);
     {
         uint16_t vp  = TOMREGS->vp;
         uint16_t vdb = TOMREGS->vdb;
@@ -853,13 +855,13 @@ void HardwareInfo(void){
     }
     updateLine(settings, mainFont, vdpTb, NULL, 999999, 999999, WHITE);
 
-    textBox *cpuTb = newTextBox("CPU     : 68000 @ 13.3 MHz", 256, 9, mainFont, 0, settings->d, 64, 144, 13, 1);
+    textBox *cpuTb = newTextBox("CPU     : 68000 @ 13.3 MHz", 256, 9, mainFont, 0, settings->d, 64, 144 + palY, 13, 1);
     updateLine(settings, mainFont, cpuTb, NULL, 999999, 999999, WHITE);
 
-    textBox *gpuTb = newTextBox("GPU/DSP : RISC @ 26.6 MHz", 256, 9, mainFont, 0, settings->d, 64, 160, 13, 1);
+    textBox *gpuTb = newTextBox("GPU/DSP : RISC @ 26.6 MHz", 256, 9, mainFont, 0, settings->d, 64, 160 + palY, 13, 1);
     updateLine(settings, mainFont, gpuTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 192, 13, 1);
+    textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 192 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -933,9 +935,10 @@ typedef struct {
     int         w, h;       /// pad dimensions
 } proPad;
 
-void ProControllerTest(void){
+void __attribute__((optimize("O1"))) ProControllerTest(void){
     int exit = 0;
     int i;
+    int palY = settings->PALOffset;
 
     /// Physical layout (approx. CatBox / 6-button): A B C bottom-row,
     /// X Y Z top-row, L on left side, R on right side, Pause + Option
@@ -957,29 +960,23 @@ void ProControllerTest(void){
         { JOYPAD_PAUSE,  56, 112, 40, 24 },
         { JOYPAD_OPTION, 56, 144, 40, 24 },
     };
-    const int padCount = (int)(sizeof(pads)/sizeof(pads[0]));
-
     /// Full-width DEPTH16 framebuffer so every pad in `pads[]` (including
     /// the R shoulder at x=264..303) fits without OOB writes -- rectPACK_RGB16
     /// does no clipping, and a previous 256-wide / fbX=32 layout corrupted
     /// the heap when R was redrawn each frame.
-    const int fbW = 320;
-    const int fbH = 144;
-    const int fbX = 0;
-    const int fbY = 64;
-    uint16_t *fb = malloc(sizeof(uint16_t)*fbW*fbH);
+    uint16_t *fb = malloc(sizeof(uint16_t)*320*144);
 
-    sprite *fbS = new_sprite(fbW, fbH, fbX, fbY, DEPTH16, (uint8_t*)fb);
+    sprite *fbS = new_sprite(320, 144, 0, 64 + palY, DEPTH16, (uint8_t*)fb);
     fbS->trans = 0;
     attach_sprite_to_display_at_layer(fbS, settings->d, 12);
 
-    textBox *titleTb = newTextBox("PRO CONTROLLER TEST", 224, 9, mainFont, 0, settings->d, 64, 40, 13, 1);
+    textBox *titleTb = newTextBox("PRO CONTROLLER TEST", 224, 9, mainFont, 0, settings->d, 64, 40 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *rawTb   = newTextBox("RAW JOY1: 00000000", 224, 9, mainFont, 0, settings->d, 80, 184, 13, 1);
+    textBox *rawTb   = newTextBox("RAW JOY1: 00000000", 224, 9, mainFont, 0, settings->d, 80, 184 + palY, 13, 1);
     updateLine(settings, mainFont, rawTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb  = newTextBox("Hold buttons to light up   LEFT+OPTION: exit", 256, 9, mainFont, 0, settings->d, 8, 200, 13, 1);
+    textBox *helpTb  = newTextBox("Hold buttons to light up   LEFT+OPTION: exit", 256, 9, mainFont, 0, settings->d, 8, 200 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     /// One-time render of static content: black background + every pad's
@@ -987,15 +984,15 @@ void ProControllerTest(void){
     /// interior, which is what changes when buttons are pressed/released.
     /// Avoids the full 320*144 = 92 KB per-frame clear that exceeds NTSC's
     /// ~1.4 ms vblank window and causes visible tearing of the pad borders.
-    fillPACK_RGB16(fb, fbW*fbH, COLOR_BLACK);
-    for(i = 0; i < padCount; i++){
-        int rx = pads[i].x - fbX;
-        int ry = pads[i].y - fbY;
-        rectPACK_RGB16(fb, fbW, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
-        rectPACK_RGB16(fb, fbW, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
-        rectPACK_RGB16(fb, fbW, rx, ry,             1,         pads[i].h, COLOR_WHITE);
-        rectPACK_RGB16(fb, fbW, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
-        rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, COLOR_GRAY25);
+    fillPACK_RGB16(fb, 320*144, COLOR_BLACK);
+    for(i = 0; i < 10; i++){
+        int rx = pads[i].x;
+        int ry = pads[i].y - (64 + palY);
+        rectPACK_RGB16(fb, 320, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, 320, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, 320, rx, ry,             1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, 320, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, 320, rx+1, ry+1, pads[i].w-2, pads[i].h-2, COLOR_GRAY25);
     }
 
     hide_or_show_display_layer_range(settings->d, 1, 12, 13);
@@ -1004,7 +1001,7 @@ void ProControllerTest(void){
     /// so every pad gets one explicit interior-fill on the first frame
     /// regardless of whether the user is holding it.
     int padLit[16];
-    for(i = 0; i < padCount && i < 16; i++){ padLit[i] = -1; }
+    for(i = 0; i < 10; i++){ padLit[i] = -1; }
 
     uint32_t prevJoy = ~settings->joy1;
 
@@ -1017,14 +1014,14 @@ void ProControllerTest(void){
         /// Reduces the steady-state cost (held/idle button) to ~zero so
         /// the OP never sees a partial fb during scanout.
         if(settings->joy1 != prevJoy){
-            for(i = 0; i < padCount; i++){
+            for(i = 0; i < 10; i++){
                 int held = (settings->joy1 & pads[i].mask) ? 1 : 0;
                 if(held == padLit[i]){ continue; }
                 padLit[i] = held;
-                int rx = pads[i].x - fbX;
-                int ry = pads[i].y - fbY;
+                int rx = pads[i].x;
+                int ry = pads[i].y - (64 + palY);
                 uint16_t bg = held ? COLOR_GREEN : COLOR_GRAY25;
-                rectPACK_RGB16(fb, fbW, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
+                rectPACK_RGB16(fb, 320, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
             }
 
             char buf[12] = "00000000";
@@ -1095,6 +1092,7 @@ void ProControllerTest(void){
 void RotaryControllerTest(void){
     int exit = 0;
     int redraw = 1;
+    int palY = settings->PALOffset;
 
     /// Edge-detection state: previous-frame raw bits, so we count *rising*
     /// transitions, not held-down frames. A held LEFT counts as one pulse,
@@ -1121,7 +1119,7 @@ void RotaryControllerTest(void){
     const int barW = 320;
     const int barH = 16;
     const int barX = 0;
-    const int barY = 152;
+    const int barY = 152 + palY;
     uint16_t *barBuf = malloc(sizeof(uint16_t)*barW*barH);
     sprite *barS = new_sprite(barW, barH, barX, barY, DEPTH16, (uint8_t*)barBuf);
     barS->trans = 0;
@@ -1132,27 +1130,27 @@ void RotaryControllerTest(void){
     const int indSize = 16;
     uint16_t *indL = malloc(sizeof(uint16_t)*indSize*indSize);
     uint16_t *indR = malloc(sizeof(uint16_t)*indSize*indSize);
-    sprite *indLs = new_sprite(indSize, indSize, 80,  56, DEPTH16, (uint8_t*)indL);
-    sprite *indRs = new_sprite(indSize, indSize, 224, 56, DEPTH16, (uint8_t*)indR);
+    sprite *indLs = new_sprite(indSize, indSize, 80,  56 + palY, DEPTH16, (uint8_t*)indL);
+    sprite *indRs = new_sprite(indSize, indSize, 224, 56 + palY, DEPTH16, (uint8_t*)indR);
     indLs->trans = 0;
     indRs->trans = 0;
     attach_sprite_to_display_at_layer(indLs, settings->d, 12);
     attach_sprite_to_display_at_layer(indRs, settings->d, 12);
 
-    textBox *titleTb = newTextBox("ROTARY CONTROLLER TEST", 256, 9, mainFont, 0, settings->d, 48, 32, 13, 1);
+    textBox *titleTb = newTextBox("ROTARY CONTROLLER TEST", 256, 9, mainFont, 0, settings->d, 48, 32 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *lLabelTb  = newTextBox("LEFT",  64, 9, mainFont, 0, settings->d, 100, 60,  13, 1);
-    textBox *rLabelTb  = newTextBox("RIGHT", 64, 9, mainFont, 0, settings->d, 244, 60,  13, 1);
+    textBox *lLabelTb  = newTextBox("LEFT",  64, 9, mainFont, 0, settings->d, 100, 60 + palY,  13, 1);
+    textBox *rLabelTb  = newTextBox("RIGHT", 64, 9, mainFont, 0, settings->d, 244, 60 + palY,  13, 1);
     updateLine(settings, mainFont, lLabelTb, NULL, 999999, 999999, GREY);
     updateLine(settings, mainFont, rLabelTb, NULL, 999999, 999999, GREY);
 
-    textBox *leftTb  = newTextBox("LEFT  PULSES: 00000", 192, 9, mainFont, 0, settings->d, 32, 88,  13, 1);
-    textBox *rightTb = newTextBox("RIGHT PULSES: 00000", 192, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
-    textBox *signTb  = newTextBox("SIGNED VALUE: +00000", 192, 9, mainFont, 0, settings->d, 32, 120, 13, 1);
-    textBox *rateTb  = newTextBox("RATE (1s)   : 000 p/s", 192, 9, mainFont, 0, settings->d, 32, 136, 13, 1);
+    textBox *leftTb  = newTextBox("LEFT  PULSES: 00000", 192, 9, mainFont, 0, settings->d, 32, 88 + palY,  13, 1);
+    textBox *rightTb = newTextBox("RIGHT PULSES: 00000", 192, 9, mainFont, 0, settings->d, 32, 104 + palY, 13, 1);
+    textBox *signTb  = newTextBox("SIGNED VALUE: +00000", 192, 9, mainFont, 0, settings->d, 32, 120 + palY, 13, 1);
+    textBox *rateTb  = newTextBox("RATE (1s)   : 000 p/s", 192, 9, mainFont, 0, settings->d, 32, 136 + palY, 13, 1);
 
-    textBox *helpTb  = newTextBox("Spin or press LEFT/RIGHT. A: reset  LEFT+OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 200, 13, 1);
+    textBox *helpTb  = newTextBox("Spin or press LEFT/RIGHT. A: reset  LEFT+OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 200 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     /// One-time render of the static bar chrome: black background, white
@@ -1406,6 +1404,7 @@ void ResolutionTest(void){
 
     int i, k, p;
     char buf[12];
+    int palY = settings->PALOffset;
 
     /// --- Reference frame sprite ----------------------------------------
     /// 320 x activeH DEPTH16 sprite with a 1px white border and a single-pixel
@@ -1430,7 +1429,7 @@ void ResolutionTest(void){
     frameSp->trans = 0;
     attach_sprite_to_display_at_layer(frameSp, settings->d, 12);
 
-    textBox *titleTb = newTextBox("VIDEO MODE TEST", 192, 9, mainFont, 0, settings->d, 80, 40, 13, 1);
+    textBox *titleTb = newTextBox("VIDEO MODE TEST", 192, 9, mainFont, 0, settings->d, 80, 40 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
     /// Region label is fixed for the lifetime of this test, so pick the
@@ -1439,7 +1438,7 @@ void ResolutionTest(void){
     /// before the Hz value because the tokens differ in length.
     textBox *regionTb = newTextBox(
         (settings->PALNTSC == 0) ? "REGION : PAL 50Hz " : "REGION : NTSC 60Hz",
-        224, 9, mainFont, 0, settings->d, 56, 64, 13, 1);
+        224, 9, mainFont, 0, settings->d, 56, 64 + palY, 13, 1);
     updateLine(settings, mainFont, regionTb, NULL, 999999, 999999, WHITE);
 
     /// Mutable / informative rows. Refreshed in the `redraw` block so
@@ -1447,15 +1446,15 @@ void ResolutionTest(void){
     /// are pre-formatted to match the post-redraw layout exactly (no
     /// parens around the hint text) so the first frame doesn't flash a
     /// different format before the redraw fires.
-    textBox *fmtTb     = newTextBox("FORMAT : RGB16              ", 256, 9, mainFont, 0, settings->d, 32, 88,  13, 1);
-    textBox *pwTb      = newTextBox("PWIDTH : 4 320 native       ", 256, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
-    textBox *vmodeTb   = newTextBox("VMODE  : 0x0000             ", 256, 9, mainFont, 0, settings->d, 32, 120, 13, 1);
-    textBox *geomTb    = newTextBox("GEOM   : 320x000            ", 256, 9, mainFont, 0, settings->d, 32, 136, 13, 1);
-    textBox *regsTb    = newTextBox("VP=000 HP=000 VDB=000 VDE=000", 256, 9, mainFont, 0, settings->d, 32, 152, 13, 1);
-    textBox *recenTb   = newTextBox("RECENTER: OFF               ", 256, 9, mainFont, 0, settings->d, 32, 168, 13, 1);
+    textBox *fmtTb     = newTextBox("FORMAT : RGB16              ", 256, 9, mainFont, 0, settings->d, 32, 88 + palY,  13, 1);
+    textBox *pwTb      = newTextBox("PWIDTH : 4 320 native       ", 256, 9, mainFont, 0, settings->d, 32, 104 + palY, 13, 1);
+    textBox *vmodeTb   = newTextBox("VMODE  : 0x0000             ", 256, 9, mainFont, 0, settings->d, 32, 120 + palY, 13, 1);
+    textBox *geomTb    = newTextBox("GEOM   : 320x000            ", 256, 9, mainFont, 0, settings->d, 32, 136 + palY, 13, 1);
+    textBox *regsTb    = newTextBox("VP=000 HP=000 VDB=000 VDE=000", 256, 9, mainFont, 0, settings->d, 32, 152 + palY, 13, 1);
+    textBox *recenTb   = newTextBox("RECENTER: OFF               ", 256, 9, mainFont, 0, settings->d, 32, 168 + palY, 13, 1);
 
-    textBox *help1Tb   = newTextBox("UP/DOWN: PWIDTH   LEFT/RIGHT: format", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
-    textBox *help2Tb   = newTextBox("A: boot mode   B: recenter   OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 200, 13, 1);
+    textBox *help1Tb   = newTextBox("UP/DOWN: PWIDTH   LEFT/RIGHT: format", 256, 9, mainFont, 0, settings->d, 24, 184 + palY, 13, 1);
+    textBox *help2Tb   = newTextBox("A: boot mode   B: recenter   OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 200 + palY, 13, 1);
     updateLine(settings, mainFont, help1Tb, NULL, 999999, 999999, GREY);
     updateLine(settings, mainFont, help2Tb, NULL, 999999, 999999, GREY);
 
@@ -1647,17 +1646,18 @@ void OptionsMenu(void){
     int exit = 0;
     int redraw = 1;
     int sel = 0;
+    int palY = settings->PALOffset;
 
-    textBox *titleTb = newTextBox("OPTIONS", 128, 9, mainFont, 0, settings->d, 116, 48, 13, 1);
+    textBox *titleTb = newTextBox("OPTIONS", 128, 9, mainFont, 0, settings->d, 116, 48 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *volTb   = newTextBox("AUDIO VOLUME : 63", 192, 9, mainFont, 0, settings->d, 64, 88, 13, 1);
+    textBox *volTb   = newTextBox("AUDIO VOLUME : 63", 192, 9, mainFont, 0, settings->d, 64, 88 + palY, 13, 1);
     updateLine(settings, mainFont, volTb, NULL, 999999, 999999, WHITE);
 
-    textBox *regTb   = newTextBox("REGION : AUTO (NTSC)", 192, 9, mainFont, 0, settings->d, 64, 104, 13, 1);
+    textBox *regTb   = newTextBox("REGION : AUTO (NTSC)", 192, 9, mainFont, 0, settings->d, 64, 104 + palY, 13, 1);
     updateLine(settings, mainFont, regTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb  = newTextBox("UP/DN: select  L/R: change  OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 192, 13, 1);
+    textBox *helpTb  = newTextBox("UP/DN: select  L/R: change  OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 192 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
