@@ -1661,6 +1661,7 @@ void OptionsMenu(void){
     textBox *helpTb  = newTextBox("UP/DN: select  L/R: change  OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 192 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
+    hide_or_show_display_layer_range(settings->d, 0, 0, 2);
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
 
     while(!exit){
@@ -1743,6 +1744,7 @@ void OptionsMenu(void){
     }
 
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    hide_or_show_display_layer_range(settings->d, 1, 0, 2);
     helpTb  = freeTextBox(helpTb);
     regTb   = freeTextBox(regTb);
     volTb   = freeTextBox(volTb);
