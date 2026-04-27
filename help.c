@@ -668,7 +668,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "JAGLINK TEST", 999999, 999999, GREEN);
 
-                            updateLine(settings, mainFont, helpTextBox, "Probes the Jerry UART registers used by the JagLink network adapter. ASIDATA ($F10030) is the 16-bit data register, ASICTRL ($F10032) the control/status register, and ASICLK ($F10034) the baud-rate clock divider.^On a base Jaguar these read 0x0000 or 0xFFFF (open bus). Any other value suggests a JagLink or compatible serial device is present.^^A: loopback test (writes 0xA5, reads back)^DOWN+OPTION: this help   OPTION: exit", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "Probes the Jerry UART registers used by the JagLink network adapter. ASIDATA ($F10030) is the 16-bit data register, ASICTRL ($F10032) the control/status register, and ASICLK ($F10034) the baud-rate clock divider.^On a base Jaguar these read 0x0000 or 0xFFFF (open bus). Any other value suggests a JagLink or compatible serial device is present.^Limitations: this probe and the loopback test do not validate a full JagLink session/protocol. Open-bus heuristics can also give false positives or false negatives depending on hardware or emulator behavior.^^A: loopback test (writes 0xA5, reads back)^DOWN+OPTION: this help   OPTION: exit", 999999, 999999, WHITE);
                             highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
                         break;
                     }
