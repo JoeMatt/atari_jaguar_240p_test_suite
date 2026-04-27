@@ -2194,8 +2194,6 @@ void MemoryTrackTest(void){
                          settings->d, 0, 196 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, helpTb2, NULL, 999999, 999999, GREY);
 
-    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
-
     while(!exit_test){
         read_joypad_state(settings->j_state);
         settings->joy1 = settings->j_state->j1;
@@ -2390,7 +2388,6 @@ void MemoryTrackTest(void){
         }
     }
 
-    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb2    = freeTextBox(helpTb2);
     helpTb1    = freeTextBox(helpTb1);
     for(row = EE_GRID_ROWS - 1; row >= 0; row--){
