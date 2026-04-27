@@ -2028,7 +2028,7 @@ void JaguarCDTest(void){
     textBox *hTb  = newTextBox("$800002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 156 + settings->PALOffset, 13, 1);
     textBox *biosTb = newTextBox("BIOS    : NOT FOUND       ", 256, 9, mainFont, 0, settings->d, 48, 170 + settings->PALOffset, 13, 1);
     textBox *noteTb = newTextBox("LIVE/frm: hex refresh  0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 186 + settings->PALOffset, 13, 1);
-    textBox *helpTb = newTextBox("A: Memory Track  DOWN+OPT: help  OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 204 + settings->PALOffset, 13, 1);
+    textBox *helpTb = newTextBox("A: Memory Track  DOWN+OPTION: help  OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 204 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
     extraHighlightJagCdFooterLine(helpTb);
