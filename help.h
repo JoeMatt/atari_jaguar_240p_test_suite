@@ -55,6 +55,7 @@
 #define HELP_CHANNEL_SEP 39
 #define HELP_JAGUAR_CD 40
 #define HELP_MEMORY_TRACK 41
+#define HELP_JAGLINK_TEST 42
 
 extern uint8_t help;
 phrase *helpData;

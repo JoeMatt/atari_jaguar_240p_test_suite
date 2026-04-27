@@ -109,6 +109,7 @@ void DrawHelp(int option){
         case HELP_CHANNEL_SEP:
         case HELP_JAGUAR_CD:
         case HELP_MEMORY_TRACK:
+        case HELP_JAGLINK_TEST:
             totalPages = 1;
         break;
 
@@ -654,6 +655,20 @@ void DrawHelp(int option){
                             updateLine(settings, mainFont, helpLineTextBox[0], "MEMORY TRACK TEST", 999999, 999999, GREEN);
 
                             updateLine(settings, mainFont, helpTextBox, "Exercises the 93C46 serial EEPROM on the bus. On a Jaguar CD with Memory Track this is the CD unit's 128-byte save storage. Without a CD this tests the cart's own EEPROM.^The CD line shows whether CD hardware was detected. Both EEPROMs use the same Jerry bus ($F14001/$F14801/$F15001).^^A: Walking-1s   X: Address-as-data^B: Re-read   Y: Erase cell^OPTION: restore originals and exit^DOWN+OPTION: this help", 999999, 999999, WHITE);
+                            highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
+                        break;
+                    }
+
+                break;
+
+                case HELP_JAGLINK_TEST:
+
+                    switch(page){
+
+                        case 0:
+                            updateLine(settings, mainFont, helpLineTextBox[0], "JAGLINK TEST", 999999, 999999, GREEN);
+
+                            updateLine(settings, mainFont, helpTextBox, "Probes the Jerry UART registers used by the JagLink network adapter. ASIDATA ($F10030) is the data register, ASICTRL ($F10032) the control/status register, and ASICLK ($F10034) the baud-rate clock divider.^On a base Jaguar these read 0x00 or 0xFF (open bus). Any other value suggests a JagLink or compatible serial device is present.^^A: loopback test (writes 0xA5, reads back)^DOWN+OPTION: this help   OPTION: exit", 999999, 999999, WHITE);
                             highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
                         break;
                     }
