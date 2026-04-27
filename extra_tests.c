@@ -960,7 +960,7 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
         { JOYPAD_PAUSE,  56, 112, 40, 24 },
         { JOYPAD_OPTION, 56, 144, 40, 24 },
     };
-#define PAD_COUNT ((int)(sizeof(pads)/sizeof(pads[0])))
+    enum { PAD_COUNT = sizeof(pads) / sizeof(pads[0]) };
     /// Full-width DEPTH16 framebuffer so every pad in `pads[]` (including
     /// the R shoulder at x=264..303) fits without OOB writes -- rectPACK_RGB16
     /// does no clipping, and a previous 256-wide / fbX=32 layout corrupted
