@@ -2684,7 +2684,7 @@ void VertScrollTest(void){
             yOff += dir * speed;
             if(yOff <= -H) yOff += H;
             if(yOff > 0)   yOff -= H;
-            s->y = yOff + settings->PALOffset;
+            s->y = yOff;
         }
 
         if(needLabel){
