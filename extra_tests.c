@@ -965,9 +965,10 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
     /// the R shoulder at x=264..303) fits without OOB writes -- rectPACK_RGB16
     /// does no clipping, and a previous 256-wide / fbX=32 layout corrupted
     /// the heap when R was redrawn each frame.
-    uint16_t *fb = malloc(sizeof(uint16_t)*320*144);
+    enum { FB_W = 320, FB_H = 144, FB_Y = 64 };
+    uint16_t *fb = malloc(sizeof(uint16_t)*FB_W*FB_H);
 
-    sprite *fbS = new_sprite(320, 144, 0, 64 + palY, DEPTH16, (uint8_t*)fb);
+    sprite *fbS = new_sprite(FB_W, FB_H, 0, FB_Y + palY, DEPTH16, (uint8_t*)fb);
     fbS->trans = 0;
     attach_sprite_to_display_at_layer(fbS, settings->d, 12);
 
@@ -985,15 +986,15 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
     /// interior, which is what changes when buttons are pressed/released.
     /// Avoids the full 320*144 = 92 KB per-frame clear that exceeds NTSC's
     /// ~1.4 ms vblank window and causes visible tearing of the pad borders.
-    fillPACK_RGB16(fb, 320*144, COLOR_BLACK);
+    fillPACK_RGB16(fb, FB_W*FB_H, COLOR_BLACK);
     for(i = 0; i < PAD_COUNT; i++){
         int rx = pads[i].x;
-        int ry = pads[i].y - 64;
-        rectPACK_RGB16(fb, 320, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
-        rectPACK_RGB16(fb, 320, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
-        rectPACK_RGB16(fb, 320, rx, ry,             1,         pads[i].h, COLOR_WHITE);
-        rectPACK_RGB16(fb, 320, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
-        rectPACK_RGB16(fb, 320, rx+1, ry+1, pads[i].w-2, pads[i].h-2, COLOR_GRAY25);
+        int ry = pads[i].y - FB_Y;
+        rectPACK_RGB16(fb, FB_W, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, FB_W, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
+        rectPACK_RGB16(fb, FB_W, rx, ry,             1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, FB_W, rx+pads[i].w-1, ry, 1,         pads[i].h, COLOR_WHITE);
+        rectPACK_RGB16(fb, FB_W, rx+1, ry+1, pads[i].w-2, pads[i].h-2, COLOR_GRAY25);
     }
 
     hide_or_show_display_layer_range(settings->d, 1, 12, 13);
@@ -1020,9 +1021,9 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
                 if(held == padLit[i]){ continue; }
                 padLit[i] = held;
                 int rx = pads[i].x;
-                int ry = pads[i].y - 64;
+                int ry = pads[i].y - FB_Y;
                 uint16_t bg = held ? COLOR_GREEN : COLOR_GRAY25;
-                rectPACK_RGB16(fb, 320, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
+                rectPACK_RGB16(fb, FB_W, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
             }
 
             char buf[12] = "00000000";
@@ -1647,6 +1648,8 @@ void OptionsMenu(void){
     int exit = 0;
     int redraw = 1;
     int sel = 0;
+    // palY is snapshot once; a region override mid-session won't
+    // reposition these textboxes (Y is baked at newTextBox time).
     int palY = settings->PALOffset;
 
     textBox *titleTb = newTextBox("OPTIONS", 128, 9, mainFont, 0, settings->d, 116, 48 + palY, 13, 1);
