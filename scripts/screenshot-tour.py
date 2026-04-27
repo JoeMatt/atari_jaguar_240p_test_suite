@@ -139,16 +139,19 @@ def _capture(label: str, note: str) -> Step:
     return Step(label, None, 1, note)
 
 
+def _down(n: int, settle: int = 8) -> list[Step]:
+    """Press DOWN n times with a short settle between each."""
+    steps: list[Step] = []
+    for _ in range(n):
+        steps.append(_press("down"))
+        steps.append(_settle(settle))
+    return steps
+
+
 def _open_main_item(n_down: int) -> list[Step]:
     """From boot main menu, scroll DOWN n_down times and press A.
     Used as the entry sequence for every sub-menu group."""
-    steps: list[Step] = []
-    for _ in range(n_down):
-        steps.append(_press("down"))
-        steps.append(_settle(8))
-    steps.append(_press("a"))
-    steps.append(_settle())
-    return steps
+    return [*_down(n_down), _press("a"), _settle()]
 
 
 TOUR: list[TourGroup] = [
@@ -178,7 +181,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(1) for s in (_press("down"), _settle(8))),
+            *_down(1),
             _press("a"),
             _settle(),
             _capture("color-bars", "Color Bars"),
@@ -190,7 +193,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(2) for s in (_press("down"), _settle(8))),
+            *_down(2),
             _press("a"),
             _settle(),
             _capture("ebu-bars", "EBU Color Bars"),
@@ -202,7 +205,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(3) for s in (_press("down"), _settle(8))),
+            *_down(3),
             _press("a"),
             _settle(),
             _capture("smpte-bars", "SMPTE Color Bars"),
@@ -214,7 +217,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(4) for s in (_press("down"), _settle(8))),
+            *_down(4),
             _press("a"),
             _settle(),
             _capture("ref-bars", "Referenced Color Bars (601)"),
@@ -226,7 +229,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(5) for s in (_press("down"), _settle(8))),
+            *_down(5),
             _press("a"),
             _settle(),
             _capture("color-bleed", "Color Bleed Check"),
@@ -238,7 +241,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            *_down(6),
             _press("a"),
             _settle(),
             _capture("monoscope", "Monoscope"),
@@ -250,7 +253,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(7) for s in (_press("down"), _settle(8))),
+            *_down(7),
             _press("a"),
             _settle(),
             _capture("grid", "Grid"),
@@ -262,7 +265,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(8) for s in (_press("down"), _settle(8))),
+            *_down(8),
             _press("a"),
             _settle(),
             _capture("gray-ramp", "Gray Ramp"),
@@ -274,7 +277,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(9) for s in (_press("down"), _settle(8))),
+            *_down(9),
             _press("a"),
             _settle(),
             _capture("white-rgb", "White & RGB Screens"),
@@ -286,7 +289,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(10) for s in (_press("down"), _settle(8))),
+            *_down(10),
             _press("a"),
             _settle(),
             _capture("100ire", "100 IRE"),
@@ -298,7 +301,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(11) for s in (_press("down"), _settle(8))),
+            *_down(11),
             _press("a"),
             _settle(),
             _capture("sharpness", "Sharpness"),
@@ -310,7 +313,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(12) for s in (_press("down"), _settle(8))),
+            *_down(12),
             _press("a"),
             _settle(),
             _capture("overscan", "Overscan"),
@@ -322,7 +325,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(13) for s in (_press("down"), _settle(8))),
+            *_down(13),
             _press("a"),
             _settle(),
             _capture("convergence", "Convergence"),
@@ -336,7 +339,7 @@ TOUR: list[TourGroup] = [
             ## Color Bars w/ Gray is the first item (case 1, 0 DOWN).
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            *_down(14),
             _press("a"),
             _settle(),
             _press("a"),
@@ -350,10 +353,10 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            *_down(14),
             _press("a"),
             _settle(),
-            *(s for _ in range(1) for s in (_press("down"), _settle(8))),
+            *_down(1),
             _press("a"),
             _settle(60),
             _capture("linearity", "Linearity (circle + crosshatch)"),
@@ -365,10 +368,10 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            *_down(14),
             _press("a"),
             _settle(),
-            *(s for _ in range(2) for s in (_press("down"), _settle(8))),
+            *_down(2),
             _press("a"),
             _settle(60),
             _capture("phase", "Phase / color-burst check"),
@@ -380,10 +383,10 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            *_down(14),
             _press("a"),
             _settle(),
-            *(s for _ in range(3) for s in (_press("down"), _settle(8))),
+            *_down(3),
             _press("a"),
             _settle(60),
             _capture("brightness", "Brightness ramp"),
@@ -395,10 +398,10 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            *_down(14),
             _press("a"),
             _settle(),
-            *(s for _ in range(4) for s in (_press("down"), _settle(8))),
+            *_down(4),
             _press("a"),
             _settle(60),
             _capture("contrast", "Contrast ramp"),
@@ -430,7 +433,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(1),
-            *(s for _ in range(1) for s in (_press("down"), _settle(8))),
+            *_down(1),
             _press("a"),
             _settle(),
             _capture("striped-sprite", "Striped Sprite Test"),
@@ -442,7 +445,7 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(1),
-            *(s for _ in range(8) for s in (_press("down"), _settle(8))),
+            *_down(8),
             _press("a"),
             _settle(),
             _capture("stripes", "Horiz/Vert Stripes"),
@@ -454,19 +457,19 @@ TOUR: list[TourGroup] = [
         steps=[
             *_boot(),
             *_open_main_item(1),
-            *(s for _ in range(9) for s in (_press("down"), _settle(8))),
+            *_down(9),
             _press("a"),
             _settle(),
             _capture("checkerboard", "Checkerboard"),
         ],
     ),
     TourGroup(
-        slug="backlight",
+        slug="backlight-zone",
         title="Backlight Zone Test",
         steps=[
             *_boot(),
             *_open_main_item(1),
-            *(s for _ in range(10) for s in (_press("down"), _settle(8))),
+            *_down(10),
             _press("a"),
             _settle(),
             _capture("backlight-zone", "Backlight Zone Test"),
@@ -505,7 +508,7 @@ TOUR: list[TourGroup] = [
             ## script repeatedly.
             *_boot(),
             *_open_main_item(3),
-            *(s for _ in range(9) for s in (_press("down"), _settle(8))),
+            *_down(9),
             _press("a"),
             _settle(),
             _capture("eeprom-grid", "EEPROM Test grid (64 words, hex)"),
@@ -522,7 +525,7 @@ TOUR: list[TourGroup] = [
             ## the other.
             *_boot(),
             *_open_main_item(3),
-            *(s for _ in range(7) for s in (_press("down"), _settle(8))),
+            *_down(7),
             _press("a"),
             _settle(),
             _capture("cd-probe", "Jaguar CD Probe register view"),
@@ -543,7 +546,7 @@ TOUR: list[TourGroup] = [
             ## renders cleanly for a screenshot.
             *_boot(),
             *_open_main_item(3),
-            *(s for _ in range(10) for s in (_press("down"), _settle(8))),
+            *_down(10),
             _press("a"),
             _settle(),
             _capture("sprite-stress-default", "Sprite Stress Test default (1 sprite, 8x8, single-line)"),
@@ -560,7 +563,7 @@ TOUR: list[TourGroup] = [
             ## NOT DETECTED, which is the expected screenshot.
             *_boot(),
             *_open_main_item(3),
-            *(s for _ in range(11) for s in (_press("down"), _settle(8))),
+            *_down(11),
             _press("a"),
             _settle(),
             _capture("jaglink-probe", "JagLink Test (Jerry UART probe)"),
@@ -579,10 +582,10 @@ TOUR: list[TourGroup] = [
             ## OP has finished compositing before we grab the FB.
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            *_down(14),
             _press("a"),
             _settle(),
-            *(s for _ in range(5) for s in (_press("down"), _settle(8))),
+            *_down(5),
             _press("a"),
             _settle(60),
             _capture("ycdelay-strips", "Y/C Delay (RGB+CMY strips with 1px white dividers)"),
@@ -597,10 +600,10 @@ TOUR: list[TourGroup] = [
             ## inverted -- canonical form for the screenshot.
             *_boot(),
             *_open_main_item(0),
-            *(s for _ in range(14) for s in (_press("down"), _settle(8))),
+            *_down(14),
             _press("a"),
             _settle(),
-            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            *_down(6),
             _press("a"),
             _settle(60),
             _capture("diagonal-default", "Diagonal / Clock pattern (8 px spacing, default invert off)"),
@@ -619,7 +622,7 @@ TOUR: list[TourGroup] = [
             ## the visible area when we capture.
             *_boot(),
             *_open_main_item(1),
-            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            *_down(6),
             _press("a"),
             _settle(60),
             _capture("vertscroll-running", "Vertical Scroll Test (default speed 1, dir DN)"),
@@ -634,7 +637,7 @@ TOUR: list[TourGroup] = [
             ## -- screenshot doesn't need playback, just the UI.
             *_boot(),
             *_open_main_item(2),
-            *(s for _ in range(4) for s in (_press("down"), _settle(8))),
+            *_down(4),
             _press("a"),
             _settle(45),
             _capture("white-noise-idle", "White Noise Test (idle, ready to play)"),
@@ -662,7 +665,7 @@ TOUR: list[TourGroup] = [
             ## harness/core bug, not a timing gap in the 240 frame budget.
             *_boot(),
             *_open_main_item(2),
-            *(s for _ in range(5) for s in (_press("down"), _settle(8))),
+            *_down(5),
             _press("a"),
             _settle(240),
             _capture(
@@ -679,7 +682,7 @@ TOUR: list[TourGroup] = [
             ## Default mode is BOTH (in phase), playback OFF.
             *_boot(),
             *_open_main_item(2),
-            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            *_down(6),
             _press("a"),
             _settle(45),
             _capture("channel-sep-default", "Channel Separation (BOTH in-phase, OFF)"),
@@ -692,7 +695,7 @@ TOUR: list[TourGroup] = [
             ## Hardware Tools, System Info is case 7 (6 DOWN).
             *_boot(),
             *_open_main_item(3),
-            *(s for _ in range(6) for s in (_press("down"), _settle(8))),
+            *_down(6),
             _press("a"),
             _settle(),
             _capture("system-info", "System Info (hardware detection summary)"),
@@ -705,7 +708,7 @@ TOUR: list[TourGroup] = [
             ## Hardware Tools, Video Mode Test is case 9 (8 DOWN).
             *_boot(),
             *_open_main_item(3),
-            *(s for _ in range(8) for s in (_press("down"), _settle(8))),
+            *_down(8),
             _press("a"),
             _settle(),
             _capture("video-mode", "Video Mode Test (resolution switching)"),
@@ -739,7 +742,7 @@ TOUR: list[TourGroup] = [
             ## Screen Savers, Bouncing Square is case 2 (1 DOWN).
             *_boot(),
             *_open_main_item(4),
-            *(s for _ in range(1) for s in (_press("down"), _settle(8))),
+            *_down(1),
             _press("a"),
             _settle(30),
             _capture("bouncing-square", "Bouncing Square screen saver (single frame)"),
@@ -752,7 +755,7 @@ TOUR: list[TourGroup] = [
             ## Screen Savers, Scrolling Bars is case 3 (2 DOWN).
             *_boot(),
             *_open_main_item(4),
-            *(s for _ in range(2) for s in (_press("down"), _settle(8))),
+            *_down(2),
             _press("a"),
             _settle(30),
             _capture("scrolling-bars", "Scrolling Bars screen saver (single frame)"),
