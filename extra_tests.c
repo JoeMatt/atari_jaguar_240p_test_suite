@@ -76,7 +76,7 @@ static void teardownFullscreenSprite(sprite *s, void *data){
  * channel against neutral gray with color filters.
  * --------------------------------------------------------------------------- */
 void DrawColorBarsGray(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const uint16_t bars75[7] = {
         PACK_RGB16(24, 24, 48), /* 75% gray   */
         PACK_RGB16(24, 0,  48), /* 75% yellow */
@@ -116,7 +116,7 @@ void DrawColorBarsGray(void){
         rectPACK_RGB16(buf, W, x, barsH, w, rampH, c);
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -155,7 +155,7 @@ void DrawColorBarsGray(void){
  * the existing Grid pattern, which is a simple line grid for overscan.
  * --------------------------------------------------------------------------- */
 void DrawLinearity(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     const int STEP = 16;     /* 20x15 grid of 16-pixel squares */
     const int CX = W/2, CY = H/2;
     int exit = 0;
@@ -218,7 +218,7 @@ void DrawLinearity(void){
         if(CY + y >= 0 && CY + y < H) buf[(CY + y) * W + CX] = COLOR_GREEN;
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -257,7 +257,7 @@ void DrawLinearity(void){
  * its complementary color so any chroma shift becomes visible at the seam.
  * --------------------------------------------------------------------------- */
 void DrawPhase(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const uint16_t blocks[8] = {
         COLOR_YELLOW, COLOR_MAGENTA, COLOR_CYAN, COLOR_RED,
         COLOR_GREEN,  COLOR_BLUE,    COLOR_WHITE, COLOR_BLACK
@@ -295,7 +295,7 @@ void DrawPhase(void){
         }
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -334,7 +334,7 @@ void DrawPhase(void){
  * brightness + contrast cues.
  * --------------------------------------------------------------------------- */
 void DrawBrightness(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     /* 4 levels of "just-above-black" gray, 6-bit green / 5-bit red+blue. */
     static const uint16_t levels[4] = {
         PACK_RGB16(1, 1, 2),   /* ~ 2 IRE  */
@@ -361,7 +361,7 @@ void DrawBrightness(void){
         rectPACK_RGB16(buf, W, x, y0, barW, barH, levels[i]);
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -399,7 +399,7 @@ void DrawBrightness(void){
  * the bottom two start to merge, then back off one notch.
  * --------------------------------------------------------------------------- */
 void DrawContrast(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const uint16_t levels[4] = {
         PACK_RGB16(28, 28, 56),  /* ~ 90 IRE */
         PACK_RGB16(29, 29, 59),  /* ~ 95 IRE */
@@ -425,7 +425,7 @@ void DrawContrast(void){
         rectPACK_RGB16(buf, W, x, y0, barW, barH, levels[i]);
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -465,7 +465,7 @@ void DrawContrast(void){
  * auto-scroll; OPTION exits.
  * --------------------------------------------------------------------------- */
 void ManualLagTest(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     int exit = 0;
     uint8_t frameDigit = 0;
     int x = 0, dir = 1;
@@ -483,14 +483,14 @@ void ManualLagTest(void){
         uint16_t c = PACK_RGB16(rb5, rb5, g6);
         rectPACK_RGB16(bg, W, i * (W/16), 0, W/16, 32, c);
     }
-    sprite *bgS = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, bg);
+    sprite *bgS = new_sprite(W, H, 0, 0, DEPTH16, bg);
     bgS->trans = 0;
     attach_sprite_to_display_at_layer(bgS, settings->d, 12);
 
     /* The moving white square */
     uint16_t *sq = malloc(sizeof(uint16_t) * 16 * 16);
     for(i = 0; i < 16*16; i++) sq[i] = COLOR_WHITE;
-    sprite *sqS = new_sprite(16, 16, 0, H - 32 + settings->PALOffset, DEPTH16, sq);
+    sprite *sqS = new_sprite(16, 16, 0, H - 32, DEPTH16, sq);
     sqS->trans = 0;
     attach_sprite_to_display_at_layer(sqS, settings->d, 13);
 
@@ -565,7 +565,7 @@ void ManualLagTest(void){
  * A cycles modes, OPTION exits.
  * --------------------------------------------------------------------------- */
 void Alternate240p480iTest(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     enum { MODE_STATIC = 0, MODE_TOGGLE = 1, MODE_VERTICAL = 2, MODE_COUNT = 3 };
     int mode = MODE_STATIC;
     int field = 0;
@@ -595,7 +595,7 @@ void Alternate240p480iTest(void){
         }
     }
 
-    sprite *fbS = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, fbA);
+    sprite *fbS = new_sprite(W, H, 0, 0, DEPTH16, fbA);
     fbS->trans = 0;
     attach_sprite_to_display_at_layer(fbS, settings->d, 12);
 
@@ -619,9 +619,14 @@ void Alternate240p480iTest(void){
         if(redrawLabel){
             const char *label = "STATIC 240p ";
             switch(mode){
-                case MODE_STATIC:   label = "STATIC 240p "; fbS->data = (phrase*)fbA; break;
+                case MODE_STATIC:   fbS->data = (phrase*)fbA; break;
                 case MODE_TOGGLE:   label = "TOGGLE FIELD"; field = 0; fbS->data = (phrase*)fbA; break;
-                case MODE_VERTICAL: label = "VERT 240p   "; fbS->data = (phrase*)fbV; break;
+                case MODE_VERTICAL: field = 0; fbS->data = (phrase*)fbV; break;
+            }
+            if(mode == MODE_STATIC){
+                label = settings->PALNTSC ? "STATIC 240p " : "STATIC 288p ";
+            } else if(mode == MODE_VERTICAL){
+                label = settings->PALNTSC ? "VERT 240p   " : "VERT 288p   ";
             }
             int j;
             for(j = 0; j < 12; j++){ modeTb->text[6 + j] = label[j]; }
@@ -693,16 +698,17 @@ void AudioBalanceTest(void){
 
     settings->fadeToColor = 0x0000;
 
-    textBox *titleTb = newTextBox("AUDIO L/R BALANCE", 192, 9, mainFont, 0, settings->d, 80, 64, 13, 1);
+    int palY = settings->PALOffset;
+    textBox *titleTb = newTextBox("AUDIO L/R BALANCE", 192, 9, mainFont, 0, settings->d, 80, 64 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *stateTb = newTextBox("CHANNEL: CENTER ", 192, 9, mainFont, 0, settings->d, 80, 96, 13, 1);
+    textBox *stateTb = newTextBox("CHANNEL: CENTER ", 192, 9, mainFont, 0, settings->d, 80, 96 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
-    textBox *toneTb  = newTextBox("TONE: OFF       ", 192, 9, mainFont, 0, settings->d, 80, 112, 13, 1);
+    textBox *toneTb  = newTextBox("TONE: OFF       ", 192, 9, mainFont, 0, settings->d, 80, 112 + palY, 13, 1);
     updateLine(settings, mainFont, toneTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb = newTextBox("A: change channel  B: tone  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
+    textBox *helpTb = newTextBox("A: change channel  B: tone  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -821,10 +827,35 @@ void HardwareInfo(void){
     }
     updateLine(settings, mainFont, ramTb, NULL, 999999, 999999, WHITE);
 
-    textBox *cpuTb = newTextBox("CPU     : 68000 @ 13.3 MHz", 256, 9, mainFont, 0, settings->d, 64, 128, 13, 1);
+    textBox *vdpTb  = newTextBox("VP=000 VDB=000 VDE=000", 192, 9, mainFont, 0, settings->d, 64, 128, 13, 1);
+    {
+        uint16_t vp  = TOMREGS->vp;
+        uint16_t vdb = TOMREGS->vdb;
+        uint16_t vde = TOMREGS->vde;
+        char nb[6];
+        int n, p2, k2;
+
+        itostring(nb, (int)vp, 10);
+        n = 0; while(nb[n] && n < 3) n++;
+        for(p2 = 0; p2 < 3; p2++) vdpTb->text[3 + p2] = ' ';
+        for(k2 = 0; k2 < n; k2++) vdpTb->text[3 + (3 - n) + k2] = nb[k2];
+
+        itostring(nb, (int)vdb, 10);
+        n = 0; while(nb[n] && n < 3) n++;
+        for(p2 = 0; p2 < 3; p2++) vdpTb->text[11 + p2] = ' ';
+        for(k2 = 0; k2 < n; k2++) vdpTb->text[11 + (3 - n) + k2] = nb[k2];
+
+        itostring(nb, (int)vde, 10);
+        n = 0; while(nb[n] && n < 3) n++;
+        for(p2 = 0; p2 < 3; p2++) vdpTb->text[19 + p2] = ' ';
+        for(k2 = 0; k2 < n; k2++) vdpTb->text[19 + (3 - n) + k2] = nb[k2];
+    }
+    updateLine(settings, mainFont, vdpTb, NULL, 999999, 999999, WHITE);
+
+    textBox *cpuTb = newTextBox("CPU     : 68000 @ 13.3 MHz", 256, 9, mainFont, 0, settings->d, 64, 144, 13, 1);
     updateLine(settings, mainFont, cpuTb, NULL, 999999, 999999, WHITE);
 
-    textBox *gpuTb = newTextBox("GPU/DSP : RISC @ 26.6 MHz", 256, 9, mainFont, 0, settings->d, 64, 144, 13, 1);
+    textBox *gpuTb = newTextBox("GPU/DSP : RISC @ 26.6 MHz", 256, 9, mainFont, 0, settings->d, 64, 160, 13, 1);
     updateLine(settings, mainFont, gpuTb, NULL, 999999, 999999, WHITE);
 
     textBox *helpTb = newTextBox("OPTION: exit", 128, 9, mainFont, 0, settings->d, 96, 192, 13, 1);
@@ -850,6 +881,7 @@ void HardwareInfo(void){
     helpTb   = freeTextBox(helpTb);
     gpuTb    = freeTextBox(gpuTb);
     cpuTb    = freeTextBox(cpuTb);
+    vdpTb    = freeTextBox(vdpTb);
     ramTb    = freeTextBox(ramTb);
     vmodeTb  = freeTextBox(vmodeTb);
     regionTb = freeTextBox(regionTb);
@@ -1418,7 +1450,7 @@ void ResolutionTest(void){
     textBox *pwTb      = newTextBox("PWIDTH : 4 320 native       ", 256, 9, mainFont, 0, settings->d, 32, 104, 13, 1);
     textBox *vmodeTb   = newTextBox("VMODE  : 0x0000             ", 256, 9, mainFont, 0, settings->d, 32, 120, 13, 1);
     textBox *geomTb    = newTextBox("GEOM   : 320x000            ", 256, 9, mainFont, 0, settings->d, 32, 136, 13, 1);
-    textBox *regsTb    = newTextBox("VP=000 HP=000               ", 256, 9, mainFont, 0, settings->d, 32, 152, 13, 1);
+    textBox *regsTb    = newTextBox("VP=000 HP=000 VDB=000 VDE=000", 256, 9, mainFont, 0, settings->d, 32, 152, 13, 1);
     textBox *recenTb   = newTextBox("RECENTER: OFF               ", 256, 9, mainFont, 0, settings->d, 32, 168, 13, 1);
 
     textBox *help1Tb   = newTextBox("UP/DOWN: PWIDTH   LEFT/RIGHT: format", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
@@ -1501,6 +1533,19 @@ void ResolutionTest(void){
             int hpn = 0; while(buf[hpn] != '\0' && hpn < 3) hpn++;
             for(p = 0; p < 3; p++){ regsTb->text[10 + p] = ' '; }
             for(k = 0; k < hpn; k++){ regsTb->text[10 + (3 - hpn) + k] = buf[k]; }
+
+            uint16_t vdbReg = TOMREGS->vdb;
+            uint16_t vdeReg = TOMREGS->vde;
+            buf[0] = '\0';
+            itostring(buf, (int)vdbReg, 10);
+            int vdbn = 0; while(buf[vdbn] != '\0' && vdbn < 3) vdbn++;
+            for(p = 0; p < 3; p++){ regsTb->text[18 + p] = ' '; }
+            for(k = 0; k < vdbn; k++){ regsTb->text[18 + (3 - vdbn) + k] = buf[k]; }
+            buf[0] = '\0';
+            itostring(buf, (int)vdeReg, 10);
+            int vden = 0; while(buf[vden] != '\0' && vden < 3) vden++;
+            for(p = 0; p < 3; p++){ regsTb->text[26 + p] = ' '; }
+            for(k = 0; k < vden; k++){ regsTb->text[26 + (3 - vden) + k] = buf[k]; }
             updateLine(settings, mainFont, regsTb, NULL, 999999, 999999, WHITE);
 
             /// RECENTER row -- show state and the actual display->x being used.
@@ -1590,18 +1635,14 @@ void ResolutionTest(void){
 /* ---------------------------------------------------------------------------
  * Options menu
  *
- * Replaces the (x)Options stubs that appeared in every sub-menu. For now the
- * options surface is intentionally narrow but real -- we expose a master
- * audio volume that's wired into the global settings and shown on screen.
- * Future options (PAL/NTSC override, scanline test mode, controller layout)
- * can be added here without touching the menu plumbing in main.c.
+ * Two rows: master audio volume (0..63) and region override (AUTO / NTSC /
+ * PAL). UP/DOWN selects the row, LEFT/RIGHT adjusts the value. The region
+ * override rewrites PALNTSC + PALOffset immediately via applyRegionOverride()
+ * so subsequent tests pick up the forced region. Sprite allocations made at
+ * boot time are not resized -- the override is most useful on emulators
+ * where the hardware strap may not match the user's display.
  * --------------------------------------------------------------------------- */
 void OptionsMenu(void){
-    /* Read/write the shared master volume directly so the value survives
-     * across OptionsMenu invocations *and* is visible to every audio test
-     * (AudioBalanceTest, MDFourierTest, SoundTest, etc) the next time they
-     * call set_voice(). No private static -- the previous static-local copy
-     * was the bug Qodo + Copilot flagged. */
     int exit = 0;
     int redraw = 1;
     int sel = 0;
@@ -1609,10 +1650,13 @@ void OptionsMenu(void){
     textBox *titleTb = newTextBox("OPTIONS", 128, 9, mainFont, 0, settings->d, 116, 48, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *volTb   = newTextBox("AUDIO VOLUME : 63", 192, 9, mainFont, 0, settings->d, 64, 96, 13, 1);
+    textBox *volTb   = newTextBox("AUDIO VOLUME : 63", 192, 9, mainFont, 0, settings->d, 64, 88, 13, 1);
     updateLine(settings, mainFont, volTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb  = newTextBox("LEFT/RIGHT: change   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 192, 13, 1);
+    textBox *regTb   = newTextBox("REGION : AUTO (NTSC)", 192, 9, mainFont, 0, settings->d, 64, 104, 13, 1);
+    updateLine(settings, mainFont, regTb, NULL, 999999, 999999, WHITE);
+
+    textBox *helpTb  = newTextBox("UP/DN: select  L/R: change  OPT: exit", 256, 9, mainFont, 0, settings->d, 16, 192, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -1631,6 +1675,27 @@ void OptionsMenu(void){
             int j;
             for(j = 0; j < len; j++) volTb->text[15 + (2 - len) + j] = nbuf[j];
             updateLine(settings, mainFont, volTb, NULL, 999999, 999999, sel == 0 ? RED : WHITE);
+
+            {
+                const char *lbl;
+                if(settings->regionOverride == 0){
+                    if((JERRYREGS->joy2 & 0x10))
+                        lbl = "REGION : AUTO (NTSC)";
+                    else
+                        lbl = "REGION : AUTO (PAL) ";
+                } else if(settings->regionOverride == 1){
+                    lbl = "REGION : NTSC       ";
+                } else {
+                    lbl = "REGION : PAL        ";
+                }
+                int k;
+                for(k = 0; lbl[k] != '\0' && k < regTb->char_count; k++)
+                    regTb->text[k] = lbl[k];
+                for(; k < regTb->char_count; k++)
+                    regTb->text[k] = ' ';
+            }
+            updateLine(settings, mainFont, regTb, NULL, 999999, 999999, sel == 1 ? RED : WHITE);
+
             redraw = 0;
         }
 
@@ -1638,13 +1703,36 @@ void OptionsMenu(void){
             settings->controllerLock = 0;
         }
 
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            if(sel > 0){ sel--; redraw = 1; }
+        }
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            if(sel < 1){ sel++; redraw = 1; }
+        }
+
         if((settings->joy1 & JOYPAD_LEFT) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            if(settings->masterVolume > 0){ settings->masterVolume--; redraw = 1; }
+            if(sel == 0){
+                if(settings->masterVolume > 0){ settings->masterVolume--; redraw = 1; }
+            } else {
+                if(settings->regionOverride > 0) settings->regionOverride--;
+                else settings->regionOverride = 2;
+                applyRegionOverride(settings);
+                redraw = 1;
+            }
         }
         if((settings->joy1 & JOYPAD_RIGHT) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            if(settings->masterVolume < 63){ settings->masterVolume++; redraw = 1; }
+            if(sel == 0){
+                if(settings->masterVolume < 63){ settings->masterVolume++; redraw = 1; }
+            } else {
+                if(settings->regionOverride < 2) settings->regionOverride++;
+                else settings->regionOverride = 0;
+                applyRegionOverride(settings);
+                redraw = 1;
+            }
         }
         if(extraExitPressed()){
             settings->controllerLock = 1;
@@ -1654,6 +1742,7 @@ void OptionsMenu(void){
 
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb  = freeTextBox(helpTb);
+    regTb   = freeTextBox(regTb);
     volTb   = freeTextBox(volTb);
     titleTb = freeTextBox(titleTb);
 }
@@ -1689,6 +1778,7 @@ void MDFourierTest(void){
     int playing = 0;        /* sweep auto-advancing or idle */
     int tone = 0;           /* current index into sweepFreq[] */
     int holdFrames = 0;     /* frames remaining on current tone in auto mode */
+    const int holdDuration = settings->PALNTSC ? 60 : 50;
     int i, ii;
 
     /* 128-sample wavetable replicated 75x so the voice loop covers ~1s of
@@ -1705,19 +1795,20 @@ void MDFourierTest(void){
 
     settings->fadeToColor = 0x0000;
 
-    textBox *titleTb = newTextBox("MDFOURIER SWEEP", 192, 9, mainFont, 0, settings->d, 80, 48, 13, 1);
+    int palY = settings->PALOffset;
+    textBox *titleTb = newTextBox("MDFOURIER SWEEP", 192, 9, mainFont, 0, settings->d, 80, 48 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *toneTb  = newTextBox("TONE 1/7  : 65Hz   ", 192, 9, mainFont, 0, settings->d, 64, 88, 13, 1);
+    textBox *toneTb  = newTextBox("TONE 1/7  : 65Hz   ", 192, 9, mainFont, 0, settings->d, 64, 88 + palY, 13, 1);
     updateLine(settings, mainFont, toneTb, NULL, 999999, 999999, WHITE);
 
-    textBox *stateTb = newTextBox("STATE     : IDLE   ", 192, 9, mainFont, 0, settings->d, 64, 104, 13, 1);
+    textBox *stateTb = newTextBox("STATE     : IDLE   ", 192, 9, mainFont, 0, settings->d, 64, 104 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb  = newTextBox("A: play/pause  B: next  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
+    textBox *helpTb  = newTextBox("A: play/pause  B: next  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
-    textBox *infoTb  = newTextBox("Capture line-out then run MDFourier", 256, 9, mainFont, 0, settings->d, 24, 200, 13, 1);
+    textBox *infoTb  = newTextBox("Capture line-out then run MDFourier", 256, 9, mainFont, 0, settings->d, 24, 200 + palY, 13, 1);
     updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -1738,7 +1829,7 @@ void MDFourierTest(void){
                     tone = 0;
                     playing = 0;        /* sweep complete -- stop auto-advance */
                 }
-                holdFrames = 60;
+                holdFrames = holdDuration;
                 redraw = 1;
             }
         }
@@ -1776,14 +1867,14 @@ void MDFourierTest(void){
         if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
             settings->controllerLock = 1;
             playing = !playing;
-            holdFrames = 60;
+            holdFrames = holdDuration;
             redraw = 1;
         }
 
         if((settings->joy1 & JOYPAD_B) && settings->controllerLock == 0){
             settings->controllerLock = 1;
             tone = (tone + 1) % sweepCount;
-            holdFrames = 60;
+            holdFrames = holdDuration;
             redraw = 1;
         }
 
@@ -2290,7 +2381,7 @@ void ScrollingBarsSaver(void){
  * the rest of the colour-bar suite.
  * --------------------------------------------------------------------------- */
 void DrawYCDelay(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     /* 6 colour strips on a black background, each strip flanked by a 1-pixel
      * white divider. Width chosen so chroma fringing has room to develop
      * across a typical CRT's PAL/NTSC chroma-delay window without strips
@@ -2323,7 +2414,7 @@ void DrawYCDelay(void){
     rectPACK_RGB16(buf, W, xStart + STRIP_COUNT * (STRIP_W + 1), 16, 1, H - 32, COLOR_WHITE);
 
     {
-        sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+        sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
         s->trans = 0;
         attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -2371,7 +2462,7 @@ void DrawYCDelay(void){
  *   OPTION          -- exit
  * --------------------------------------------------------------------------- */
 void DrawDiagonal(void){
-    const int W = 320, H = 240;
+    const int W = 320, H = settings->PALNTSC ? 240 : 288;
     static const int SPACINGS[4] = { 4, 8, 16, 32 };
     int spacingIdx = 1;        /* default 8 px to match upstream canonical */
     int invert = 0;
@@ -2390,7 +2481,7 @@ void DrawDiagonal(void){
      * the real diagonals on the first loop iteration. */
     fillPACK_RGB16(buf, W * H, COLOR_BLACK);
 
-    s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -2555,8 +2646,8 @@ static void vertScrollFillBuffer(uint16_t *buf, int W, int H, int BUF_H){
 
 void VertScrollTest(void){
     const int W = 320;
-    const int H = 240;
-    const int BUF_H = 480;
+    const int H = settings->PALNTSC ? 240 : 288;
+    const int BUF_H = H * 2;
 
     int exit = 0;
     int paused = 0;
@@ -2575,7 +2666,7 @@ void VertScrollTest(void){
     fillPACK_RGB16(buf, W * BUF_H, COLOR_BLACK);
     vertScrollFillBuffer(buf, W, H, BUF_H);
 
-    s = new_sprite(W, BUF_H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    s = new_sprite(W, BUF_H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -2593,7 +2684,7 @@ void VertScrollTest(void){
             yOff += dir * speed;
             if(yOff <= -H) yOff += H;
             if(yOff > 0)   yOff -= H;
-            s->y = yOff + settings->PALOffset;
+            s->y = yOff;
         }
 
         if(needLabel){
@@ -2797,9 +2888,11 @@ static void runNoiseTest(int16_t *buf, const char *title, int helpId){
 
     settings->fadeToColor = 0x0000;
 
+    int palY = settings->PALOffset;
+
     /* Title -- pre-sized for the longest runtime string we emit. */
     textBox *titleTb = newTextBox("CHANNEL SEPARATION TEST ", 256, 9, mainFont, 0,
-                                   settings->d, 48, 64, 13, 1);
+                                   settings->d, 48, 64 + palY, 13, 1);
     /* Copy the runtime title into the worst-case-sized buffer so we don't
      * realloc tb->text every redraw. Once we hit the source NUL we switch
      * to space padding -- reading past the literal's NUL would be UB on
@@ -2819,19 +2912,19 @@ static void runNoiseTest(int16_t *buf, const char *title, int helpId){
      * doesn't grow tb->text when the new text is longer; we patch in-place
      * so the trailing char must always be the '\0' the engine relies on. */
     textBox *stateTb = newTextBox("STATE   : IDLE    ", 192, 9, mainFont, 0,
-                                   settings->d, 80, 96, 13, 1);
+                                   settings->d, 80, 96 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
     textBox *channelTb = newTextBox("CHANNEL : BOTH   ", 192, 9, mainFont, 0,
-                                     settings->d, 80, 112, 13, 1);
+                                     settings->d, 80, 112 + palY, 13, 1);
     updateLine(settings, mainFont, channelTb, NULL, 999999, 999999, WHITE);
 
     textBox *helpTb = newTextBox("A: play/pause  B: cycle channel  OPTION:exit", 320, 9, mainFont, 0,
-                                  settings->d, 0, 184, 13, 1);
+                                  settings->d, 0, 184 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     textBox *infoTb = newTextBox("Mute one channel to verify L/R isolation", 320, 9, mainFont, 0,
-                                  settings->d, 0, 200, 13, 1);
+                                  settings->d, 0, 200 + palY, 13, 1);
     updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -3014,8 +3107,9 @@ void ChannelSeparationTest(void){
 
     settings->fadeToColor = 0x0000;
 
+    int palY = settings->PALOffset;
     textBox *titleTb = newTextBox("L/R CHANNEL SEPARATION", 256, 9, mainFont, 0,
-                                   settings->d, 32, 56, 13, 1);
+                                   settings->d, 32, 56 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
     /* Worst-case state string: "BOTH (180 OUT-OF-PHASE)" = 23 chars at the
@@ -3025,23 +3119,23 @@ void ChannelSeparationTest(void){
      * grow tb->text after construction. 320-px box keeps us inside the
      * phrase-aligned width ladder. */
     textBox *stateTb = newTextBox("STATE   : BOTH (180 OUT-OF-PHASE) ", 320, 9, mainFont, 0,
-                                   settings->d, 0, 88, 13, 1);
+                                   settings->d, 0, 88 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
     textBox *playTb  = newTextBox("PLAYING : OFF  ", 192, 9, mainFont, 0,
-                                   settings->d, 80, 104, 13, 1);
+                                   settings->d, 80, 104 + palY, 13, 1);
     updateLine(settings, mainFont, playTb, NULL, 999999, 999999, WHITE);
 
     textBox *help1Tb = newTextBox("UP:LEFT  DOWN:RIGHT  LEFT:BOTH  RIGHT:OUT-PHASE", 320, 9, mainFont, 0,
-                                   settings->d, 0, 168, 13, 1);
+                                   settings->d, 0, 168 + palY, 13, 1);
     updateLine(settings, mainFont, help1Tb, NULL, 999999, 999999, GREY);
 
     textBox *help2Tb = newTextBox("A: play/pause   OPTION: exit", 256, 9, mainFont, 0,
-                                   settings->d, 32, 184, 13, 1);
+                                   settings->d, 32, 184 + palY, 13, 1);
     updateLine(settings, mainFont, help2Tb, NULL, 999999, 999999, GREY);
 
     textBox *infoTb  = newTextBox("Verify L and R outputs are not crossed/mono'd", 320, 9, mainFont, 0,
-                                   settings->d, 0, 200, 13, 1);
+                                   settings->d, 0, 200 + palY, 13, 1);
     updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);

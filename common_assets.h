@@ -88,6 +88,9 @@ typedef struct {
      * matches the previous hardcoded VOICE_VOLUME(63) behavior so existing
      * tests sound identical until the user turns it down. */
     int masterVolume;
+
+    /* 0 = auto-detect (hardware strap), 1 = force NTSC, 2 = force PAL */
+    int regionOverride;
     
     //line options
     int linePos;
@@ -100,6 +103,7 @@ typedef struct {
 
 globalSettings *settings;
 globalSettings *initGlobalSettings();
+void applyRegionOverride(globalSettings *s);
 
 void fadeBGColor(globalSettings *s, int speed);
 
