@@ -960,6 +960,7 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
         { JOYPAD_PAUSE,  56, 112, 40, 24 },
         { JOYPAD_OPTION, 56, 144, 40, 24 },
     };
+#define PAD_COUNT ((int)(sizeof(pads)/sizeof(pads[0])))
     /// Full-width DEPTH16 framebuffer so every pad in `pads[]` (including
     /// the R shoulder at x=264..303) fits without OOB writes -- rectPACK_RGB16
     /// does no clipping, and a previous 256-wide / fbX=32 layout corrupted
@@ -985,9 +986,9 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
     /// Avoids the full 320*144 = 92 KB per-frame clear that exceeds NTSC's
     /// ~1.4 ms vblank window and causes visible tearing of the pad borders.
     fillPACK_RGB16(fb, 320*144, COLOR_BLACK);
-    for(i = 0; i < 10; i++){
+    for(i = 0; i < PAD_COUNT; i++){
         int rx = pads[i].x;
-        int ry = pads[i].y - (64 + palY);
+        int ry = pads[i].y - 64;
         rectPACK_RGB16(fb, 320, rx, ry,             pads[i].w, 1,         COLOR_WHITE);
         rectPACK_RGB16(fb, 320, rx, ry+pads[i].h-1, pads[i].w, 1,         COLOR_WHITE);
         rectPACK_RGB16(fb, 320, rx, ry,             1,         pads[i].h, COLOR_WHITE);
@@ -1001,7 +1002,7 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
     /// so every pad gets one explicit interior-fill on the first frame
     /// regardless of whether the user is holding it.
     int padLit[16];
-    for(i = 0; i < 10; i++){ padLit[i] = -1; }
+    for(i = 0; i < PAD_COUNT; i++){ padLit[i] = -1; }
 
     uint32_t prevJoy = ~settings->joy1;
 
@@ -1014,12 +1015,12 @@ void __attribute__((optimize("O1"))) ProControllerTest(void){
         /// Reduces the steady-state cost (held/idle button) to ~zero so
         /// the OP never sees a partial fb during scanout.
         if(settings->joy1 != prevJoy){
-            for(i = 0; i < 10; i++){
+            for(i = 0; i < PAD_COUNT; i++){
                 int held = (settings->joy1 & pads[i].mask) ? 1 : 0;
                 if(held == padLit[i]){ continue; }
                 padLit[i] = held;
                 int rx = pads[i].x;
-                int ry = pads[i].y - (64 + palY);
+                int ry = pads[i].y - 64;
                 uint16_t bg = held ? COLOR_GREEN : COLOR_GRAY25;
                 rectPACK_RGB16(fb, 320, rx+1, ry+1, pads[i].w-2, pads[i].h-2, bg);
             }
