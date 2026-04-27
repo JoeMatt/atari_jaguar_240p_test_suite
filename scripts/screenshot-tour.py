@@ -221,6 +221,26 @@ TOUR: list[TourGroup] = [
         ],
     ),
     TourGroup(
+        slug="cd-probe",
+        title="Jaguar CD Probe",
+        steps=[
+            ## Hardware Tools sub-menu, walk DOWN x7 to land on
+            ## "Jaguar CD Probe" (case 8). Capture the probe screen,
+            ## then press A to enter Memory Track Test (layer 12) and
+            ## capture that too -- verifies neither screen bleeds into
+            ## the other.
+            *_boot(),
+            *_open_main_item(3),
+            *(s for _ in range(7) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            _capture("cd-probe", "Jaguar CD Probe register view"),
+            _press("a"),
+            _settle(),
+            _capture("memory-track", "Memory Track Test (from CD Probe)"),
+        ],
+    ),
+    TourGroup(
         slug="sprite-stress",
         title="Sprite stress test",
         steps=[

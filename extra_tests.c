@@ -2161,11 +2161,11 @@ void MemoryTrackTest(void){
     }
 
     titleTb = newTextBox("MEMORY TRACK TEST (93C46 64x16)      ", 320, 9, mainFont, 0,
-                          settings->d, 0, 8 + settings->PALOffset, 13, 1);
+                          settings->d, 0, 8 + settings->PALOffset, 12, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
     cdStatusTb = newTextBox("CD: NOT DETECTED (testing cart EEPROM)", 320, 9, mainFont, 0,
-                             settings->d, 0, 22 + settings->PALOffset, 13, 1);
+                             settings->d, 0, 22 + settings->PALOffset, 12, 1);
     if(cdDetected){
         updateLine(settings, mainFont, cdStatusTb, "CD: DETECTED (testing Memory Track)  ", 999999, 999999, GREEN);
     } else {
@@ -2173,26 +2173,28 @@ void MemoryTrackTest(void){
     }
 
     statusTb = newTextBox("WARN: restore failed at 0xFF -- check save data", 320, 9, mainFont, 0,
-                          settings->d, 0, 36 + settings->PALOffset, 13, 1);
+                          settings->d, 0, 36 + settings->PALOffset, 12, 1);
     updateLine(settings, mainFont, statusTb, "STATUS: idle (press A or X)", 999999, 999999, GREY);
 
     cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000", 320, 9, mainFont, 0,
-                          settings->d, 0, 50 + settings->PALOffset, 13, 1);
+                          settings->d, 0, 50 + settings->PALOffset, 12, 1);
 
     for(row = 0; row < EE_GRID_ROWS; row++){
         gridTb[row] = newTextBox("00: 0000 0000 0000 0000 0000 0000 0000 0000", 320, 9, mainFont, 0,
-                                 settings->d, 0, 68 + row * 14 + settings->PALOffset, 13, 1);
+                                 settings->d, 0, 68 + row * 14 + settings->PALOffset, 12, 1);
     }
 
     helpTb1 = newTextBox("D-PAD move  A walk-1s  X addr-as-data",
                          320, 9, mainFont, 0,
-                         settings->d, 0, 184 + settings->PALOffset, 13, 1);
+                         settings->d, 0, 184 + settings->PALOffset, 12, 1);
     updateLine(settings, mainFont, helpTb1, NULL, 999999, 999999, GREY);
 
     helpTb2 = newTextBox("B re-read  Y erase  DOWN+OPT help  OPT exit",
                          320, 9, mainFont, 0,
-                         settings->d, 0, 196 + settings->PALOffset, 13, 1);
+                         settings->d, 0, 196 + settings->PALOffset, 12, 1);
     updateLine(settings, mainFont, helpTb2, NULL, 999999, 999999, GREY);
+
+    hide_or_show_display_layer_range(settings->d, 1, 12, 12);
 
     while(!exit_test){
         read_joypad_state(settings->j_state);
@@ -2388,6 +2390,7 @@ void MemoryTrackTest(void){
         }
     }
 
+    hide_or_show_display_layer_range(settings->d, 0, 12, 12);
     helpTb2    = freeTextBox(helpTb2);
     helpTb1    = freeTextBox(helpTb1);
     for(row = EE_GRID_ROWS - 1; row >= 0; row--){
