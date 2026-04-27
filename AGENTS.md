@@ -43,7 +43,7 @@ or substantially rewritten by this fork:
 | Test Patterns | More Patterns sub-menu (Color Bars w/ Gray, Linearity, Phase, Brightness, Contrast) |
 | Video Tests | Striped Sprite, Manual Lag Test, Alternate 240p/480i |
 | Audio Tests | L/R Balance + 1 kHz Tone, MDFourier Sweep |
-| Hardware Tools | Pro Controller Test, Rotary Controller Test, System Info, Jaguar CD Probe, Video Mode Test (Resolution Switching), EEPROM Read & Write Test (93C46) |
+| Hardware Tools | Pro Controller Test, Rotary Controller Test, System Info, Jaguar CD Probe, Video Mode Test (Resolution Switching), EEPROM Read & Write Test (93C46), JagLink Test |
 | Screen Savers | Color Cycle, Bouncing Square, Scrolling Bars |
 
 Procedurally generated wherever possible (see `extra_tests.c`,
