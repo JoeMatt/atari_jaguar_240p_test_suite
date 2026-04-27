@@ -2037,7 +2037,7 @@ void JaguarCDTest(void){
     textBox *hTb  = newTextBox("$800002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 156 + settings->PALOffset, 13, 1);
     textBox *biosTb = newTextBox("BIOS    : NOT FOUND       ", 256, 9, mainFont, 0, settings->d, 48, 170 + settings->PALOffset, 13, 1);
     textBox *noteTb = newTextBox("LIVE/frm: hex refresh  0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 186 + settings->PALOffset, 13, 1);
-    textBox *helpTb = newTextBox("DOWN+OPTION: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 204 + settings->PALOffset, 13, 1);
+    textBox *helpTb = newTextBox("A: Memory Track  DOWN+OPT: help  OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 204 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
     extraHighlightJagCdFooterLine(helpTb);
@@ -2063,6 +2063,12 @@ void JaguarCDTest(void){
         if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
             settings->controllerLock = 1;
             DrawHelp(HELP_JAGUAR_CD);
+        }
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+            MemoryTrackTest();
+            hide_or_show_display_layer_range(settings->d, 1, 3, 15);
         }
         if(extraExitPressed()){
             settings->controllerLock = 1;

@@ -639,7 +639,7 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "JAGUAR CD PROBE", 999999, 999999, GREEN);
 
-                            updateLine(settings, mainFont, helpTextBox, "Probes 16-bit words in the Butch (CD) ASIC ($F14000-$F1400A) and the CD boot ROM window ($800000-$800002). On a base Jaguar these read 0x0000 or 0xFFFF (open bus).^If any word returns a different value the heuristic reports DETECTED. The BIOS line shows FOUND when the CD boot ROM window contains non-open-bus data.^Values refresh every frame for real-time monitoring.^^DOWN+OPTION: this help.   OPTION: exit", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "Probes 16-bit words in the Butch (CD) ASIC ($F14000-$F1400A) and the CD boot ROM window ($800000-$800002). On a base Jaguar these read 0x0000 or 0xFFFF (open bus).^If any word returns a different value the heuristic reports DETECTED. The BIOS line shows FOUND when the CD boot ROM window contains non-open-bus data.^Values refresh every frame for real-time monitoring.^^A: Memory Track EEPROM test^DOWN+OPTION: this help   OPTION: exit", 999999, 999999, WHITE);
                             highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
                         break;
                     }
