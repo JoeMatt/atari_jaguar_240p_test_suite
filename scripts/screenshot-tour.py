@@ -259,6 +259,23 @@ TOUR: list[TourGroup] = [
         ],
     ),
     TourGroup(
+        slug="jaglink",
+        title="JagLink test",
+        steps=[
+            ## Hardware Tools sub-menu, walk DOWN x11 to land on
+            ## "JagLink Test" (lineTextBox[12], case 12). The test
+            ## probes Jerry UART registers -- on a base Jaguar (and
+            ## emulators) all three read 0x0000/0xFFFF so status shows
+            ## NOT DETECTED, which is the expected screenshot.
+            *_boot(),
+            *_open_main_item(3),
+            *(s for _ in range(11) for s in (_press("down"), _settle(8))),
+            _press("a"),
+            _settle(),
+            _capture("jaglink-probe", "JagLink Test (Jerry UART probe)"),
+        ],
+    ),
+    TourGroup(
         slug="ycdelay",
         title="Y/C delay pattern",
         steps=[

@@ -1945,6 +1945,28 @@ static void extraHighlightJagCdFooterLine(textBox *tb){
     textRangeColorChange(tb, start, plen, GREY, GREEN);
 }
 
+static void jagSetHex2(textBox *tb, char *buf, uint8_t v){
+    int n, i, hexStart, cmax;
+    if(tb == NULL || tb->text == NULL){ return; }
+    itostring(buf, (int)v, 16);
+    n = 0;
+    while(buf[n] != '\0' && n < 2) n++;
+    cmax = tb->char_count;
+    hexStart = 10;
+    {
+        int j = 0;
+        while(j < cmax && tb->text[j] != '\0' && tb->text[j] != ':') j++;
+        if(j < cmax && tb->text[j] == ':'){
+            j++;
+            while(j < cmax && tb->text[j] == ' ') j++;
+            if(j + 2 <= cmax) hexStart = j;
+        }
+    }
+    if(hexStart + 2 > cmax) return;
+    for(i = 0; i < 2 - n; i++) tb->text[hexStart + i] = '0';
+    for(i = 0; i < n; i++) tb->text[hexStart + (2 - n) + i] = buf[i];
+}
+
 static void jagCdSetHex4(textBox *tb, char *buf, uint16_t v){
     int n, i, pad, j, hexStart, cmax;
     if(tb == NULL || tb->text == NULL){ return; }
@@ -2406,6 +2428,156 @@ void MemoryTrackTest(void){
     statusTb   = freeTextBox(statusTb);
     cdStatusTb = freeTextBox(cdStatusTb);
     titleTb    = freeTextBox(titleTb);
+}
+
+/* ---------------------------------------------------------------------------
+ * JagLink Test — Jerry UART register probe + loopback
+ *
+ * The JagLink network adapter uses Jerry's asynchronous serial interface:
+ *   ASIDATA  $F10030  — transmit/receive data (active bits vary by mode)
+ *   ASICTRL  $F10032  — control and status register
+ *   ASICLK   $F10034  — baud-rate clock divider
+ *
+ * All three are 16-bit registers on the Jerry bus (confirmed by VJ source).
+ * On a base Jaguar with nothing connected they read 0x0000 or 0xFFFF
+ * (open bus). Any other value suggests a JagLink or compatible serial
+ * device is present. The loopback sub-test writes 0xA5 into the data
+ * byte and reads it back after a short spin to check basic TX→RX wiring.
+ * --------------------------------------------------------------------------- */
+void JagLinkTest(void){
+    int exit = 0;
+    int loopbackRun = 0;
+    int loopbackPass = 0;
+    uint8_t txByte = 0xA5;
+    uint8_t rxByte = 0x00;
+    char buf[12] = "00000000\0";
+    int i;
+    int detected;
+
+    int palY = settings->PALOffset;
+
+    volatile uint16_t *asidata = (volatile uint16_t *)0xF10030;
+    volatile uint16_t *asictrl = (volatile uint16_t *)0xF10032;
+    volatile uint16_t *asiclk  = (volatile uint16_t *)0xF10034;
+
+    uint16_t vData, vCtrl, vClk;
+
+    textBox *titleTb  = newTextBox("JAGLINK TEST       ", 192, 9, mainFont, 0, settings->d, 80, 24 + palY, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    textBox *statusTb = newTextBox("STATUS  : NOT DETECTED  ", 256, 9, mainFont, 0, settings->d, 48, 44 + palY, 13, 1);
+    textBox *dataTb   = newTextBox("ASIDATA : 0000 ($F10030)", 256, 9, mainFont, 0, settings->d, 48, 62 + palY, 13, 1);
+    textBox *ctrlTb   = newTextBox("ASICTRL : 0000 ($F10032)", 256, 9, mainFont, 0, settings->d, 48, 76 + palY, 13, 1);
+    textBox *clkTb    = newTextBox("ASICLK  : 0000 ($F10034)", 256, 9, mainFont, 0, settings->d, 48, 90 + palY, 13, 1);
+
+    textBox *loopTitleTb = newTextBox("LOOPBACK TEST            ", 256, 9, mainFont, 0, settings->d, 48, 114 + palY, 13, 1);
+    textBox *loopTxTb    = newTextBox("TX BYTE : A5             ", 256, 9, mainFont, 0, settings->d, 48, 128 + palY, 13, 1);
+    textBox *loopRxTb    = newTextBox("RX BYTE : --             ", 256, 9, mainFont, 0, settings->d, 48, 142 + palY, 13, 1);
+    textBox *loopResTb   = newTextBox("RESULT  : not run           ", 256, 9, mainFont, 0, settings->d, 48, 156 + palY, 13, 1);
+
+    textBox *noteTb = newTextBox("LIVE/frm: hex refresh 0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 186 + palY, 13, 1);
+    textBox *helpTb = newTextBox("A: loopback  DOWN+OPTION: help  OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 204 + palY, 13, 1);
+    updateLine(settings, mainFont, loopTitleTb, NULL, 999999, 999999, GREEN);
+    updateLine(settings, mainFont, loopTxTb, NULL, 999999, 999999, WHITE);
+    updateLine(settings, mainFont, loopRxTb, NULL, 999999, 999999, WHITE);
+    updateLine(settings, mainFont, loopResTb, NULL, 999999, 999999, GREY);
+    updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
+    updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
+    extraHighlightJagCdFooterLine(helpTb);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vData = *asidata;
+        vCtrl = *asictrl;
+        vClk  = *asiclk;
+        vsync();
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+        if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            DrawHelp(HELP_JAGLINK_TEST);
+        }
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            uint16_t savedClk, savedCtrl;
+            settings->controllerLock = 1;
+
+            savedClk  = *asiclk;
+            savedCtrl = *asictrl;
+
+            *asiclk  = 0x0002;
+            *asictrl = 0x0001;
+            *asidata = (uint16_t)txByte;
+
+            for(i = 0; i < 2000; i++){
+                __asm__ volatile("nop");
+            }
+
+            rxByte = (uint8_t)(*asidata & 0xFF);
+            loopbackRun = 1;
+            loopbackPass = (rxByte == txByte) ? 1 : 0;
+
+            *asictrl = savedCtrl;
+            *asiclk  = savedClk;
+        }
+        if(extraExitPressed()){
+            settings->controllerLock = 1;
+            exit = 1;
+        }
+
+        detected = 0;
+        if(vData != 0x0000U && vData != 0xFFFFU) detected = 1;
+        if(vCtrl != 0x0000U && vCtrl != 0xFFFFU) detected = 1;
+        if(vClk  != 0x0000U && vClk  != 0xFFFFU) detected = 1;
+
+        if(detected){
+            const char *yes = "DETECTED      ";
+            for(i = 0; i < 14; i++){ statusTb->text[10 + i] = yes[i]; }
+        } else {
+            const char *no = "NOT DETECTED  ";
+            for(i = 0; i < 14; i++){ statusTb->text[10 + i] = no[i]; }
+        }
+        updateLine(settings, mainFont, statusTb, NULL, 999999, 999999, detected ? GREEN : RED);
+
+        jagCdSetHex4(dataTb, buf, vData);
+        updateLine(settings, mainFont, dataTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(ctrlTb, buf, vCtrl);
+        updateLine(settings, mainFont, ctrlTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(clkTb, buf, vClk);
+        updateLine(settings, mainFont, clkTb, NULL, 999999, 999999, WHITE);
+
+        if(loopbackRun){
+            jagSetHex2(loopRxTb, buf, rxByte);
+            updateLine(settings, mainFont, loopRxTb, NULL, 999999, 999999, WHITE);
+
+            if(loopbackPass){
+                const char *p = "PASS             ";
+                for(i = 0; i < 17; i++){ loopResTb->text[10 + i] = p[i]; }
+                updateLine(settings, mainFont, loopResTb, NULL, 999999, 999999, GREEN);
+            } else {
+                const char *f = "FAIL (mismatch)  ";
+                for(i = 0; i < 17; i++){ loopResTb->text[10 + i] = f[i]; }
+                updateLine(settings, mainFont, loopResTb, NULL, 999999, 999999, RED);
+            }
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    helpTb       = freeTextBox(helpTb);
+    noteTb       = freeTextBox(noteTb);
+    loopResTb    = freeTextBox(loopResTb);
+    loopRxTb     = freeTextBox(loopRxTb);
+    loopTxTb     = freeTextBox(loopTxTb);
+    loopTitleTb  = freeTextBox(loopTitleTb);
+    clkTb        = freeTextBox(clkTb);
+    ctrlTb       = freeTextBox(ctrlTb);
+    dataTb       = freeTextBox(dataTb);
+    statusTb     = freeTextBox(statusTb);
+    titleTb      = freeTextBox(titleTb);
 }
 
 /* ---------------------------------------------------------------------------
