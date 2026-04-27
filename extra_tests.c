@@ -1972,38 +1972,29 @@ static void jagCdSetHex4(textBox *tb, char *buf, uint16_t v){
     for(i = 0; i < n; i++) tb->text[hexStart + (4 - n) + i] = buf[i];
 }
 
-static void mtHexByte(char *out, uint8_t v){
-    static const char D[] = "0123456789ABCDEF";
-    out[0] = D[(v >> 4) & 0xF];
-    out[1] = D[v & 0xF];
-}
+/* Shared CD-detection heuristic: probes all 6 Butch registers
+ * ($F14000-$F1400A) and both CD BIOS window words ($800000-$800002).
+ * Returns 1 if any register reads non-open-bus, 0 otherwise. */
+static int jagCdProbeDetect(void){
+    volatile uint16_t *addrs[8];
+    uint16_t vals[8];
+    int i, det;
 
-static void mtHexWord(char *out, uint16_t v){
-    mtHexByte(out, (uint8_t)(v >> 8));
-    mtHexByte(out + 2, (uint8_t)(v & 0xFF));
-}
+    addrs[0] = (volatile uint16_t*)0xF14000;
+    addrs[1] = (volatile uint16_t*)0xF14002;
+    addrs[2] = (volatile uint16_t*)0xF14004;
+    addrs[3] = (volatile uint16_t*)0xF14006;
+    addrs[4] = (volatile uint16_t*)0xF14008;
+    addrs[5] = (volatile uint16_t*)0xF1400A;
+    addrs[6] = (volatile uint16_t*)0x00800000;
+    addrs[7] = (volatile uint16_t*)0x00800002;
 
-static void mtFormatGridRow(char *out, const uint16_t *words, int row){
-    int col;
-    mtHexByte(out, (uint8_t)(row * 8));
-    out[2] = ':';
-    for(col = 0; col < 8; col++){
-        out[3 + col * 5] = ' ';
-        mtHexWord(out + 4 + col * 5, words[row * 8 + col]);
+    det = 0;
+    for(i = 0; i < 8; i++){
+        vals[i] = *addrs[i];
+        if(vals[i] != 0x0000U && vals[i] != 0xFFFFU) det = 1;
     }
-    out[3 + 8 * 5] = '\0';
-}
-
-static void mtFormatCursorLine(char *out, int cursor, uint16_t orig, uint16_t cur){
-    int i;
-    static const char tmpl[] = "ADDR: 0x00  ORIG: 0000  CUR: 0000";
-    for(i = 0; tmpl[i] != '\0'; i++){
-        out[i] = tmpl[i];
-    }
-    out[i] = '\0';
-    mtHexByte(out + 8, (uint8_t)(cursor & 0xFF));
-    mtHexWord(out + 18, orig);
-    mtHexWord(out + 29, cur);
+    return det;
 }
 
 void JaguarCDTest(void){
@@ -2151,31 +2142,18 @@ void MemoryTrackTest(void){
     int cdDetected;
     uint16_t original[EE_NWORDS];
     uint16_t current[EE_NWORDS];
-    char rowBuf[3 + 8 * 5 + 1];
+    char rowBuf[3 + EE_GRID_COLS * 5 + 1];
     char cursorBuf[40];
     char statusBuf[64];
     textBox *titleTb;
     textBox *cdStatusTb;
     textBox *statusTb;
     textBox *cursorTb;
-    textBox *gridTb[8];
+    textBox *gridTb[EE_GRID_ROWS];
     textBox *helpTb1;
     textBox *helpTb2;
 
-    {
-        volatile uint16_t *b0 = (volatile uint16_t*)0xF14000;
-        volatile uint16_t *b1 = (volatile uint16_t*)0xF14002;
-        volatile uint16_t *b2 = (volatile uint16_t*)0xF14004;
-        volatile uint16_t *b3 = (volatile uint16_t*)0xF14008;
-        volatile uint16_t *cb = (volatile uint16_t*)0x00800000;
-        uint16_t v0 = *b0, v1 = *b1, v2 = *b2, v3 = *b3, v4 = *cb;
-        cdDetected = 0;
-        if(v0 != 0x0000U && v0 != 0xFFFFU) cdDetected = 1;
-        if(v1 != 0x0000U && v1 != 0xFFFFU) cdDetected = 1;
-        if(v2 != 0x0000U && v2 != 0xFFFFU) cdDetected = 1;
-        if(v3 != 0x0000U && v3 != 0xFFFFU) cdDetected = 1;
-        if(v4 != 0x0000U && v4 != 0xFFFFU) cdDetected = 1;
-    }
+    cdDetected = jagCdProbeDetect();
 
     for(i = 0; i < EE_NWORDS; i++){
         original[i] = eeprom_read_word_drv((uint8_t)i);
@@ -2201,7 +2179,7 @@ void MemoryTrackTest(void){
     cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000", 320, 9, mainFont, 0,
                           settings->d, 0, 50 + settings->PALOffset, 13, 1);
 
-    for(row = 0; row < 8; row++){
+    for(row = 0; row < EE_GRID_ROWS; row++){
         gridTb[row] = newTextBox("00: 0000 0000 0000 0000 0000 0000 0000 0000", 320, 9, mainFont, 0,
                                  settings->d, 0, 68 + row * 14 + settings->PALOffset, 13, 1);
     }
@@ -2244,12 +2222,12 @@ void MemoryTrackTest(void){
         }
         if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            cursor = (cursor + 8) % EE_NWORDS;
+            cursor = (cursor + EE_GRID_COLS) % EE_NWORDS;
             needRedraw = 1;
         }
         if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            cursor = (cursor + EE_NWORDS - 8) % EE_NWORDS;
+            cursor = (cursor + EE_NWORDS - EE_GRID_COLS) % EE_NWORDS;
             needRedraw = 1;
         }
 
@@ -2356,12 +2334,12 @@ void MemoryTrackTest(void){
             if(lastTestRan) statusColor = (totalErrors == 0) ? GREEN : RED;
             updateLine(settings, mainFont, statusTb, statusBuf, 999999, 999999, statusColor);
 
-            mtFormatCursorLine(cursorBuf, cursor, original[cursor], current[cursor]);
+            formatCursorLine(cursorBuf, cursor, original[cursor], current[cursor]);
             updateLine(settings, mainFont, cursorTb, cursorBuf, 999999, 999999, WHITE);
 
-            for(row = 0; row < 8; row++){
-                uint16_t color = (cursor / 8 == row) ? RED : WHITE;
-                mtFormatGridRow(rowBuf, current, row);
+            for(row = 0; row < EE_GRID_ROWS; row++){
+                uint16_t color = (cursor / EE_GRID_COLS == row) ? RED : WHITE;
+                formatGridRow(rowBuf, current, row);
                 updateLine(settings, mainFont, gridTb[row], rowBuf, 999999, 999999, color);
             }
         }
@@ -2400,7 +2378,7 @@ void MemoryTrackTest(void){
             int hold;
 
             while(warn[n] != '\0'){ statusBuf[n] = warn[n]; n++; }
-            mtHexByte(statusBuf + n, (uint8_t)(badAddr & 0xFF));
+            hexbyte(statusBuf + n, (uint8_t)(badAddr & 0xFF));
             n += 2;
             while(tail[t] != '\0'){ statusBuf[n++] = tail[t++]; }
             statusBuf[n] = '\0';
@@ -2415,7 +2393,7 @@ void MemoryTrackTest(void){
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb2    = freeTextBox(helpTb2);
     helpTb1    = freeTextBox(helpTb1);
-    for(row = 7; row >= 0; row--){
+    for(row = EE_GRID_ROWS - 1; row >= 0; row--){
         gridTb[row] = freeTextBox(gridTb[row]);
     }
     cursorTb   = freeTextBox(cursorTb);

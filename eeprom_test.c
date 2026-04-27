@@ -199,8 +199,7 @@ int eeprom_write_word_drv(uint8_t addr, uint16_t data){
  * recoloring the active row -- same pattern as the controller test.
  * --------------------------------------------------------------------------- */
 
-#define GRID_COLS 8
-#define GRID_ROWS 8
+/* GRID_COLS / GRID_ROWS moved to eeprom_test.h as EE_GRID_COLS / EE_GRID_ROWS */
 /* Grid sits at x=0 with a full-screen 320 px wide sprite per row.
  * That gives the 43-char "00: 0000 0000 ..." line ~62 px of right-
  * margin slack at 6 px/char so the in-engine word-wrap can never
@@ -213,43 +212,29 @@ int eeprom_write_word_drv(uint8_t addr, uint16_t data){
 #define GRID_Y 80
 #define GRID_ROW_H 14
 
-static void hexbyte(char *out, uint8_t v){
-    /* No printf in this codebase -- itostring handles ints but
-     * doesn't zero-pad, so do the 4-char hex word ourselves. */
+void hexbyte(char *out, uint8_t v){
     static const char DIGITS[] = "0123456789ABCDEF";
     out[0] = DIGITS[(v >> 4) & 0xF];
     out[1] = DIGITS[v & 0xF];
 }
 
-static void hexword(char *out, uint16_t v){
+void hexword(char *out, uint16_t v){
     hexbyte(out, (uint8_t)(v >> 8));
     hexbyte(out + 2, (uint8_t)(v & 0xFF));
 }
 
-static void formatGridRow(char *out, const uint16_t *words, int row){
-    /* "00:FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF" -- the 2-char
-     * row label is the address of the first word in that row, in
-     * hex, so the user can map any cell back to its EEPROM index. */
+void formatGridRow(char *out, const uint16_t *words, int row){
     int col;
-    hexbyte(out, (uint8_t)(row * GRID_COLS));
+    hexbyte(out, (uint8_t)(row * EE_GRID_COLS));
     out[2] = ':';
-    for(col = 0; col < GRID_COLS; col++){
+    for(col = 0; col < EE_GRID_COLS; col++){
         out[3 + col * 5] = ' ';
-        hexword(out + 4 + col * 5, words[row * GRID_COLS + col]);
+        hexword(out + 4 + col * 5, words[row * EE_GRID_COLS + col]);
     }
-    out[3 + GRID_COLS * 5] = '\0';
+    out[3 + EE_GRID_COLS * 5] = '\0';
 }
 
-static void formatCursorLine(char *out, int cursor, uint16_t orig, uint16_t cur){
-    /* Template offsets (0-based):
-     *   "ADDR: 0x00  ORIG: 0000  CUR: 0000"
-     *    0123456789012345678901234567890123
-     *            ^^         ^^^^         ^^^^
-     *            8,9        18..21       29..32
-     * The CUR field starts at column 29 -- column 28 is the space
-     * after "CUR:". Writing the hex word at 28 (the original code)
-     * stomped on that space and left the trailing '0' of the
-     * template intact, producing "CUR:FFFF0" on screen. */
+void formatCursorLine(char *out, int cursor, uint16_t orig, uint16_t cur){
     int i;
     static const char tmpl[] = "ADDR: 0x00  ORIG: 0000  CUR: 0000";
     for(i = 0; tmpl[i] != '\0'; i++){
@@ -305,7 +290,7 @@ void EepromTest(void){
      * right now (refreshed after every write-test pass and on B). */
     uint16_t original[EE_NWORDS];
     uint16_t current[EE_NWORDS];
-    char rowBuf[3 + GRID_COLS * 5 + 1];
+    char rowBuf[3 + EE_GRID_COLS * 5 + 1];
     char cursorBuf[40];
     /* Sized for the longest line we publish: the exit-time restore
      * failure warning ("WARN: restore failed at 0xNN -- check save
@@ -315,7 +300,7 @@ void EepromTest(void){
     textBox *titleTb;
     textBox *statusTb;
     textBox *cursorTb;
-    textBox *gridTb[GRID_ROWS];
+    textBox *gridTb[EE_GRID_ROWS];
     textBox *helpTb1;
     textBox *helpTb2;
 
@@ -351,7 +336,7 @@ void EepromTest(void){
     cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000", 320, 9, mainFont, 0,
                           settings->d, 0, 40 + settings->PALOffset, 13, 1);
 
-    for(row = 0; row < GRID_ROWS; row++){
+    for(row = 0; row < EE_GRID_ROWS; row++){
         gridTb[row] = newTextBox("00: 0000 0000 0000 0000 0000 0000 0000 0000", 320, 9, mainFont, 0,
                                  settings->d, GRID_X, GRID_Y + row * GRID_ROW_H + settings->PALOffset, 13, 1);
     }
@@ -393,12 +378,12 @@ void EepromTest(void){
         }
         if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            cursor = (cursor + GRID_COLS) % EE_NWORDS;
+            cursor = (cursor + EE_GRID_COLS) % EE_NWORDS;
             needRedraw = 1;
         }
         if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
             settings->controllerLock = 1;
-            cursor = (cursor + EE_NWORDS - GRID_COLS) % EE_NWORDS;
+            cursor = (cursor + EE_NWORDS - EE_GRID_COLS) % EE_NWORDS;
             needRedraw = 1;
         }
 
@@ -533,13 +518,13 @@ void EepromTest(void){
             formatCursorLine(cursorBuf, cursor, original[cursor], current[cursor]);
             updateLine(settings, mainFont, cursorTb, cursorBuf, 999999, 999999, WHITE);
 
-            for(row = 0; row < GRID_ROWS; row++){
+            for(row = 0; row < EE_GRID_ROWS; row++){
                 /* Highlight the row that contains the cursor in red so
                  * the active selection is obvious without having to
                  * underline a single 4-char hex word (which would need
                  * a sub-textBox). The selected cell within that row
                  * is the one whose address matches the cursor info line. */
-                uint16_t color = (cursor / GRID_COLS == row) ? RED : WHITE;
+                uint16_t color = (cursor / EE_GRID_COLS == row) ? RED : WHITE;
                 formatGridRow(rowBuf, current, row);
                 updateLine(settings, mainFont, gridTb[row], rowBuf, 999999, 999999, color);
             }
@@ -621,7 +606,7 @@ void EepromTest(void){
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb2  = freeTextBox(helpTb2);
     helpTb1  = freeTextBox(helpTb1);
-    for(row = GRID_ROWS - 1; row >= 0; row--){
+    for(row = EE_GRID_ROWS - 1; row >= 0; row--){
         gridTb[row] = freeTextBox(gridTb[row]);
     }
     cursorTb = freeTextBox(cursorTb);
