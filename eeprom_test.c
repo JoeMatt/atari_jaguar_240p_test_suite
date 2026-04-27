@@ -57,8 +57,8 @@
 #define EE_DI_REG (*(volatile uint8_t *)0xF14801)
 #define EE_CS_REG (*(volatile uint8_t *)0xF15001)
 
-/* 93C46 organisation: 64 words of 16 bits each. */
-#define EE_NWORDS 64
+/* EE_NWORDS now lives in eeprom_test.h so the Memory Track test can
+ * share it without duplicating the definition. */
 
 /* WRITE poll budget. VJ returns ready immediately; real hardware
  * needs ~10 ms which at 13.3 MHz / typical loop overhead lands well
@@ -122,7 +122,7 @@ static int ee_wait_ready(void){
     return 0;
 }
 
-static uint16_t eeprom_read_word_drv(uint8_t addr){
+uint16_t eeprom_read_word_drv(uint8_t addr){
     /* READ: start(1) + op(10) + addr(6) -> 16 data bits */
     ee_cs();
     ee_send_bit(1);
@@ -132,7 +132,7 @@ static uint16_t eeprom_read_word_drv(uint8_t addr){
     return ee_recv_word();
 }
 
-static void eeprom_ewen_drv(void){
+void eeprom_ewen_drv(void){
     /* EWEN: start(1) + op(00) + sub(11xxxx) -- 4 trailing bits are
      * "don't care" but we send 0s to be predictable. */
     ee_cs();
@@ -147,7 +147,7 @@ static void eeprom_ewen_drv(void){
     ee_send_bit(0);
 }
 
-static void eeprom_ewds_drv(void){
+void eeprom_ewds_drv(void){
     /* EWDS: start(1) + op(00) + sub(00xxxx) -- the chip's reset
      * default; we send it explicitly when the test is done so we
      * don't leave the EEPROM "open for writes" after exit. */
@@ -163,7 +163,7 @@ static void eeprom_ewds_drv(void){
     ee_send_bit(0);
 }
 
-static int eeprom_write_word_drv(uint8_t addr, uint16_t data){
+int eeprom_write_word_drv(uint8_t addr, uint16_t data){
     /* WRITE: start(1) + op(01) + addr(6) + data(16) -> poll DO until idle.
      *
      * Returns the result of ee_wait_ready() so callers can detect a

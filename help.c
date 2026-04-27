@@ -108,6 +108,7 @@ void DrawHelp(int option){
         case HELP_PINK_NOISE:
         case HELP_CHANNEL_SEP:
         case HELP_JAGUAR_CD:
+        case HELP_MEMORY_TRACK:
             totalPages = 1;
         break;
 
@@ -638,7 +639,21 @@ void DrawHelp(int option){
                         case 0:
                             updateLine(settings, mainFont, helpLineTextBox[0], "JAGUAR CD PROBE", 999999, 999999, GREEN);
 
-                            updateLine(settings, mainFont, helpTextBox, "Probes a handful of 16-bit words: four in the Butch (CD) ASIC at $F14000+ and the first word of the paged-in CD boot ROM window at $800000. On a base Jaguar with no CD, those often read 0x0000 or 0xFFFF (open bus).^If *any* word returns a different value, the heuristic reports DETECTED.^Values are re-read *every frame* so emulators and hardware bring-up can watch registers change in real time. This is not a full Memory-Track or disc I/O test -- use real media for that.^^DOWN+OPTION: this help.   OPTION: exit", 999999, 999999, WHITE);
+                            updateLine(settings, mainFont, helpTextBox, "Probes 16-bit words in the Butch (CD) ASIC ($F14000-$F1400A) and the CD boot ROM window ($800000-$800002). On a base Jaguar these read 0x0000 or 0xFFFF (open bus).^If any word returns a different value the heuristic reports DETECTED. The BIOS line shows FOUND when the CD boot ROM window contains non-open-bus data.^Values refresh every frame for real-time monitoring.^^DOWN+OPTION: this help.   OPTION: exit", 999999, 999999, WHITE);
+                            highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
+                        break;
+                    }
+
+                break;
+
+                case HELP_MEMORY_TRACK:
+
+                    switch(page){
+
+                        case 0:
+                            updateLine(settings, mainFont, helpLineTextBox[0], "MEMORY TRACK TEST", 999999, 999999, GREEN);
+
+                            updateLine(settings, mainFont, helpTextBox, "Exercises the 93C46 serial EEPROM on the bus. On a Jaguar CD with Memory Track this is the CD unit's 128-byte save storage. Without a CD this tests the cart's own EEPROM.^The CD line shows whether CD hardware was detected. Both EEPROMs use the same Jerry bus ($F14001/$F14801/$F15001).^^A: Walking-1s   X: Address-as-data^B: Re-read   Y: Erase cell^OPTION: restore originals and exit^DOWN+OPTION: this help", 999999, 999999, WHITE);
                             highlightHelpPhrase(helpTextBox, "DOWN+OPTION");
                         break;
                     }

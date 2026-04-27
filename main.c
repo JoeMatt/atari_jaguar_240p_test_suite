@@ -1146,12 +1146,9 @@ void HardwareMenu(){
     
     int done = 0;
     /* Max 1-based menuState value (cursor wraps between 1 and
-     * lastMenuLine). EEPROM Test is switch case 10, Sprite Stress
-     * Test is case 11, and "Back to Main Menu" is the final case 14.
-     * The other *Menu() helpers in this file use the same convention
-     * -- the legacy "counting from zero" comment was misleading since
-     * menuState is 1-based. */
-    int lastMenuLine = 14;
+     * lastMenuLine). Memory Track Test is case 11, Sprite Stress
+     * Test is case 12, and "Back to Main Menu" is the final case 15. */
+    int lastMenuLine = 15;
     settings->menuState = 1;
     
     hide_display_layer(settings->d, 2);
@@ -1172,11 +1169,12 @@ void HardwareMenu(){
     updateLine(settings, mainFont, lineTextBox[8],  "Jaguar CD Probe",        settings->lineXOffset, setLineYPos(7), WHITE);
     updateLine(settings, mainFont, lineTextBox[9],  "Video Mode Test",        settings->lineXOffset, setLineYPos(8), WHITE);
     updateLine(settings, mainFont, lineTextBox[10], "EEPROM Test",            settings->lineXOffset, setLineYPos(9), WHITE);
-    updateLine(settings, mainFont, lineTextBox[11], "Sprite Stress Test",     settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[11], "Memory Track Test",      settings->lineXOffset, setLineYPos(10), WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Sprite Stress Test",     settings->lineXOffset, setLineYPos(11), WHITE);
 
-    updateLine(settings, mainFont, lineTextBox[12], "Help",              settings->lineXOffset, setLineYPos(11), WHITE);
-    updateLine(settings, mainFont, lineTextBox[13], "Options",           settings->lineXOffset, setLineYPos(12), WHITE);
-    updateLine(settings, mainFont, lineTextBox[14], "Back to Main Menu", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Help",              settings->lineXOffset, setLineYPos(12), WHITE);
+    updateLine(settings, mainFont, lineTextBox[14], "Options",           settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[15], "Back to Main Menu", settings->lineXOffset, setLineYPos(14), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -1309,15 +1307,22 @@ void HardwareMenu(){
 
                 break;
 
-                //Sprite Stress Test (Object Processor saturation)
+                //Memory Track Test (Jaguar CD EEPROM)
                 case 11:
+
+                    MemoryTrackTest();
+
+                break;
+
+                //Sprite Stress Test (Object Processor saturation)
+                case 12:
 
                     SpriteStressTest();
 
                 break;
 
                 //Help
-                case 12:
+                case 13:
 
                     hide_or_show_display_layer_range(settings->d, 0, 0, 15);
                     hide_or_show_display_layer_range(settings->d, 1, 14, 14);
@@ -1327,15 +1332,15 @@ void HardwareMenu(){
                     hide_or_show_display_layer_range(settings->d, 1, 0, 15);
 
                 break;
-                    
+
                 //Options
-                case 13:
+                case 14:
 
                     OptionsMenu();
 
                 break;
 
-                case 14:
+                case 15:
 
                     done = 1;
 

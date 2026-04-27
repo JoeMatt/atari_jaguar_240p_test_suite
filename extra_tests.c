@@ -1,4 +1,5 @@
 #include "./extra_tests.h"
+#include "./eeprom_test.h"
 #include "./tests.h" /* for the C1..C9 frequency constants used by audio */
 
 /* ---------------------------------------------------------------------------
@@ -1971,30 +1972,72 @@ static void jagCdSetHex4(textBox *tb, char *buf, uint16_t v){
     for(i = 0; i < n; i++) tb->text[hexStart + (4 - n) + i] = buf[i];
 }
 
+static void mtHexByte(char *out, uint8_t v){
+    static const char D[] = "0123456789ABCDEF";
+    out[0] = D[(v >> 4) & 0xF];
+    out[1] = D[v & 0xF];
+}
+
+static void mtHexWord(char *out, uint16_t v){
+    mtHexByte(out, (uint8_t)(v >> 8));
+    mtHexByte(out + 2, (uint8_t)(v & 0xFF));
+}
+
+static void mtFormatGridRow(char *out, const uint16_t *words, int row){
+    int col;
+    mtHexByte(out, (uint8_t)(row * 8));
+    out[2] = ':';
+    for(col = 0; col < 8; col++){
+        out[3 + col * 5] = ' ';
+        mtHexWord(out + 4 + col * 5, words[row * 8 + col]);
+    }
+    out[3 + 8 * 5] = '\0';
+}
+
+static void mtFormatCursorLine(char *out, int cursor, uint16_t orig, uint16_t cur){
+    int i;
+    static const char tmpl[] = "ADDR: 0x00  ORIG: 0000  CUR: 0000";
+    for(i = 0; tmpl[i] != '\0'; i++){
+        out[i] = tmpl[i];
+    }
+    out[i] = '\0';
+    mtHexByte(out + 8, (uint8_t)(cursor & 0xFF));
+    mtHexWord(out + 18, orig);
+    mtHexWord(out + 29, cur);
+}
+
 void JaguarCDTest(void){
     int exit = 0;
     char buf[12] = "00000000\0";
     int i;
     int detected;
-    uint16_t u0, u1, u2, u3, u4;
+    int biosFound;
+    uint16_t u0, u1, u2, u3, u4, u5, u6, u7;
 
     volatile uint16_t *butch0  = (volatile uint16_t*)0xF14000;
     volatile uint16_t *butch1  = (volatile uint16_t*)0xF14002;
     volatile uint16_t *butch2  = (volatile uint16_t*)0xF14004;
-    volatile uint16_t *butch3  = (volatile uint16_t*)0xF14008;
+    volatile uint16_t *butch3  = (volatile uint16_t*)0xF14006;
+    volatile uint16_t *butch4  = (volatile uint16_t*)0xF14008;
+    volatile uint16_t *butch5  = (volatile uint16_t*)0xF1400A;
     volatile uint16_t *cdBios0 = (volatile uint16_t*)0x00800000;
+    volatile uint16_t *cdBios1 = (volatile uint16_t*)0x00800002;
 
-    textBox *titleTb = newTextBox("JAGUAR CD PROBE", 192, 9, mainFont, 0, settings->d, 80, 40, 13, 1);
+    textBox *titleTb  = newTextBox("JAGUAR CD PROBE", 192, 9, mainFont, 0, settings->d, 80, 24 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *statusTb = newTextBox("STATUS  : NOT DETECTED  ", 256, 9, mainFont, 0, settings->d, 48, 60, 13, 1);
-    textBox *aTb = newTextBox("$F14000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 80, 13, 1);
-    textBox *bTb = newTextBox("$F14002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 96, 13, 1);
-    textBox *cTb = newTextBox("$F14004 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 112, 13, 1);
-    textBox *dTb = newTextBox("$F14008 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 128, 13, 1);
-    textBox *eTb = newTextBox("$800000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 144, 13, 1);
-    textBox *noteTb = newTextBox("LIVE/frm: hex refresh  0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 168, 13, 1);
-    textBox *helpTb = newTextBox("DOWN+OPTION: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 196, 13, 1);
+    textBox *statusTb = newTextBox("STATUS  : NOT DETECTED  ", 256, 9, mainFont, 0, settings->d, 48, 40 + settings->PALOffset, 13, 1);
+    textBox *aTb  = newTextBox("$F14000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 58 + settings->PALOffset, 13, 1);
+    textBox *bTb  = newTextBox("$F14002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 72 + settings->PALOffset, 13, 1);
+    textBox *cTb  = newTextBox("$F14004 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 86 + settings->PALOffset, 13, 1);
+    textBox *dTb  = newTextBox("$F14006 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 100 + settings->PALOffset, 13, 1);
+    textBox *eTb  = newTextBox("$F14008 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 114 + settings->PALOffset, 13, 1);
+    textBox *fTb  = newTextBox("$F1400A : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 128 + settings->PALOffset, 13, 1);
+    textBox *gTb  = newTextBox("$800000 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 142 + settings->PALOffset, 13, 1);
+    textBox *hTb  = newTextBox("$800002 : 0000 ", 192, 9, mainFont, 0, settings->d, 48, 156 + settings->PALOffset, 13, 1);
+    textBox *biosTb = newTextBox("BIOS    : NOT FOUND       ", 256, 9, mainFont, 0, settings->d, 48, 170 + settings->PALOffset, 13, 1);
+    textBox *noteTb = newTextBox("LIVE/frm: hex refresh  0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 186 + settings->PALOffset, 13, 1);
+    textBox *helpTb = newTextBox("DOWN+OPTION: help   OPTION: exit", 256, 9, mainFont, 0, settings->d, 32, 204 + settings->PALOffset, 13, 1);
     updateLine(settings, mainFont, noteTb, NULL, 999999, 999999, GREY);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
     extraHighlightJagCdFooterLine(helpTb);
@@ -2008,7 +2051,10 @@ void JaguarCDTest(void){
         u1 = *butch1;
         u2 = *butch2;
         u3 = *butch3;
-        u4 = *cdBios0;
+        u4 = *butch4;
+        u5 = *butch5;
+        u6 = *cdBios0;
+        u7 = *cdBios1;
         vsync();
 
         if((settings->joy1 & 0xFFFFFF) == 0){
@@ -2029,6 +2075,12 @@ void JaguarCDTest(void){
         if(u2 != 0x0000U && u2 != 0xFFFFU) detected = 1;
         if(u3 != 0x0000U && u3 != 0xFFFFU) detected = 1;
         if(u4 != 0x0000U && u4 != 0xFFFFU) detected = 1;
+        if(u5 != 0x0000U && u5 != 0xFFFFU) detected = 1;
+
+        biosFound = 0;
+        if(u6 != 0x0000U && u6 != 0xFFFFU) biosFound = 1;
+        if(u7 != 0x0000U && u7 != 0xFFFFU) biosFound = 1;
+        if(biosFound) detected = 1;
 
         if(detected){
             {
@@ -2042,6 +2094,13 @@ void JaguarCDTest(void){
             }
         }
         updateLine(settings, mainFont, statusTb, NULL, 999999, 999999, detected ? GREEN : RED);
+
+        {
+            const char *biosStr = biosFound ? "FOUND           " : "NOT FOUND       ";
+            for(i = 0; i < 16; i++){ biosTb->text[10 + i] = biosStr[i]; }
+        }
+        updateLine(settings, mainFont, biosTb, NULL, 999999, 999999, biosFound ? GREEN : GREY);
+
         jagCdSetHex4(aTb, buf, u0);
         updateLine(settings, mainFont, aTb, NULL, 999999, 999999, WHITE);
         jagCdSetHex4(bTb, buf, u1);
@@ -2052,11 +2111,21 @@ void JaguarCDTest(void){
         updateLine(settings, mainFont, dTb, NULL, 999999, 999999, WHITE);
         jagCdSetHex4(eTb, buf, u4);
         updateLine(settings, mainFont, eTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(fTb, buf, u5);
+        updateLine(settings, mainFont, fTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(gTb, buf, u6);
+        updateLine(settings, mainFont, gTb, NULL, 999999, 999999, WHITE);
+        jagCdSetHex4(hTb, buf, u7);
+        updateLine(settings, mainFont, hTb, NULL, 999999, 999999, WHITE);
     }
 
     hide_or_show_display_layer_range(settings->d, 0, 3, 15);
     helpTb   = freeTextBox(helpTb);
     noteTb   = freeTextBox(noteTb);
+    biosTb   = freeTextBox(biosTb);
+    hTb      = freeTextBox(hTb);
+    gTb      = freeTextBox(gTb);
+    fTb      = freeTextBox(fTb);
     eTb      = freeTextBox(eTb);
     dTb      = freeTextBox(dTb);
     cTb      = freeTextBox(cTb);
@@ -2064,6 +2133,289 @@ void JaguarCDTest(void){
     aTb      = freeTextBox(aTb);
     statusTb = freeTextBox(statusTb);
     titleTb  = freeTextBox(titleTb);
+}
+
+void MemoryTrackTest(void){
+    int exit_test = 0;
+    int cursor = 0;
+    int needRedraw = 1;
+    int totalErrors = 0;
+    int lastTestRan = 0;
+    int row, i;
+    int cdDetected;
+    uint16_t original[EE_NWORDS];
+    uint16_t current[EE_NWORDS];
+    char rowBuf[3 + 8 * 5 + 1];
+    char cursorBuf[40];
+    char statusBuf[64];
+    textBox *titleTb;
+    textBox *cdStatusTb;
+    textBox *statusTb;
+    textBox *cursorTb;
+    textBox *gridTb[8];
+    textBox *helpTb1;
+    textBox *helpTb2;
+
+    {
+        volatile uint16_t *b0 = (volatile uint16_t*)0xF14000;
+        volatile uint16_t *b1 = (volatile uint16_t*)0xF14002;
+        volatile uint16_t *b2 = (volatile uint16_t*)0xF14004;
+        volatile uint16_t *b3 = (volatile uint16_t*)0xF14008;
+        volatile uint16_t *cb = (volatile uint16_t*)0x00800000;
+        uint16_t v0 = *b0, v1 = *b1, v2 = *b2, v3 = *b3, v4 = *cb;
+        cdDetected = 0;
+        if(v0 != 0x0000U && v0 != 0xFFFFU) cdDetected = 1;
+        if(v1 != 0x0000U && v1 != 0xFFFFU) cdDetected = 1;
+        if(v2 != 0x0000U && v2 != 0xFFFFU) cdDetected = 1;
+        if(v3 != 0x0000U && v3 != 0xFFFFU) cdDetected = 1;
+        if(v4 != 0x0000U && v4 != 0xFFFFU) cdDetected = 1;
+    }
+
+    for(i = 0; i < EE_NWORDS; i++){
+        original[i] = eeprom_read_word_drv((uint8_t)i);
+        current[i] = original[i];
+    }
+
+    titleTb = newTextBox("MEMORY TRACK TEST (93C46 64x16)      ", 320, 9, mainFont, 0,
+                          settings->d, 0, 8 + settings->PALOffset, 13, 1);
+    updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
+
+    cdStatusTb = newTextBox("CD: NOT DETECTED (testing cart EEPROM)", 320, 9, mainFont, 0,
+                             settings->d, 0, 22 + settings->PALOffset, 13, 1);
+    if(cdDetected){
+        updateLine(settings, mainFont, cdStatusTb, "CD: DETECTED (testing Memory Track)  ", 999999, 999999, GREEN);
+    } else {
+        updateLine(settings, mainFont, cdStatusTb, NULL, 999999, 999999, RED);
+    }
+
+    statusTb = newTextBox("WARN: restore failed at 0xFF -- check save data", 320, 9, mainFont, 0,
+                          settings->d, 0, 36 + settings->PALOffset, 13, 1);
+    updateLine(settings, mainFont, statusTb, "STATUS: idle (press A or X)", 999999, 999999, GREY);
+
+    cursorTb = newTextBox("ADDR: 0x00  ORIG: 0000  CUR: 0000", 320, 9, mainFont, 0,
+                          settings->d, 0, 50 + settings->PALOffset, 13, 1);
+
+    for(row = 0; row < 8; row++){
+        gridTb[row] = newTextBox("00: 0000 0000 0000 0000 0000 0000 0000 0000", 320, 9, mainFont, 0,
+                                 settings->d, 0, 68 + row * 14 + settings->PALOffset, 13, 1);
+    }
+
+    helpTb1 = newTextBox("D-PAD move  A walk-1s  X addr-as-data",
+                         320, 9, mainFont, 0,
+                         settings->d, 0, 184 + settings->PALOffset, 13, 1);
+    updateLine(settings, mainFont, helpTb1, NULL, 999999, 999999, GREY);
+
+    helpTb2 = newTextBox("B re-read  Y erase  DOWN+OPT help  OPT exit",
+                         320, 9, mainFont, 0,
+                         settings->d, 0, 196 + settings->PALOffset, 13, 1);
+    updateLine(settings, mainFont, helpTb2, NULL, 999999, 999999, GREY);
+
+    hide_or_show_display_layer_range(settings->d, 1, 3, 15);
+
+    while(!exit_test){
+        read_joypad_state(settings->j_state);
+        settings->joy1 = settings->j_state->j1;
+        vsync();
+
+        if((settings->joy1 & 0xFFFFFF) == 0){
+            settings->controllerLock = 0;
+        }
+
+        if(((settings->joy1 & JOYPAD_DOWN) && (settings->joy1 & JOYPAD_OPTION)) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            DrawHelp(HELP_MEMORY_TRACK);
+        }
+
+        if((settings->joy1 & JOYPAD_RIGHT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            cursor = (cursor + 1) % EE_NWORDS;
+            needRedraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_LEFT) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            cursor = (cursor + EE_NWORDS - 1) % EE_NWORDS;
+            needRedraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_DOWN) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            cursor = (cursor + 8) % EE_NWORDS;
+            needRedraw = 1;
+        }
+        if((settings->joy1 & JOYPAD_UP) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            cursor = (cursor + EE_NWORDS - 8) % EE_NWORDS;
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            uint16_t pattern[EE_NWORDS];
+            int errs;
+            settings->controllerLock = 1;
+            for(i = 0; i < EE_NWORDS; i++){
+                pattern[i] = (uint16_t)(1u << (i % 16));
+            }
+            eeprom_ewen_drv();
+            errs = 0;
+            for(i = 0; i < EE_NWORDS; i++){
+                (void)eeprom_write_word_drv((uint8_t)i, pattern[i]);
+            }
+            for(i = 0; i < EE_NWORDS; i++){
+                if(eeprom_read_word_drv((uint8_t)i) != pattern[i]) errs++;
+            }
+            totalErrors += errs;
+            lastTestRan = 1;
+            for(i = 0; i < EE_NWORDS; i++){
+                current[i] = eeprom_read_word_drv((uint8_t)i);
+            }
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_X) && settings->controllerLock == 0){
+            uint16_t pattern[EE_NWORDS];
+            int errs;
+            settings->controllerLock = 1;
+            for(i = 0; i < EE_NWORDS; i++){
+                pattern[i] = (uint16_t)(((uint16_t)i << 8) | ((~(uint16_t)i) & 0xFF));
+            }
+            eeprom_ewen_drv();
+            errs = 0;
+            for(i = 0; i < EE_NWORDS; i++){
+                (void)eeprom_write_word_drv((uint8_t)i, pattern[i]);
+            }
+            for(i = 0; i < EE_NWORDS; i++){
+                if(eeprom_read_word_drv((uint8_t)i) != pattern[i]) errs++;
+            }
+            totalErrors += errs;
+            lastTestRan = 2;
+            for(i = 0; i < EE_NWORDS; i++){
+                current[i] = eeprom_read_word_drv((uint8_t)i);
+            }
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_B) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            for(i = 0; i < EE_NWORDS; i++){
+                current[i] = eeprom_read_word_drv((uint8_t)i);
+            }
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_Y) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            eeprom_ewen_drv();
+            eeprom_write_word_drv((uint8_t)cursor, 0xFFFF);
+            current[cursor] = eeprom_read_word_drv((uint8_t)cursor);
+            needRedraw = 1;
+        }
+
+        if((settings->joy1 & JOYPAD_OPTION) && settings->controllerLock == 0){
+            settings->controllerLock = 1;
+            exit_test = 1;
+        }
+
+        if(needRedraw){
+            const char *label;
+            const char *prefix;
+            int n, k;
+            uint16_t statusColor;
+
+            needRedraw = 0;
+
+            label = "idle (press A or X)";
+            if(lastTestRan == 1) label = "WALKING-1S complete";
+            else if(lastTestRan == 2) label = "ADDR-AS-DATA complete";
+
+            n = 0;
+            prefix = "STATUS: ";
+            while(prefix[n] != '\0'){ statusBuf[n] = prefix[n]; n++; }
+            k = 0;
+            while(label[k] != '\0' && n < (int)sizeof(statusBuf) - 12){
+                statusBuf[n++] = label[k++];
+            }
+            if(lastTestRan){
+                const char *errLabel = "  ERRORS: ";
+                int j = 0;
+                int displayErrors = totalErrors;
+                while(errLabel[j] != '\0' && n < (int)sizeof(statusBuf) - 5){
+                    statusBuf[n++] = errLabel[j++];
+                }
+                if(displayErrors > 999) displayErrors = 999;
+                if(displayErrors >= 100) statusBuf[n++] = (char)('0' + (displayErrors / 100));
+                if(displayErrors >= 10) statusBuf[n++] = (char)('0' + ((displayErrors / 10) % 10));
+                statusBuf[n++] = (char)('0' + (displayErrors % 10));
+            }
+            statusBuf[n] = '\0';
+            statusColor = GREY;
+            if(lastTestRan) statusColor = (totalErrors == 0) ? GREEN : RED;
+            updateLine(settings, mainFont, statusTb, statusBuf, 999999, 999999, statusColor);
+
+            mtFormatCursorLine(cursorBuf, cursor, original[cursor], current[cursor]);
+            updateLine(settings, mainFont, cursorTb, cursorBuf, 999999, 999999, WHITE);
+
+            for(row = 0; row < 8; row++){
+                uint16_t color = (cursor / 8 == row) ? RED : WHITE;
+                mtFormatGridRow(rowBuf, current, row);
+                updateLine(settings, mainFont, gridTb[row], rowBuf, 999999, 999999, color);
+            }
+        }
+    }
+
+    {
+        int restoreFailed = 0;
+        int badAddr = -1;
+        int attempts;
+        uint16_t verify = 0;
+
+        eeprom_ewen_drv();
+        for(i = 0; i < EE_NWORDS; i++){
+            if(current[i] == original[i]) continue;
+            verify = current[i];
+            for(attempts = 0; attempts < 3; attempts++){
+                (void)eeprom_write_word_drv((uint8_t)i, original[i]);
+                verify = eeprom_read_word_drv((uint8_t)i);
+                if(verify == original[i]){
+                    current[i] = verify;
+                    break;
+                }
+            }
+            if(verify != original[i] && !restoreFailed){
+                restoreFailed = 1;
+                badAddr = i;
+            }
+        }
+        eeprom_ewds_drv();
+
+        if(restoreFailed){
+            const char *warn = "WARN: restore failed at 0x";
+            const char *tail = " -- check save data";
+            int n = 0;
+            int t = 0;
+            int hold;
+
+            while(warn[n] != '\0'){ statusBuf[n] = warn[n]; n++; }
+            mtHexByte(statusBuf + n, (uint8_t)(badAddr & 0xFF));
+            n += 2;
+            while(tail[t] != '\0'){ statusBuf[n++] = tail[t++]; }
+            statusBuf[n] = '\0';
+            updateLine(settings, mainFont, statusTb, statusBuf, 999999, 999999, RED);
+
+            for(hold = 0; hold < 120; hold++){
+                vsync();
+            }
+        }
+    }
+
+    hide_or_show_display_layer_range(settings->d, 0, 3, 15);
+    helpTb2    = freeTextBox(helpTb2);
+    helpTb1    = freeTextBox(helpTb1);
+    for(row = 7; row >= 0; row--){
+        gridTb[row] = freeTextBox(gridTb[row]);
+    }
+    cursorTb   = freeTextBox(cursorTb);
+    statusTb   = freeTextBox(statusTb);
+    cdStatusTb = freeTextBox(cdStatusTb);
+    titleTb    = freeTextBox(titleTb);
 }
 
 /* ---------------------------------------------------------------------------
