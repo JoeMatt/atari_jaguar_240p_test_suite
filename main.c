@@ -1158,7 +1158,7 @@ void HardwareMenu(){
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = 76 + settings->PALOffset;
+    settings->lineYOffset = (settings->PALNTSC ? 76 : 56) + settings->PALOffset;
     
     resetAllLines();
         

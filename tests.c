@@ -2175,10 +2175,11 @@ void AudioSyncTest(){
                 reset = 1;
             }
 
-            int b1 = fpHalf / 3;
-            int b2 = (fpHalf * 3) / 4;
-            int b3 = fpHalf + b1;
-            int b4 = fpHalf + b2;
+            int total = fpHalf * 2;
+            int b1 = (total * 20) / 120;
+            int b2 = (total * 45) / 120;
+            int b3 = (total * 70) / 120;
+            int b4 = (total * 95) / 120;
             if(timer == b1 || timer == b2 || timer == b3 || timer == b4){
                 barSprite[0]->x += 32;
                 barSprite[1]->x -= 32;
@@ -2759,38 +2760,40 @@ void ReflexNTiming(){
     int clicks[11];
     int soundFreq = C6;
 
+    int palOff = settings->PALOffset;
+
     x = 144;
     y = 60;
 
     x2 = 108;
     y2 = 96;
-    
+
     //setup beep
     int16_t DSPSample[128];
     for(i = 0; i != 128; i++){
         DSPSample[i] = (int16_t)JERRYREGS->rom_sine12w[i];
     }
-            
+
     //load palette
 
     //load graphic
     lagPerData = malloc(sizeof(uint8_t)*32*32);
     lz77_unpack(&_GPU_FREE_RAM, &lagPer, (uint8_t*)lagPerData);
-    
-    lagPerSprite[0] = new_sprite(32, 32, 144, 96, DEPTH8, lagPerData);
+
+    lagPerSprite[0] = new_sprite(32, 32, 144, 96 + palOff, DEPTH8, lagPerData);
     attach_sprite_to_display_at_layer(lagPerSprite[0], settings->d, 13);
-    
-    lagPerSprite[1] = new_sprite(32, 32, 144, 72, DEPTH8, lagPerData);
+
+    lagPerSprite[1] = new_sprite(32, 32, 144, 72 + palOff, DEPTH8, lagPerData);
     attach_sprite_to_display_at_layer(lagPerSprite[1], settings->d, 13);
-    
-    lagPerSprite[2] = new_sprite(32, 32, 144, 72, DEPTH8, lagPerData);
+
+    lagPerSprite[2] = new_sprite(32, 32, 144, 72 + palOff, DEPTH8, lagPerData);
     attach_sprite_to_display_at_layer(lagPerSprite[2], settings->d, 13);
-    
+
     //menu
-    textBox *audioTitleTextBox = newTextBox("Audio:", 96, 9, mainFont, 0, settings->d, 194, 12, 13, 1);
+    textBox *audioTitleTextBox = newTextBox("Audio:", 96, 9, mainFont, 0, settings->d, 194, 12 + palOff, 13, 1);
     updateLine(settings, mainFont, audioTitleTextBox, NULL, 999999, 999999, WHITE);
-    
-    textBox *audioStatusTextBox = newTextBox("on ", 64, 9, mainFont, 0, settings->d, 232, 12, 13, 1);
+
+    textBox *audioStatusTextBox = newTextBox("on ", 64, 9, mainFont, 0, settings->d, 232, 12 + palOff, 13, 1);
     if(audio){
         updateLine(settings, mainFont, audioStatusTextBox, "on ", 999999, 999999, WHITE);
     }
@@ -2799,10 +2802,10 @@ void ReflexNTiming(){
     }
     
     
-    textBox *timingTitleTextBox = newTextBox("Timing:", 96, 9, mainFont, 0, settings->d, 188, 21, 13, 1);
+    textBox *timingTitleTextBox = newTextBox("Timing:", 96, 9, mainFont, 0, settings->d, 188, 21 + palOff, 13, 1);
     updateLine(settings, mainFont, timingTitleTextBox, NULL, 999999, 999999, WHITE);
-    
-    textBox *timingStatusTextBox = newTextBox("random  ", 96, 9, mainFont, 0, settings->d, 232, 21, 13, 1);
+
+    textBox *timingStatusTextBox = newTextBox("random  ", 96, 9, mainFont, 0, settings->d, 232, 21 + palOff, 13, 1);
     if(variation){
         updateLine(settings, mainFont, timingStatusTextBox, "random  ", 999999, 999999, WHITE);
     }
@@ -2811,7 +2814,7 @@ void ReflexNTiming(){
     }
 
     //instructions
-    textBox *lagInstructionsTextBox = newTextBox("Press the \"A\" button when the sprite is aligned. A negative value means you pressed \"A\" before they intersect. \"B\" button toggles horz/vert \"C\" button toggles audio DOWN toggles random/rhythmic.", 320, 120, mainFont, 12, settings->d, 0, 180, 13, 1);
+    textBox *lagInstructionsTextBox = newTextBox("Press the \"A\" button when the sprite is aligned. A negative value means you pressed \"A\" before they intersect. \"B\" button toggles horz/vert \"C\" button toggles audio DOWN toggles random/rhythmic.", 320, 120, mainFont, 12, settings->d, 0, 180 + palOff, 13, 1);
     updateLine(settings, mainFont, lagInstructionsTextBox, NULL, 999999, 999999, GREEN);
     
     //results
@@ -2819,10 +2822,10 @@ void ReflexNTiming(){
     textBox *frameCountTextBox[12];
     
     for(i = 0; i != 12; i++){
-        offsetTextBox[i] = newTextBox("Offset    ", 96, 9, mainFont, 0, settings->d, 12, 12 + (9*i), 13, 1);
+        offsetTextBox[i] = newTextBox("Offset    ", 96, 9, mainFont, 0, settings->d, 12, 12 + (9*i) + palOff, 13, 1);
         updateLine(settings, mainFont, offsetTextBox[i], NULL, 999999, 999999, WHITE);
         offsetTextBox[i]->tbSprite->invisible = 1;
-        frameCountTextBox[i] = newTextBox("00 frames", 96, 9, mainFont, 0, settings->d, 72, 12 + (9*i), 13, 1);
+        frameCountTextBox[i] = newTextBox("00 frames", 96, 9, mainFont, 0, settings->d, 72, 12 + (9*i) + palOff, 13, 1);
         updateLine(settings, mainFont, frameCountTextBox[i], NULL, 999999, 999999, WHITE);
         frameCountTextBox[i]->tbSprite->invisible = 1;
     }
@@ -3046,20 +3049,20 @@ void ReflexNTiming(){
 
         if(view == 0 || view == 2){
             lagPerSprite[1]->x = x;
-            lagPerSprite[1]->y = y;
+            lagPerSprite[1]->y = y + palOff;
         }
         else{
             lagPerSprite[1]->x = 320;
-            lagPerSprite[1]->y = 224;
+            lagPerSprite[1]->y = 224 + palOff;
         }
 
         if(view == 1 || view == 2){
             lagPerSprite[2]->x = x2;
-            lagPerSprite[2]->y = y2;
+            lagPerSprite[2]->y = y2 + palOff;
         }
         else{
             lagPerSprite[2]->x = 320;
-            lagPerSprite[2]->y = 224;
+            lagPerSprite[2]->y = 224 + palOff;
         }
 
         if(y == 96){

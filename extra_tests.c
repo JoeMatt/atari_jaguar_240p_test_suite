@@ -116,7 +116,7 @@ void DrawColorBarsGray(void){
         rectPACK_RGB16(buf, W, x, barsH, w, rampH, c);
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -218,7 +218,7 @@ void DrawLinearity(void){
         if(CY + y >= 0 && CY + y < H) buf[(CY + y) * W + CX] = COLOR_GREEN;
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -295,7 +295,7 @@ void DrawPhase(void){
         }
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -361,7 +361,7 @@ void DrawBrightness(void){
         rectPACK_RGB16(buf, W, x, y0, barW, barH, levels[i]);
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -425,7 +425,7 @@ void DrawContrast(void){
         rectPACK_RGB16(buf, W, x, y0, barW, barH, levels[i]);
     }
 
-    sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -483,14 +483,14 @@ void ManualLagTest(void){
         uint16_t c = PACK_RGB16(rb5, rb5, g6);
         rectPACK_RGB16(bg, W, i * (W/16), 0, W/16, 32, c);
     }
-    sprite *bgS = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, bg);
+    sprite *bgS = new_sprite(W, H, 0, 0, DEPTH16, bg);
     bgS->trans = 0;
     attach_sprite_to_display_at_layer(bgS, settings->d, 12);
 
     /* The moving white square */
     uint16_t *sq = malloc(sizeof(uint16_t) * 16 * 16);
     for(i = 0; i < 16*16; i++) sq[i] = COLOR_WHITE;
-    sprite *sqS = new_sprite(16, 16, 0, H - 32 + settings->PALOffset, DEPTH16, sq);
+    sprite *sqS = new_sprite(16, 16, 0, H - 32, DEPTH16, sq);
     sqS->trans = 0;
     attach_sprite_to_display_at_layer(sqS, settings->d, 13);
 
@@ -595,7 +595,7 @@ void Alternate240p480iTest(void){
         }
     }
 
-    sprite *fbS = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, fbA);
+    sprite *fbS = new_sprite(W, H, 0, 0, DEPTH16, fbA);
     fbS->trans = 0;
     attach_sprite_to_display_at_layer(fbS, settings->d, 12);
 
@@ -621,7 +621,7 @@ void Alternate240p480iTest(void){
             switch(mode){
                 case MODE_STATIC:   fbS->data = (phrase*)fbA; break;
                 case MODE_TOGGLE:   label = "TOGGLE FIELD"; field = 0; fbS->data = (phrase*)fbA; break;
-                case MODE_VERTICAL: break;
+                case MODE_VERTICAL: field = 0; fbS->data = (phrase*)fbV; break;
             }
             if(mode == MODE_STATIC){
                 label = settings->PALNTSC ? "STATIC 240p " : "STATIC 288p ";
@@ -698,16 +698,17 @@ void AudioBalanceTest(void){
 
     settings->fadeToColor = 0x0000;
 
-    textBox *titleTb = newTextBox("AUDIO L/R BALANCE", 192, 9, mainFont, 0, settings->d, 80, 64, 13, 1);
+    int palY = settings->PALOffset;
+    textBox *titleTb = newTextBox("AUDIO L/R BALANCE", 192, 9, mainFont, 0, settings->d, 80, 64 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *stateTb = newTextBox("CHANNEL: CENTER ", 192, 9, mainFont, 0, settings->d, 80, 96, 13, 1);
+    textBox *stateTb = newTextBox("CHANNEL: CENTER ", 192, 9, mainFont, 0, settings->d, 80, 96 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
-    textBox *toneTb  = newTextBox("TONE: OFF       ", 192, 9, mainFont, 0, settings->d, 80, 112, 13, 1);
+    textBox *toneTb  = newTextBox("TONE: OFF       ", 192, 9, mainFont, 0, settings->d, 80, 112 + palY, 13, 1);
     updateLine(settings, mainFont, toneTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb = newTextBox("A: change channel  B: tone  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
+    textBox *helpTb = newTextBox("A: change channel  B: tone  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -1794,19 +1795,20 @@ void MDFourierTest(void){
 
     settings->fadeToColor = 0x0000;
 
-    textBox *titleTb = newTextBox("MDFOURIER SWEEP", 192, 9, mainFont, 0, settings->d, 80, 48, 13, 1);
+    int palY = settings->PALOffset;
+    textBox *titleTb = newTextBox("MDFOURIER SWEEP", 192, 9, mainFont, 0, settings->d, 80, 48 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
-    textBox *toneTb  = newTextBox("TONE 1/7  : 65Hz   ", 192, 9, mainFont, 0, settings->d, 64, 88, 13, 1);
+    textBox *toneTb  = newTextBox("TONE 1/7  : 65Hz   ", 192, 9, mainFont, 0, settings->d, 64, 88 + palY, 13, 1);
     updateLine(settings, mainFont, toneTb, NULL, 999999, 999999, WHITE);
 
-    textBox *stateTb = newTextBox("STATE     : IDLE   ", 192, 9, mainFont, 0, settings->d, 64, 104, 13, 1);
+    textBox *stateTb = newTextBox("STATE     : IDLE   ", 192, 9, mainFont, 0, settings->d, 64, 104 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
-    textBox *helpTb  = newTextBox("A: play/pause  B: next  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184, 13, 1);
+    textBox *helpTb  = newTextBox("A: play/pause  B: next  OPTION: exit", 256, 9, mainFont, 0, settings->d, 24, 184 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
-    textBox *infoTb  = newTextBox("Capture line-out then run MDFourier", 256, 9, mainFont, 0, settings->d, 24, 200, 13, 1);
+    textBox *infoTb  = newTextBox("Capture line-out then run MDFourier", 256, 9, mainFont, 0, settings->d, 24, 200 + palY, 13, 1);
     updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -2412,7 +2414,7 @@ void DrawYCDelay(void){
     rectPACK_RGB16(buf, W, xStart + STRIP_COUNT * (STRIP_W + 1), 16, 1, H - 32, COLOR_WHITE);
 
     {
-        sprite *s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+        sprite *s = new_sprite(W, H, 0, 0, DEPTH16, buf);
         s->trans = 0;
         attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -2479,7 +2481,7 @@ void DrawDiagonal(void){
      * the real diagonals on the first loop iteration. */
     fillPACK_RGB16(buf, W * H, COLOR_BLACK);
 
-    s = new_sprite(W, H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    s = new_sprite(W, H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -2664,7 +2666,7 @@ void VertScrollTest(void){
     fillPACK_RGB16(buf, W * BUF_H, COLOR_BLACK);
     vertScrollFillBuffer(buf, W, H, BUF_H);
 
-    s = new_sprite(W, BUF_H, 0, 0 + settings->PALOffset, DEPTH16, buf);
+    s = new_sprite(W, BUF_H, 0, 0, DEPTH16, buf);
     s->trans = 0;
     attach_sprite_to_display_at_layer(s, settings->d, 13);
 
@@ -2886,9 +2888,11 @@ static void runNoiseTest(int16_t *buf, const char *title, int helpId){
 
     settings->fadeToColor = 0x0000;
 
+    int palY = settings->PALOffset;
+
     /* Title -- pre-sized for the longest runtime string we emit. */
     textBox *titleTb = newTextBox("CHANNEL SEPARATION TEST ", 256, 9, mainFont, 0,
-                                   settings->d, 48, 64, 13, 1);
+                                   settings->d, 48, 64 + palY, 13, 1);
     /* Copy the runtime title into the worst-case-sized buffer so we don't
      * realloc tb->text every redraw. Once we hit the source NUL we switch
      * to space padding -- reading past the literal's NUL would be UB on
@@ -2908,19 +2912,19 @@ static void runNoiseTest(int16_t *buf, const char *title, int helpId){
      * doesn't grow tb->text when the new text is longer; we patch in-place
      * so the trailing char must always be the '\0' the engine relies on. */
     textBox *stateTb = newTextBox("STATE   : IDLE    ", 192, 9, mainFont, 0,
-                                   settings->d, 80, 96, 13, 1);
+                                   settings->d, 80, 96 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
     textBox *channelTb = newTextBox("CHANNEL : BOTH   ", 192, 9, mainFont, 0,
-                                     settings->d, 80, 112, 13, 1);
+                                     settings->d, 80, 112 + palY, 13, 1);
     updateLine(settings, mainFont, channelTb, NULL, 999999, 999999, WHITE);
 
     textBox *helpTb = newTextBox("A: play/pause  B: cycle channel  OPTION:exit", 320, 9, mainFont, 0,
-                                  settings->d, 0, 184, 13, 1);
+                                  settings->d, 0, 184 + palY, 13, 1);
     updateLine(settings, mainFont, helpTb, NULL, 999999, 999999, GREY);
 
     textBox *infoTb = newTextBox("Mute one channel to verify L/R isolation", 320, 9, mainFont, 0,
-                                  settings->d, 0, 200, 13, 1);
+                                  settings->d, 0, 200 + palY, 13, 1);
     updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
@@ -3103,8 +3107,9 @@ void ChannelSeparationTest(void){
 
     settings->fadeToColor = 0x0000;
 
+    int palY = settings->PALOffset;
     textBox *titleTb = newTextBox("L/R CHANNEL SEPARATION", 256, 9, mainFont, 0,
-                                   settings->d, 32, 56, 13, 1);
+                                   settings->d, 32, 56 + palY, 13, 1);
     updateLine(settings, mainFont, titleTb, NULL, 999999, 999999, GREEN);
 
     /* Worst-case state string: "BOTH (180 OUT-OF-PHASE)" = 23 chars at the
@@ -3114,23 +3119,23 @@ void ChannelSeparationTest(void){
      * grow tb->text after construction. 320-px box keeps us inside the
      * phrase-aligned width ladder. */
     textBox *stateTb = newTextBox("STATE   : BOTH (180 OUT-OF-PHASE) ", 320, 9, mainFont, 0,
-                                   settings->d, 0, 88, 13, 1);
+                                   settings->d, 0, 88 + palY, 13, 1);
     updateLine(settings, mainFont, stateTb, NULL, 999999, 999999, WHITE);
 
     textBox *playTb  = newTextBox("PLAYING : OFF  ", 192, 9, mainFont, 0,
-                                   settings->d, 80, 104, 13, 1);
+                                   settings->d, 80, 104 + palY, 13, 1);
     updateLine(settings, mainFont, playTb, NULL, 999999, 999999, WHITE);
 
     textBox *help1Tb = newTextBox("UP:LEFT  DOWN:RIGHT  LEFT:BOTH  RIGHT:OUT-PHASE", 320, 9, mainFont, 0,
-                                   settings->d, 0, 168, 13, 1);
+                                   settings->d, 0, 168 + palY, 13, 1);
     updateLine(settings, mainFont, help1Tb, NULL, 999999, 999999, GREY);
 
     textBox *help2Tb = newTextBox("A: play/pause   OPTION: exit", 256, 9, mainFont, 0,
-                                   settings->d, 32, 184, 13, 1);
+                                   settings->d, 32, 184 + palY, 13, 1);
     updateLine(settings, mainFont, help2Tb, NULL, 999999, 999999, GREY);
 
     textBox *infoTb  = newTextBox("Verify L and R outputs are not crossed/mono'd", 320, 9, mainFont, 0,
-                                   settings->d, 0, 200, 13, 1);
+                                   settings->d, 0, 200 + palY, 13, 1);
     updateLine(settings, mainFont, infoTb, NULL, 999999, 999999, GREY);
 
     hide_or_show_display_layer_range(settings->d, 1, 3, 15);
