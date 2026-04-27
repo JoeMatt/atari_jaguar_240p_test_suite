@@ -58,7 +58,7 @@ Tests are grouped into five top-level menus. Items in **bold** were added or sub
 | **Test Patterns** | Pluge · Color Bars · EBU Color Bars · SMPTE Color Bars · Referenced Color Bars · Color Bleed Check · Monoscope · Grid · Gray Ramp · White & RGB Screens · 100 IRE · Sharpness · Overscan · Convergence · **More Patterns →** (**Color Bars w/ Gray** · **Linearity** · **Phase** · **Brightness** · **Contrast** · **Y/C Delay** · **Diagonal**) |
 | **Video Tests** | Drop Shadow · **Striped Sprite** · Lag Test · **Manual Lag Test** · Timing & Reflex · Scroll · **Vertical Scroll** · Grid Scroll · Horiz/Vert Stripes · Checkerboard · Backlight Zone · **Alternate 240p/480i** |
 | **Audio Tests** | Sound Test · Audio Sync · **L/R Balance + 1 kHz Tone** · **MDFourier Sweep** |
-| **Hardware Tools** | Controller Test · **Pro Controller Test** · **Rotary Controller Test** · GPU Memory Viewer · DSP Memory Viewer · DRAM Memory Viewer · **System Info** · **Jaguar CD Probe** · **Video Mode Test** (Resolution Switching) · **JagLink Test** |
+| **Hardware Tools** | Controller Test · **Pro Controller Test** · **Rotary Controller Test** · GPU Memory Viewer · DSP Memory Viewer · DRAM Memory Viewer · **System Info** · **Jaguar CD Probe** · **Video Mode Test** (Resolution Switching) · **EEPROM Test** · **Sprite Stress Test** · **JagLink Test** |
 | **Screen Savers** | **Color Cycle** · **Bouncing Square** · **Scrolling Bars** |
 
 In-app **Help** screens (per menu and per test) document the purpose, expected output, and any test-specific button bindings.

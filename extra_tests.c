@@ -2503,7 +2503,11 @@ void JagLinkTest(void){
             DrawHelp(HELP_JAGLINK_TEST);
         }
         if((settings->joy1 & JOYPAD_A) && settings->controllerLock == 0){
+            uint16_t savedClk, savedCtrl;
             settings->controllerLock = 1;
+
+            savedClk  = *asiclk;
+            savedCtrl = *asictrl;
 
             *asiclk  = 0x0002;
             *asictrl = 0x0001;
@@ -2516,6 +2520,9 @@ void JagLinkTest(void){
             rxByte = (uint8_t)(*asidata & 0xFF);
             loopbackRun = 1;
             loopbackPass = (rxByte == txByte) ? 1 : 0;
+
+            *asictrl = savedCtrl;
+            *asiclk  = savedClk;
         }
         if(extraExitPressed()){
             settings->controllerLock = 1;
