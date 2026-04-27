@@ -2473,7 +2473,7 @@ void JagLinkTest(void){
     textBox *loopTitleTb = newTextBox("LOOPBACK TEST            ", 256, 9, mainFont, 0, settings->d, 48, 114 + palY, 13, 1);
     textBox *loopTxTb    = newTextBox("TX BYTE : A5             ", 256, 9, mainFont, 0, settings->d, 48, 128 + palY, 13, 1);
     textBox *loopRxTb    = newTextBox("RX BYTE : --             ", 256, 9, mainFont, 0, settings->d, 48, 142 + palY, 13, 1);
-    textBox *loopResTb   = newTextBox("RESULT  : not run        ", 256, 9, mainFont, 0, settings->d, 48, 156 + palY, 13, 1);
+    textBox *loopResTb   = newTextBox("RESULT  : not run           ", 256, 9, mainFont, 0, settings->d, 48, 156 + palY, 13, 1);
 
     textBox *noteTb = newTextBox("LIVE/frm: hex refresh 0000+FFFF=open", 256, 9, mainFont, 0, settings->d, 16, 186 + palY, 13, 1);
     textBox *helpTb = newTextBox("A: loopback  DOWN+OPTION: help  OPT: exit", 320, 9, mainFont, 0, settings->d, 0, 204 + palY, 13, 1);

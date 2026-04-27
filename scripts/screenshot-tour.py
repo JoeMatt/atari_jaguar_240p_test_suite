@@ -265,7 +265,7 @@ TOUR: list[TourGroup] = [
             ## Hardware Tools sub-menu, walk DOWN x11 to land on
             ## "JagLink Test" (lineTextBox[12], case 12). The test
             ## probes Jerry UART registers -- on a base Jaguar (and
-            ## emulators) all three read 0x00/0xFF so status shows
+            ## emulators) all three read 0x0000/0xFFFF so status shows
             ## NOT DETECTED, which is the expected screenshot.
             *_boot(),
             *_open_main_item(3),
