@@ -37,6 +37,25 @@
  * on exit, so running it never costs the user their real save data.
  * --------------------------------------------------------------------------- */
 
+/* 93C46 organisation: 64 words of 16 bits each. */
+#define EE_NWORDS   64
+#define EE_GRID_COLS 8
+#define EE_GRID_ROWS 8
+
+/* Low-level 93C46 command wrappers shared by the cart EEPROM test and
+ * the Memory Track test (same Jerry bus, different physical chip). */
+uint16_t eeprom_read_word_drv(uint8_t addr);
+int eeprom_write_word_drv(uint8_t addr, uint16_t data);
+void eeprom_ewen_drv(void);
+void eeprom_ewds_drv(void);
+
+/* Hex formatting helpers shared between the EEPROM test and Memory
+ * Track test so both screens produce identical grid layouts. */
+void hexbyte(char *out, uint8_t v);
+void hexword(char *out, uint16_t v);
+void formatGridRow(char *out, const uint16_t *words, int row);
+void formatCursorLine(char *out, int cursor, uint16_t orig, uint16_t cur);
+
 void EepromTest(void);
 
 #endif

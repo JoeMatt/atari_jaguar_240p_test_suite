@@ -1146,11 +1146,8 @@ void HardwareMenu(){
     
     int done = 0;
     /* Max 1-based menuState value (cursor wraps between 1 and
-     * lastMenuLine). EEPROM Test is switch case 10, Sprite Stress
-     * Test is case 11, and "Back to Main Menu" is the final case 14.
-     * The other *Menu() helpers in this file use the same convention
-     * -- the legacy "counting from zero" comment was misleading since
-     * menuState is 1-based. */
+     * lastMenuLine). Memory Track is inside the CD Probe screen (A
+     * button), not a standalone menu entry. */
     int lastMenuLine = 14;
     settings->menuState = 1;
     
@@ -1158,10 +1155,10 @@ void HardwareMenu(){
     vsync();
     
     settings->lineXOffset = 38;
-    settings->lineYOffset = (settings->PALNTSC ? 76 : 56) + settings->PALOffset;
-    
+    settings->lineYOffset = 56 + settings->PALOffset;
+
     resetAllLines();
-        
+
     updateLine(settings, mainFont, lineTextBox[1],  "Controller Test",        settings->lineXOffset, setLineYPos(0), RED);
     updateLine(settings, mainFont, lineTextBox[2],  "Pro Controller Test",    settings->lineXOffset, setLineYPos(1), WHITE);
     updateLine(settings, mainFont, lineTextBox[3],  "Rotary Controller Test", settings->lineXOffset, setLineYPos(2), WHITE);
@@ -1174,9 +1171,9 @@ void HardwareMenu(){
     updateLine(settings, mainFont, lineTextBox[10], "EEPROM Test",            settings->lineXOffset, setLineYPos(9), WHITE);
     updateLine(settings, mainFont, lineTextBox[11], "Sprite Stress Test",     settings->lineXOffset, setLineYPos(10), WHITE);
 
-    updateLine(settings, mainFont, lineTextBox[12], "Help",              settings->lineXOffset, setLineYPos(11), WHITE);
-    updateLine(settings, mainFont, lineTextBox[13], "Options",           settings->lineXOffset, setLineYPos(12), WHITE);
-    updateLine(settings, mainFont, lineTextBox[14], "Back to Main Menu", settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[12], "Help",              settings->lineXOffset, setLineYPos(12), WHITE);
+    updateLine(settings, mainFont, lineTextBox[13], "Options",           settings->lineXOffset, setLineYPos(13), WHITE);
+    updateLine(settings, mainFont, lineTextBox[14], "Back to Main Menu", settings->lineXOffset, setLineYPos(14), WHITE);
     
     updateLine(settings, mainFont, lineTextBox[0], settings->PALNTSC ? "NTSC VDP 320x240p" : "PAL VDP 320x288p", 184, 200 + settings->PALOffset, WHITE);
        
@@ -1327,7 +1324,7 @@ void HardwareMenu(){
                     hide_or_show_display_layer_range(settings->d, 1, 0, 15);
 
                 break;
-                    
+
                 //Options
                 case 13:
 

@@ -59,6 +59,7 @@ void ChannelSeparationTest(void);
 /* Hardware tests */
 void HardwareInfo(void);
 void JaguarCDTest(void);
+void MemoryTrackTest(void);
 void ResolutionTest(void);
 void ProControllerTest(void);
 void RotaryControllerTest(void);
