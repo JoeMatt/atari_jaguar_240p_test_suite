@@ -30,11 +30,218 @@
       "height": 241
     },
     {
+      "group": "color-bars",
+      "title": "Color Bars",
+      "label": "color-bars",
+      "note": "Color Bars",
+      "path": "color-bars/00-color-bars.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "ebu-bars",
+      "title": "EBU Color Bars",
+      "label": "ebu-bars",
+      "note": "EBU Color Bars",
+      "path": "ebu-bars/00-ebu-bars.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "smpte-bars",
+      "title": "SMPTE Color Bars",
+      "label": "smpte-bars",
+      "note": "SMPTE Color Bars",
+      "path": "smpte-bars/00-smpte-bars.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "ref-bars",
+      "title": "Referenced Color Bars",
+      "label": "ref-bars",
+      "note": "Referenced Color Bars (601)",
+      "path": "ref-bars/00-ref-bars.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "color-bleed",
+      "title": "Color Bleed Check",
+      "label": "color-bleed",
+      "note": "Color Bleed Check",
+      "path": "color-bleed/00-color-bleed.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "monoscope",
+      "title": "Monoscope",
+      "label": "monoscope",
+      "note": "Monoscope",
+      "path": "monoscope/00-monoscope.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "grid",
+      "title": "Grid",
+      "label": "grid",
+      "note": "Grid",
+      "path": "grid/00-grid.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "gray-ramp",
+      "title": "Gray Ramp",
+      "label": "gray-ramp",
+      "note": "Gray Ramp",
+      "path": "gray-ramp/00-gray-ramp.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "white-rgb",
+      "title": "White & RGB Screens",
+      "label": "white-rgb",
+      "note": "White & RGB Screens",
+      "path": "white-rgb/00-white-rgb.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "100ire",
+      "title": "100 IRE",
+      "label": "100ire",
+      "note": "100 IRE",
+      "path": "100ire/00-100ire.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "sharpness",
+      "title": "Sharpness",
+      "label": "sharpness",
+      "note": "Sharpness",
+      "path": "sharpness/00-sharpness.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "overscan",
+      "title": "Overscan",
+      "label": "overscan",
+      "note": "Overscan",
+      "path": "overscan/00-overscan.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "convergence",
+      "title": "Convergence",
+      "label": "convergence",
+      "note": "Convergence",
+      "path": "convergence/00-convergence.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "bars-gray",
+      "title": "Color Bars w/ Gray",
+      "label": "bars-gray",
+      "note": "Color Bars w/ Gray (procedural)",
+      "path": "bars-gray/00-bars-gray.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "linearity",
+      "title": "Linearity",
+      "label": "linearity",
+      "note": "Linearity (circle + crosshatch)",
+      "path": "linearity/00-linearity.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "phase",
+      "title": "Phase",
+      "label": "phase",
+      "note": "Phase / color-burst check",
+      "path": "phase/00-phase.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "brightness",
+      "title": "Brightness",
+      "label": "brightness",
+      "note": "Brightness ramp",
+      "path": "brightness/00-brightness.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "contrast",
+      "title": "Contrast",
+      "label": "contrast",
+      "note": "Contrast ramp",
+      "path": "contrast/00-contrast.png",
+      "width": 326,
+      "height": 241
+    },
+    {
       "group": "video",
       "title": "Video tests",
       "label": "video-menu",
       "note": "Video Tests sub-menu",
       "path": "video/00-video-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "drop-shadow",
+      "title": "Drop Shadow Test",
+      "label": "drop-shadow",
+      "note": "Drop Shadow Test",
+      "path": "drop-shadow/00-drop-shadow.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "striped-sprite",
+      "title": "Striped Sprite Test",
+      "label": "striped-sprite",
+      "note": "Striped Sprite Test",
+      "path": "striped-sprite/00-striped-sprite.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "stripes",
+      "title": "Horiz/Vert Stripes",
+      "label": "stripes",
+      "note": "Horiz/Vert Stripes",
+      "path": "stripes/00-stripes.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "checkerboard",
+      "title": "Checkerboard",
+      "label": "checkerboard",
+      "note": "Checkerboard",
+      "path": "checkerboard/00-checkerboard.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "backlight-zone",
+      "title": "Backlight Zone Test",
+      "label": "backlight-zone",
+      "note": "Backlight Zone Test",
+      "path": "backlight-zone/00-backlight-zone.png",
       "width": 326,
       "height": 241
     },
@@ -66,11 +273,38 @@
       "height": 241
     },
     {
+      "group": "cd-probe",
+      "title": "Jaguar CD Probe",
+      "label": "cd-probe",
+      "note": "Jaguar CD Probe register view",
+      "path": "cd-probe/00-cd-probe.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "cd-probe",
+      "title": "Jaguar CD Probe",
+      "label": "memory-track",
+      "note": "Memory Track Test (from CD Probe)",
+      "path": "cd-probe/01-memory-track.png",
+      "width": 326,
+      "height": 241
+    },
+    {
       "group": "sprite-stress",
       "title": "Sprite stress test",
       "label": "sprite-stress-default",
       "note": "Sprite Stress Test default (1 sprite, 8x8, single-line)",
       "path": "sprite-stress/00-sprite-stress-default.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "jaglink",
+      "title": "JagLink test",
+      "label": "jaglink-probe",
+      "note": "JagLink Test (Jerry UART probe)",
+      "path": "jaglink/00-jaglink-probe.png",
       "width": 326,
       "height": 241
     },
@@ -114,7 +348,7 @@
       "group": "pink-noise",
       "title": "Pink noise test",
       "label": "pink-noise-idle",
-      "note": "Pink Noise Test (idle, ready to play) — all-black: bad headless libretro read-FB, not the cart",
+      "note": "Pink Noise Test (idle, ready to play) \u2014 all-black: bad headless libretro read-FB, not the cart",
       "path": "pink-noise/00-pink-noise-idle.png",
       "width": 326,
       "height": 241
@@ -129,11 +363,56 @@
       "height": 241
     },
     {
+      "group": "system-info",
+      "title": "System Info",
+      "label": "system-info",
+      "note": "System Info (hardware detection summary)",
+      "path": "system-info/00-system-info.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "video-mode",
+      "title": "Video Mode Test",
+      "label": "video-mode",
+      "note": "Video Mode Test (resolution switching)",
+      "path": "video-mode/00-video-mode.png",
+      "width": 326,
+      "height": 241
+    },
+    {
       "group": "screensavers",
       "title": "Screen savers",
       "label": "screensavers-menu",
       "note": "Screen Savers sub-menu",
       "path": "screensavers/00-screensavers-menu.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "color-cycle",
+      "title": "Color Cycle saver",
+      "label": "color-cycle",
+      "note": "Color Cycle screen saver (single frame)",
+      "path": "color-cycle/00-color-cycle.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "bouncing-square",
+      "title": "Bouncing Square saver",
+      "label": "bouncing-square",
+      "note": "Bouncing Square screen saver (single frame)",
+      "path": "bouncing-square/00-bouncing-square.png",
+      "width": 326,
+      "height": 241
+    },
+    {
+      "group": "scrolling-bars",
+      "title": "Scrolling Bars saver",
+      "label": "scrolling-bars",
+      "note": "Scrolling Bars screen saver (single frame)",
+      "path": "scrolling-bars/00-scrolling-bars.png",
       "width": 326,
       "height": 241
     },
@@ -175,8 +454,100 @@
       "title": "Test patterns"
     },
     {
+      "slug": "color-bars",
+      "title": "Color Bars"
+    },
+    {
+      "slug": "ebu-bars",
+      "title": "EBU Color Bars"
+    },
+    {
+      "slug": "smpte-bars",
+      "title": "SMPTE Color Bars"
+    },
+    {
+      "slug": "ref-bars",
+      "title": "Referenced Color Bars"
+    },
+    {
+      "slug": "color-bleed",
+      "title": "Color Bleed Check"
+    },
+    {
+      "slug": "monoscope",
+      "title": "Monoscope"
+    },
+    {
+      "slug": "grid",
+      "title": "Grid"
+    },
+    {
+      "slug": "gray-ramp",
+      "title": "Gray Ramp"
+    },
+    {
+      "slug": "white-rgb",
+      "title": "White & RGB Screens"
+    },
+    {
+      "slug": "100ire",
+      "title": "100 IRE"
+    },
+    {
+      "slug": "sharpness",
+      "title": "Sharpness"
+    },
+    {
+      "slug": "overscan",
+      "title": "Overscan"
+    },
+    {
+      "slug": "convergence",
+      "title": "Convergence"
+    },
+    {
+      "slug": "bars-gray",
+      "title": "Color Bars w/ Gray"
+    },
+    {
+      "slug": "linearity",
+      "title": "Linearity"
+    },
+    {
+      "slug": "phase",
+      "title": "Phase"
+    },
+    {
+      "slug": "brightness",
+      "title": "Brightness"
+    },
+    {
+      "slug": "contrast",
+      "title": "Contrast"
+    },
+    {
       "slug": "video",
       "title": "Video tests"
+    },
+    {
+      "slug": "drop-shadow",
+      "title": "Drop Shadow Test"
+    },
+    {
+      "slug": "striped-sprite",
+      "title": "Striped Sprite Test"
+    },
+    {
+      "slug": "stripes",
+      "title": "Horiz/Vert Stripes"
+    },
+    {
+      "slug": "checkerboard",
+      "title": "Checkerboard"
+    },
+    {
+      "slug": "backlight-zone",
+      "title": "Backlight Zone Test"
     },
     {
       "slug": "audio",
@@ -191,8 +562,16 @@
       "title": "EEPROM test"
     },
     {
+      "slug": "cd-probe",
+      "title": "Jaguar CD Probe"
+    },
+    {
       "slug": "sprite-stress",
       "title": "Sprite stress test"
+    },
+    {
+      "slug": "jaglink",
+      "title": "JagLink test"
     },
     {
       "slug": "ycdelay",
@@ -219,8 +598,28 @@
       "title": "L/R channel separation"
     },
     {
+      "slug": "system-info",
+      "title": "System Info"
+    },
+    {
+      "slug": "video-mode",
+      "title": "Video Mode Test"
+    },
+    {
       "slug": "screensavers",
       "title": "Screen savers"
+    },
+    {
+      "slug": "color-cycle",
+      "title": "Color Cycle saver"
+    },
+    {
+      "slug": "bouncing-square",
+      "title": "Bouncing Square saver"
+    },
+    {
+      "slug": "scrolling-bars",
+      "title": "Scrolling Bars saver"
     },
     {
       "slug": "help",
